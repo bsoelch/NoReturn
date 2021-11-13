@@ -1,12 +1,12 @@
-#NoReturn 
+# NoReturn 
 NoReturn is a programing language build around the idea, that 
 procedures do not return to the position where they were called
 
 !!! This language is currently in early development !!!
 
-##Syntax
-###Types
-####Atomic Types
+## Syntax
+### Types
+#### Atomic Types
 There are 14 atomic types:
 - uint8, uint16, uint32, uint64: unsigned integers
 - int8, int16, int32, int64: signed integers
@@ -15,7 +15,7 @@ There are 14 atomic types:
 - bool: a boolean value (true or false)
 - type: a Type
 - any: Wildcard Type that can contain any value
-####Containers
+#### Containers
 - arrays: (syntax: `<Type>'[]'`) contain a sequence of values of 
 Type < Type > indexed with an uint64 
 elements of an array are accessible though the [] operator
@@ -41,11 +41,11 @@ int32?
 !!! the handling of values in container types 
 is currently only partially implement !!!
 
-####Procedures
+#### Procedures
 Procedures are treated as normal values, 
 types of procedures are defined though the syntax:
 `'('<Type>(','<Type>)')=>?'`
-####Generics
+#### Generics
 A generic type is declared though $ followed by an 
 identifier, generic allow declaration of dependent types 
 in procedure signatures. At runtime generics are treated as
@@ -60,7 +60,7 @@ and then passes it to another procedure, while
 allowing the caller to pass an arbitrary addition argument
 to that procedure
 
-####Typedef
+#### Typedef
 With the keyword "typedef", it is possible to define 
 name aliases for types. 
 A typedef statement is typedef, followed by a type-name 
@@ -75,7 +75,7 @@ typedef float64 double;
 create type aliases for the primitive java types
 int, long, float and double
 
-##Constants
+## Constants
 The "const" keyword can be used to define global constants.
 Constant definitions have the syntax:
 'const '< Type >':'< Name >'='< Expression >';'
@@ -85,7 +85,7 @@ Example:
 const float64:pi=3.14159265358979;
 const float64:sq_pi=pi*pi;
 ```
-##Procedures
+## Procedures
 Procedures are the main building block of no-ret programs.
 Each procedure takes the given arguments, preforms 
 the atomic actions in the procedure-body and the calls 
@@ -110,11 +110,11 @@ with `<ProcName>` being the name of called procedure
 (local or global) variable and `<Expr>` being an 
 [expression](https://github.com/bsoelch/NoReturn#Expressions)
 
-##Actions
+## Actions
 
 !!TODO!!
 
-##Expressions
+## Expressions
 
 !!TODO!!
 
