@@ -1,0 +1,71 @@
+package bsoelch.noret.lang.expression;
+
+import bsoelch.noret.lang.*;
+
+import java.util.ArrayList;
+
+public class GetIndex implements Expression{
+    final Expression value;
+    final Expression index;
+    final Type type;
+    public GetIndex(Expression value, Expression index) {
+        this.value=value;
+        this.index=index;
+        Type valType = value.expectedType();
+        Type indType = index.expectedType();
+        if(valType == Type.Primitive.STRING){
+            if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
+                this.type = Type.Numeric.UINT8;//utf8 char-code
+            }else if(Type.canAssign(Type.Numeric.STRING, indType,null)){
+                this.type = Type.Numeric.UINT64;//index of string
+            }else{
+                throw new IllegalArgumentException("Invalid type for string index:"+
+                        indType+ " string indices have to be unsigned integers or strings");
+            }
+        }else {
+            if(valType instanceof Type.Array){
+                if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
+                    this.type =((Type.Array) valType).content;
+                }else{
+                    throw new IllegalArgumentException("Invalid type for array index:"+
+                            indType+ " Array indices have to be unsigned integers");
+                }
+            }else{
+                throw new IllegalArgumentException("Invalid type for array/dictionary access: \"" +
+                        valType +"\" only dictionary, arrays and string support dict-access");
+            }
+        }
+    }
+
+    @Override
+    public ValueView evaluate(Procedure parent, ArrayList<Value> context) {
+        ValueView source=value.evaluate(parent, context);
+        Value indexValue=index.evaluate(parent, context).get();
+        return new ValueView() {
+            @Override
+            public Value get() {
+                return source.get().getAtIndex(indexValue);
+            }
+
+            @Override
+            public void set(Value newValue) {
+                if(!Type.canAssign(type,newValue.getType(),null)){
+                    throw new IllegalArgumentException("unresolved Type-Error cannot assign " +
+                            newValue.getType()+" to "+type);
+                }
+                newValue=newValue.castTo(type);
+                source.set(source.get().setAtIndex(indexValue,newValue));
+            }
+
+        };
+    }
+    @Override
+    public boolean canSet() {
+        return value.canSet();
+    }
+
+    @Override
+    public Type expectedType() {
+        return type;
+    }
+}

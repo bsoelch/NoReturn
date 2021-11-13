@@ -1,0 +1,1537 @@
+package bsoelch.noret;
+
+import bsoelch.noret.lang.expression.VarExpression;
+import bsoelch.noret.lang.*;
+import bsoelch.noret.lang.expression.*;
+
+import java.io.IOException;
+import java.io.Reader;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.regex.Pattern;
+
+public class Parser {
+
+    enum WordState{
+        ROOT,STRING,COMMENT,LINE_COMMENT
+    }
+
+    enum ParserTokenType {
+        OPEN_BRACKET,CLOSE_BRACKET,OPEN_SQ_BRACKET,CLOSE_SQ_BRACKET,OPEN_CR_BRACKET,CLOSE_CR_BRACKET,
+        OPERATOR,DOLLAR,OPTION,AT,SEPARATOR,END, ASSIGN,DOT,COMMA,MAPS_TO,WORD,TYPE,EXPRESSION,
+        INDEX,RANGE
+    }
+
+    static class ParserToken{
+        final ParserTokenType tokenType;
+        ParserToken(ParserTokenType tokenType) {
+            this.tokenType = tokenType;
+        }
+        //TODO? token positions
+
+        @Override
+        public String toString() {
+            return tokenType.toString();
+        }
+    }
+    static class NamedToken extends ParserToken{
+        final String value;
+        NamedToken(ParserTokenType type, String value) {
+            super(type);
+            this.value=value;
+        }
+        @Override
+        public String toString() {
+            return tokenType.toString()+": \""+value+"\"";
+        }
+    }
+    static class Operator extends ParserToken{
+        final OperatorType opType;
+        Operator(OperatorType opType) {
+            super(ParserTokenType.OPERATOR);
+            this.opType=opType;
+        }
+        @Override
+        public String toString() {
+            return tokenType.toString()+": "+opType.toString();
+        }
+    }
+    static class TypeToken extends ParserToken{
+        final Type type;
+        TypeToken(Type type) {
+            super(ParserTokenType.TYPE);
+            this.type=type;
+        }
+        @Override
+        public String toString() {
+            return tokenType.toString()+": \""+type+"\"";
+        }
+    }
+    static class ExprToken extends ParserToken{
+        final Expression expr;
+        ExprToken(Value value) {
+            this(false,new ValueExpression(value));
+        }
+        ExprToken(Expression expr) {
+            this(false,expr);
+        }
+        ExprToken(boolean isIndex,Expression expr) {
+            super(isIndex?ParserTokenType.INDEX:ParserTokenType.EXPRESSION);
+            this.expr=expr;
+        }
+        @Override
+        public String toString() {
+            return tokenType.toString()+": \""+expr+"\"";
+        }
+    }
+
+    private static class Tokenizer{
+        private final Reader input;
+        private final StringBuilder buffer=new StringBuilder();
+        private final ArrayDeque<ParserToken> tokenBuffer =new ArrayDeque<>();
+
+
+        static final String DEC_DIGIT = "[0-9]";
+        static final String BIN_DIGIT = "[01]";
+        static final String HEX_DIGIT = "[0-9a-fA-F]";
+        static final String BIN_PREFIX = "0b";
+        static final String HEX_PREFIX = "0x";
+        static final String DEC_INT_PATTERN = DEC_DIGIT + "+";
+        static final String BIN_INT_PATTERN = BIN_PREFIX + BIN_DIGIT + "+";
+        static final String HEX_INT_PATTERN = HEX_PREFIX + HEX_DIGIT + "+";
+        static final Pattern intDec=Pattern.compile(DEC_INT_PATTERN);
+        static final Pattern intBin=Pattern.compile(BIN_INT_PATTERN);
+        static final Pattern intHex=Pattern.compile(HEX_INT_PATTERN);
+        static final Pattern floatDotPrefix =Pattern.compile(//pattern for prefixes of . or , that lead to floats
+                "("+BIN_INT_PATTERN+")|("+DEC_INT_PATTERN+")|("+HEX_INT_PATTERN+")");
+        static final String DEC_FLOAT_MAGNITUDE = DEC_INT_PATTERN + "\\.?"+DEC_DIGIT+"*";
+        static final String BIN_FLOAT_MAGNITUDE = BIN_INT_PATTERN + "\\.?"+BIN_DIGIT+"*";
+        static final String HEX_FLOAT_MAGNITUDE = HEX_INT_PATTERN + "\\.?"+HEX_DIGIT+"*";
+        static final Pattern floatDec=Pattern.compile("NaN|Infinity|("+
+                                                      DEC_FLOAT_MAGNITUDE+"([Ee][+-]?"+DEC_DIGIT+"+)?)");
+        static final Pattern floatHex=Pattern.compile(HEX_FLOAT_MAGNITUDE+"([Pp][+-]?"+HEX_DIGIT+"+)?");
+        static final Pattern floatBin=Pattern.compile(BIN_FLOAT_MAGNITUDE+"([Ee][+-]?"+BIN_DIGIT+"+)?");
+        static final Pattern floatExpPrefix =Pattern.compile("(("+BIN_FLOAT_MAGNITUDE+")|("
+                +DEC_FLOAT_MAGNITUDE+")[Ee])|("+HEX_FLOAT_MAGNITUDE+"[Pp])");
+
+        private WordState state=WordState.ROOT;
+        private int stringStart=-1;
+        private int cached=-1;
+
+        private Tokenizer(Reader input) {
+            this.input = input;
+        }
+
+        ParserToken getNextToken() throws IOException {
+            if(tokenBuffer.size()==0){
+                prepareToken();
+            }
+            return tokenBuffer.pollFirst();
+        }
+
+        private int nextChar() throws IOException {
+            if(cached>=0){
+                int c=cached;
+                cached = -1;
+                return c;
+            }else{
+                return input.read();
+            }
+        }
+        private int forceNextChar() throws IOException {
+            int c=nextChar();
+            if (c < 0) {
+                throw new IOException("Unexpected end of File");
+            }
+            return c;
+        }
+        //addLater better error feedback
+        private void prepareToken() throws IOException {
+            int c;
+            while((c=nextChar())>=0){
+                switch(state){
+                    case ROOT:
+                        if(Character.isWhitespace(c)){
+                            if(finishWord(tokenBuffer, buffer)){
+                                return;
+                            }
+                        }else{
+                            switch(c){
+                                case '"':
+                                case '\'':
+                                    state=WordState.STRING;
+                                    stringStart=(char)c;
+                                    if(finishWord(tokenBuffer, buffer)){
+                                        return;
+                                    }
+                                    break;
+                                case '#':
+                                    c = forceNextChar();
+                                    if(c=='#'){
+                                        state=WordState.LINE_COMMENT;
+                                        if(finishWord(tokenBuffer, buffer)){
+                                            return;
+                                        }
+                                    }else if(c=='_'){
+                                        state=WordState.COMMENT;
+                                        if(finishWord(tokenBuffer, buffer)){
+                                            return;
+                                        }
+                                    }else{
+                                        buffer.append('#').append((char)c);
+                                    }
+                                    break;
+                                case '(':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPEN_BRACKET));
+                                    return;
+                                case ')':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.CLOSE_BRACKET));
+                                    return;
+                                case '[':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPEN_SQ_BRACKET));
+                                    return;
+                                case ']':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.CLOSE_SQ_BRACKET));
+                                    return;
+                                case '{':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPEN_CR_BRACKET));
+                                    return;
+                                case '}':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.CLOSE_CR_BRACKET));
+                                    return;
+                                case '@':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.AT));
+                                    return;
+                                case '$':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.DOLLAR));
+                                    return;
+                                case '+':
+                                case '-':
+                                    if(floatExpPrefix.matcher(buffer).matches()){
+                                        buffer.append(c);
+                                        break;
+                                    }
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new Operator(c=='+'?OperatorType.PLUS:OperatorType.MINUS));
+                                    return;
+                                case '%':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new Operator(OperatorType.MOD));
+                                    return;
+                                case '~':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new Operator(OperatorType.FLIP));
+                                    return;
+                                case '^':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new Operator(OperatorType.XOR));
+                                    return;
+                                case '?':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPTION));
+                                    return;
+                                case ':':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.SEPARATOR));
+                                    return;
+                                case ';':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.END));
+                                    return;
+                                case '.':
+                                    if(floatDotPrefix.matcher(buffer).matches()){
+                                        buffer.append('.');
+                                        break;//. after int -> floating point number
+                                    }
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.DOT));
+                                    return;
+                                case ',':
+                                    finishWord(tokenBuffer, buffer);
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.COMMA));
+                                    return;
+                                //detect multi-char operators
+                                case '*'://* **
+                                    finishWord(tokenBuffer, buffer);
+                                    c = forceNextChar();
+                                    switch(c){
+                                        case '*':
+                                            tokenBuffer.addLast(new Operator(OperatorType.POW));
+                                            return;
+                                        case '-':
+                                            tokenBuffer.addLast(new Operator(OperatorType.MULT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            return;
+                                        case '+':
+                                            tokenBuffer.addLast(new Operator(OperatorType.MULT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            return;
+                                        default:
+                                            tokenBuffer.addLast(new Operator(OperatorType.MULT));
+                                            cached=c;
+                                            return;
+                                    }
+                                case '/':// / //
+                                    finishWord(tokenBuffer, buffer);
+                                    c = forceNextChar();
+                                    switch(c){
+                                        case '/':
+                                            tokenBuffer.addLast(new Operator(OperatorType.INT_DIV));
+                                            return;
+                                        case '-':
+                                            tokenBuffer.addLast(new Operator(OperatorType.DIV));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            return;
+                                        case '+':
+                                            tokenBuffer.addLast(new Operator(OperatorType.DIV));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            return;
+                                        default:
+                                            tokenBuffer.addLast(new Operator(OperatorType.DIV));
+                                            cached=c;
+                                            return;
+                                    }
+                                case '&':// & &&
+                                    finishWord(tokenBuffer, buffer);
+                                    c = forceNextChar();
+                                    switch(c){
+                                        case '&':
+                                            tokenBuffer.addLast(new Operator(OperatorType.FAST_AND));
+                                            return;
+                                        case '-':
+                                            tokenBuffer.addLast(new Operator(OperatorType.AND));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            return;
+                                        case '+':
+                                            tokenBuffer.addLast(new Operator(OperatorType.AND));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            return;
+                                        default:
+                                            tokenBuffer.addLast(new Operator(OperatorType.AND));
+                                            cached=c;
+                                            return;
+                                    }
+                                case '|':// | ||
+                                    finishWord(tokenBuffer, buffer);
+                                    c = forceNextChar();
+                                    switch(c){
+                                        case '|':
+                                            tokenBuffer.addLast(new Operator(OperatorType.FAST_OR));
+                                            return;
+                                        case '-':
+                                            tokenBuffer.addLast(new Operator(OperatorType.OR));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            return;
+                                        case '+':
+                                            tokenBuffer.addLast(new Operator(OperatorType.OR));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            return;
+                                        default:
+                                            tokenBuffer.addLast(new Operator(OperatorType.OR));
+                                            cached=c;
+                                            return;
+                                    }
+                                case '=':// = == =>
+                                    finishWord(tokenBuffer, buffer);
+                                    c = forceNextChar();
+                                    switch(c){
+                                        case '>':
+                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.MAPS_TO));
+                                            return;
+                                        case '=':
+                                            tokenBuffer.addLast(new Operator(OperatorType.EQ));
+                                            return;
+                                        case '-':
+                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.ASSIGN));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            return;
+                                        case '+':
+                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.ASSIGN));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            return;
+                                        default:
+                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.ASSIGN));
+                                            cached=c;
+                                            return;
+                                    }
+                                case '!':// ! !=
+                                    finishWord(tokenBuffer, buffer);
+                                    c = forceNextChar();
+                                    switch(c){
+                                        case '=':
+                                            tokenBuffer.addLast(new Operator(OperatorType.NE));
+                                            return;
+                                        case '-':
+                                            tokenBuffer.addLast(new Operator(OperatorType.NOT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            return;
+                                        case '+':
+                                            tokenBuffer.addLast(new Operator(OperatorType.NOT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            return;
+                                        default:
+                                            tokenBuffer.addLast(new Operator(OperatorType.NOT));
+                                            cached=c;
+                                            return;
+                                    }
+                                case '<':// < <= <<
+                                    finishWord(tokenBuffer, buffer);
+                                    c = forceNextChar();
+                                    switch(c){
+                                        case '=':
+                                            tokenBuffer.addLast(new Operator(OperatorType.LE));
+                                            return;
+                                        case '<':
+                                            tokenBuffer.addLast(new Operator(OperatorType.LSHIFT));
+                                            return;
+                                        case '-':
+                                            tokenBuffer.addLast(new Operator(OperatorType.LT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            return;
+                                        case '+':
+                                            tokenBuffer.addLast(new Operator(OperatorType.LT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            return;
+                                        default:
+                                            tokenBuffer.addLast(new Operator(OperatorType.LT));
+                                            cached=c;
+                                            return;
+                                    }
+                                case '>':// > >= >>
+                                    finishWord(tokenBuffer, buffer);
+                                    c = forceNextChar();
+                                    switch(c){
+                                        case '=':
+                                            tokenBuffer.addLast(new Operator(OperatorType.GE));
+                                            return;
+                                        case '>':
+                                            tokenBuffer.addLast(new Operator(OperatorType.RSHIFT));
+                                            return;
+                                        case '-':
+                                            tokenBuffer.addLast(new Operator(OperatorType.GT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            return;
+                                        case '+':
+                                            tokenBuffer.addLast(new Operator(OperatorType.GT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            return;
+                                        default:
+                                            tokenBuffer.addLast(new Operator(OperatorType.GT));
+                                            cached=c;
+                                            return;
+                                    }
+                                default:
+                                    buffer.append((char)c);
+                            }
+                        }
+                        break;
+                    case STRING:
+                        if(c==stringStart){
+                            tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
+                                    Type.Primitive.STRING,buffer.toString())
+                            ));
+                            buffer.setLength(0);
+                            state=WordState.ROOT;
+                            return;
+                        }else{
+                            buffer.append((char)c);
+                            if(c=='\\'){
+                                c = forceNextChar();
+                                buffer.append((char)c);
+                            }
+                        }
+                        break;
+                    case COMMENT:
+                        if(c=='_'){
+                            c = forceNextChar();
+                            if(c=='#'){
+                                state=WordState.ROOT;
+                            }
+                        }
+                        break;
+                    case LINE_COMMENT:
+                        if(c=='\n'||c=='\r'){
+                            state=WordState.ROOT;
+                        }
+                        break;
+                }
+            }
+            if(state!=WordState.ROOT){
+                throw new IOException("Unexpected end of File");
+            }
+            finishWord(tokenBuffer,buffer);
+        }
+
+        private boolean finishWord(ArrayDeque<ParserToken> tokens, StringBuilder buffer) {
+            if (buffer.length() > 0) {
+                String str=buffer.toString();
+                try{
+                    if(intDec.matcher(str).matches()){//dez-Int
+                        parseInt(tokens, str, 10);
+                    }else if(intBin.matcher(str).matches()){//bin-Int
+                        str=str.replaceAll(BIN_PREFIX,"");//remove header
+                        parseInt(tokens, str, 2);
+                    }else if(intHex.matcher(str).matches()){ //hex-Int
+                        str=str.replaceAll(HEX_PREFIX,"");//remove header
+                        parseInt(tokens, str, 16);
+                    }else if(floatDec.matcher(str).matches()){
+                        //dez-Float
+                        double d = Double.parseDouble(str);
+                        tokens.addLast(new ExprToken(
+                                Value.createPrimitive(Type.Numeric.FLOAT64, d)));
+                    }else if(floatBin.matcher(str).matches()){
+                        //bin-Float
+                        double d=parseBinFloat(
+                                str.replaceAll(BIN_PREFIX,"")//remove header
+                        );
+                        tokens.addLast(new ExprToken(
+                                Value.createPrimitive(Type.Numeric.FLOAT64, d)));
+                    }else if(floatHex.matcher(str).matches()){
+                        //hex-Float
+                        double d=parseHexFloat(
+                                str.replaceAll(HEX_PREFIX,"")//remove header
+                        );
+                        tokens.addLast(new ExprToken(
+                                Value.createPrimitive(Type.Numeric.FLOAT64, d)));
+                    }else {
+                        {//split string at . , + -
+                            int i = str.indexOf('.');
+                            if (i != -1) {
+                                if (i > 0)
+                                    addWord(tokens, str.substring(0, i));
+                                tokens.addLast(new ParserToken(ParserTokenType.DOT));
+                                str = str.substring(i + 1);
+                            }
+                            i = str.indexOf('+');
+                            if (i != -1) {
+                                if (i > 0)
+                                    addWord(tokens, str.substring(0, i));
+                                tokens.addLast(new Operator(OperatorType.PLUS));
+                                str = str.substring(i + 1);
+                            }
+                            i = str.indexOf('-');
+                            if (i != -1) {
+                                if (i > 0)
+                                    addWord(tokens, str.substring(0, i));
+                                tokens.addLast(new Operator(OperatorType.MINUS));
+                                str = str.substring(i + 1);
+                            }
+                        }
+                        addWord(tokens, str);
+                    }
+                }catch (NumberFormatException nfe){
+                    throw new IllegalArgumentException(nfe);//addLater own exception
+                }
+                buffer.setLength(0);
+                return true;
+            }
+            return false;
+        }
+
+        private void addWord(ArrayDeque<ParserToken> tokens, String str) {
+            switch(str){
+                case "none":
+                    tokens.addLast(new ExprToken(Value.NONE));
+                    break;
+                case "NOP":
+                    tokens.addLast(new ExprToken(Value.NOP));
+                    break;
+                case "true":
+                    tokens.addLast(new ExprToken(Value.TRUE));
+                    break;
+                case "false":
+                    tokens.addLast(new ExprToken(Value.FALSE));
+                    break;
+                default:
+                    tokens.addLast(new NamedToken(ParserTokenType.WORD, str));
+            }
+        }
+
+        private void parseInt(ArrayDeque<ParserToken> tokens, String str, int base) {
+            try {
+                int i = Integer.parseInt(str, base);
+                tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT32, i)));
+            } catch (NumberFormatException nfeI) {
+                try {
+                    long l = Long.parseLong(str, base);
+                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT64, l)));
+                } catch (NumberFormatException nfeL) {
+                    throw new IllegalArgumentException("Number out of Range:"+str);
+                }
+            }
+        }
+
+        private double parseBinFloat(String str){
+            long val=0;
+            int c1=0,c2=0;
+            int d2=0,e=-1;
+            for(int i=0;i<str.length();i++){
+                switch (str.charAt(i)){
+                    case '0':
+                    case '1':
+                        if(c1<63){
+                            val*=2;
+                            val+=str.charAt(i)-'0';
+                            c1++;
+                            c2+=d2;
+                        }
+                        break;
+                    case '.':
+                        if(d2!=0){
+                            throw new IllegalArgumentException("Duplicate decimal point");
+                        }
+                        d2=1;
+                        break;
+                    case 'E':
+                    case 'e':
+                        e=i+1;
+                        break;
+                }
+            }
+            if (e > 0) {
+                c2-=Integer.parseInt(str.substring(e),2);
+            }
+            return val*Math.pow(2,-c2);
+        }
+        private double parseHexFloat(String str){
+            long val=0;
+            int c1=0,c2=0;
+            int d2=0,e=-1;
+            for(int i=0;i<str.length();i++){
+                switch (str.charAt(i)){
+                    case '0':case '1':case '2':
+                    case '3':case '4':case '5':
+                    case '6':case '7':case '8':
+                    case '9':
+                        if(c1<15){
+                            val*=16;
+                            val+=str.charAt(i)-'0';
+                            c1++;
+                            c2+=d2;
+                        }
+                        break;
+                    case 'A':case 'B':case 'C':
+                    case 'D':case 'E':case 'F':
+                        if(c1<15){
+                            val*=16;
+                            val+=str.charAt(i)-'A'+10;
+                            c1++;
+                            c2+=d2;
+                        }
+                        break;
+                    case 'a':case 'b':case 'c':
+                    case 'd':case 'e':case 'f':
+                        if(c1<15){
+                            val*=16;
+                            val+=str.charAt(i)-'a'+10;
+                            c1++;
+                            c2+=d2;
+                        }
+                        break;
+                    case '.':
+                        if(d2!=0){
+                            throw new IllegalArgumentException("Duplicate decimal point");
+                        }
+                        d2=1;
+                        break;
+                    case 'P':
+                    case 'p':
+                        e=i+1;
+                        break;
+                }
+            }
+            if (e > 0) {
+                c2-=Integer.parseInt(str.substring(e),16);
+            }
+            return val*Math.pow(2,-c2);
+        }
+    }
+
+
+    static class ParserContext{
+        final HashMap<String, Type>      typeNames = new HashMap<>();
+        final HashMap<String, Procedure> procNames = new HashMap<>();
+        final HashMap<String, Value>     constants = new HashMap<>();
+
+        final HashMap<String, Integer>   varIds    = new HashMap<>();
+        //addLater ArrayList<VarData> preEval -> (varType,expectedTypes,valueBoundTo)
+        final ArrayList<Type> varTypes = new ArrayList<>();
+
+        public void declareProcedure(String name,Procedure proc){
+            procNames.put(name,proc);
+            varIds.clear();
+            varTypes.clear();
+        }
+
+        private boolean hasName(String name) {
+            return typeNames.containsKey(name)|| procNames.containsKey(name)||
+                    constants.containsKey(name)|| varIds.containsKey(name);
+        }
+
+        public void defType(String name,Type type){
+            if(hasName(name)){
+                throw new IllegalArgumentException(name+" is already defined");
+            }else{
+                typeNames.put(name,type);
+            }
+        }
+        public void declareVariable(String name,Type type){
+            if(hasName(name)){
+                throw new IllegalArgumentException(name+" is already defined");
+            }else{
+                varIds.put(name,varIds.size());
+                varTypes.add(type);
+            }
+        }
+
+        public Type getType(String name){
+            return typeNames.get(name);
+        }
+        public Procedure getProc(String name){
+            return procNames.get(name);
+        }
+
+        public int getVarId(String name){
+            Integer get=varIds.get(name);
+            return get==null?-1:get;
+        }
+
+        public Type getVarType(int id) {
+            return varTypes.get(id);
+        }
+
+        public int varCount(){
+            return varIds.size();
+        }
+
+        public void addConstant(String constName, Value constValue) {
+            if(hasName(constName)){
+                throw new IllegalArgumentException(constName+" is already defined");
+            }else{
+                //TODO mark value as constant
+                constValue.bind(Value.GLOBAL_VAR);
+                constants.put(constName,constValue);
+            }
+        }
+        public Value getConst(String constName){
+            return constants.get(constName);
+        }
+    }
+
+    enum TypeParserState{
+        ROOT,BRACKET,STRUCT_TYPE,STRUCT_NAME
+    }
+    enum ExpressionParserState{
+        ROOT,BRACKET, ARRAY,STRUCT_NAME,STRUCT_VALUE,INDEX,RANGE
+    }
+    enum ActionParserState{
+        ROOT,ASSIGN_EXPR,DEF_EXPR
+    }
+
+    ParserContext context;
+
+    /*
+    <root_element>=<typedef>|<proc_def>
+    <typedef>='typedef' <Name> <Type> ';'
+    <proc_def>= <Name>'('<Type>(',' <Type>)*') : ('<Name>(,<Name>)*')=>{'
+      (<Action>';')*'}=>['<Name>'('<Name>(,<Name>)*')'(','<Name>'('<Name>(,<Name>)*')')*']'
+    <Action> = <Type>': '<Name>' '<Expression>|<proc_def>|<Name>'='<Expression>
+    <Expression> = <Value>|'('<Expression>')'|<Expression>'?'<Expression>':'<Expression>|
+      <Expression><bOp><Expression>|<lOp><Expression>|<Expression><rOp>
+
+    */
+    public Parser(){
+        context=new ParserContext();
+        Type.addPrimitives(context.typeNames);
+        Native.addProcsTo(context.procNames);
+    }
+    private void updateBracketStack(ParserToken nextTokens, ArrayDeque<ParserTokenType> bracketStack) {
+        if(nextTokens.tokenType ==ParserTokenType.OPEN_BRACKET){
+            bracketStack.addLast(ParserTokenType.OPEN_BRACKET);
+        }else if(nextTokens.tokenType ==ParserTokenType.OPEN_SQ_BRACKET){
+            bracketStack.addLast(ParserTokenType.OPEN_SQ_BRACKET);
+        }else if(nextTokens.tokenType ==ParserTokenType.OPEN_CR_BRACKET){
+            bracketStack.addLast(ParserTokenType.OPEN_CR_BRACKET);
+        }else if(nextTokens.tokenType ==ParserTokenType.CLOSE_BRACKET){
+            if(bracketStack.isEmpty()||
+                    bracketStack.removeLast()!=ParserTokenType.OPEN_BRACKET){
+                throw new IllegalArgumentException("unexpected closing bracket");
+            }
+        }else if(nextTokens.tokenType ==ParserTokenType.CLOSE_SQ_BRACKET){
+            if(bracketStack.isEmpty()||
+                    bracketStack.removeLast()!=ParserTokenType.OPEN_SQ_BRACKET){
+                throw new IllegalArgumentException("unexpected end of struct");
+            }
+        }else if(nextTokens.tokenType ==ParserTokenType.CLOSE_CR_BRACKET){
+            if(bracketStack.isEmpty()||
+                    bracketStack.removeLast()!=ParserTokenType.OPEN_CR_BRACKET){
+                throw new IllegalArgumentException("unexpected end of struct");
+            }
+        }
+    }
+
+    private Type typeFromTokens(ParserContext context, ArrayList<ParserToken> tokens) {
+        //1. parse primitives to TYPE
+        // <Primitive> | <typedef Type>
+        Type tmp;
+        for(int i=0;i<tokens.size();i++){
+            if(i>0&&tokens.get(i-1).tokenType==ParserTokenType.DOLLAR){
+                tokens.set(i-1,new TypeToken(new Type.Generic(((NamedToken)tokens.remove(i--)).value)));
+            }else if(tokens.get(i).tokenType ==ParserTokenType.WORD&&
+                    (i==0||tokens.get(i-1).tokenType !=ParserTokenType.SEPARATOR)){
+                //word preceded with : is param name
+                tmp=context.getType(((NamedToken)tokens.get(i)).value);
+                if(tmp==null){
+                    throw new IllegalArgumentException("Not a typeName:"+
+                            ((NamedToken)tokens.get(i)).value);
+                }
+                tokens.set(i,new TypeToken(tmp));
+            }
+
+        }
+        //2. parse parentheses
+        // '('<Type>')'
+        // '('<Type>(','<Type>)*')=>?'
+        // '{'<Type>':'<Name>(','<Type>':'<Name>)*'}'
+        ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();
+        TypeParserState state=TypeParserState.ROOT;
+        ArrayList<ParserToken> tokenBuffer=new ArrayList<>();
+        ArrayList<Type> typeBuffer=new ArrayList<>();
+        ArrayList<String> nameBuffer=new ArrayList<>();
+        for(int i=0;i<tokens.size();i++){
+            updateBracketStack(tokens.get(i), bracketStack);
+            switch (state){
+                case ROOT:if(bracketStack.size()>0){
+                    if(bracketStack.peekLast()==ParserTokenType.OPEN_BRACKET){
+                        tokens.remove(i--);
+                        state=TypeParserState.BRACKET;
+                    }else if(bracketStack.peekLast()==ParserTokenType.OPEN_CR_BRACKET){
+                        tokens.remove(i--);
+                        state=TypeParserState.STRUCT_TYPE;
+                    }
+                }break;
+                case BRACKET:
+                    if(bracketStack.isEmpty()||(bracketStack.size()==1
+                            &&tokens.get(i).tokenType ==ParserTokenType.COMMA)){
+                        typeBuffer.add(typeFromTokens(context, tokenBuffer));
+                        tokenBuffer.clear();
+                        if(bracketStack.isEmpty()){
+                            if(i+2<tokens.size()&&tokens.get(i+1).tokenType ==ParserTokenType.MAPS_TO
+                                    &&tokens.get(i+2).tokenType ==ParserTokenType.OPTION){
+                                tokens.remove(i+2);
+                                tokens.remove(i+1);
+                                tokens.set(i,new TypeToken(
+                                        new Type.Proc(typeBuffer.toArray(new Type[0]))));
+                                typeBuffer.clear();
+                                state=TypeParserState.ROOT;
+                            }else if(typeBuffer.size()==1){
+                               tokens.set(i,new TypeToken(typeBuffer.get(0)));
+                               typeBuffer.clear();
+                                state=TypeParserState.ROOT;
+                            }else{
+                                throw new IllegalArgumentException("invalid syntax for bracket:" +
+                                        "expected '('<Type>')' or '('<Type>(','<Type>)*')=>?'");
+                            }
+                        }else{
+                            tokens.remove(i--);
+                        }
+                    }else {
+                        tokenBuffer.add(tokens.remove(i--));
+                    }
+                    break;
+                case STRUCT_TYPE:
+                    if(bracketStack.size()==1&&
+                            (tokens.get(i).tokenType ==ParserTokenType.SEPARATOR)){
+                        typeBuffer.add(typeFromTokens(context, tokenBuffer));
+                        tokenBuffer.clear();
+                        state=TypeParserState.STRUCT_NAME;
+                        tokens.remove(i--);
+                    }else{
+                        tokenBuffer.add(tokens.remove(i--));
+                    }
+                    break;
+                case STRUCT_NAME:
+                    if(bracketStack.size()==1&&tokens.get(i).tokenType ==ParserTokenType.WORD){
+                        nameBuffer.add(((NamedToken)tokens.remove(i)).value);
+                        if(tokens.get(i).tokenType==ParserTokenType.CLOSE_CR_BRACKET){
+                            if(bracketStack.removeLast()!=ParserTokenType.OPEN_CR_BRACKET){
+                                throw new IllegalArgumentException("mismatched bracket");
+                            }
+                            tokens.set(i,new TypeToken(new Type.Struct(typeBuffer.toArray(new Type[0]),
+                                    nameBuffer.toArray(new String[0]))));
+                            nameBuffer.clear();
+                            typeBuffer.clear();
+                            state=TypeParserState.ROOT;
+                        }else if (tokens.remove(i--).tokenType==ParserTokenType.COMMA){
+                            state=TypeParserState.STRUCT_TYPE;
+                        }else{
+                            throw new IllegalArgumentException("invalid syntax for struct entry:" +
+                                    "expected <Type>':'<Name>','");
+                        }
+                    }else{
+                        throw new IllegalArgumentException(
+                                "unexpected token for struct-entry name:\""+ tokens.get(i)+
+                                        "\" expected Word");
+                    }
+                    break;
+            }
+
+        }
+        //3. parse optionals and arrays
+        // <Type>'?'
+        // <Type>'[]'
+        for(int i=0;i<tokens.size()-1;i++){
+            if(tokens.get(i).tokenType ==ParserTokenType.TYPE&&
+                    tokens.get(i+1).tokenType==ParserTokenType.OPTION){
+                tmp=((TypeToken)tokens.get(i)).type;
+                tokens.remove(i+1);
+                //addLater? caching of Types
+                tokens.set(i,new TypeToken(new Type.Optional(tmp)));
+            }else if(tokens.get(i).tokenType ==ParserTokenType.TYPE&&
+                    tokens.get(i+1).tokenType ==ParserTokenType.OPEN_SQ_BRACKET){
+                tmp=((TypeToken)tokens.get(i)).type;
+                tokens.remove(i+1);
+                if(i+1<tokens.size()&&tokens.get(i+1).tokenType ==ParserTokenType.CLOSE_SQ_BRACKET){//Array
+                    tokens.remove(i+1);
+                    tokens.set(i,new TypeToken(new Type.Array(tmp)));
+                }else{
+                    throw new IllegalArgumentException("Illegal Syntax for Array: expected " +
+                            "<Type>'[]'or <Type>'['<Type>']'");
+                }
+            }
+        }
+        //4. parse references
+        // '@'<Type>
+        for(int i=tokens.size()-1;i>0;i--){
+            if(tokens.get(i).tokenType ==ParserTokenType.TYPE&&
+                    tokens.get(i-1).tokenType !=ParserTokenType.AT){
+                tmp=((TypeToken)tokens.remove(i)).type;
+                tokens.set(i-1,new TypeToken(new Type.Reference(tmp)));
+            }
+        }
+        if(tokens.size()!=1||tokens.get(0).tokenType !=ParserTokenType.TYPE){
+            throw new IllegalArgumentException("Invalid syntax for Type:"+tokens);
+        }else{
+            return ((TypeToken)tokens.get(0)).type;
+        }
+    }
+    private void readTypeDef(Tokenizer tokens,ParserContext context) throws IOException {
+        ParserToken token= tokens.getNextToken();
+        if(token.tokenType !=ParserTokenType.WORD){
+            throw new IOException("Illegal token-type for type-name:\""+token.tokenType.toString()+
+                    "\" expected \""+ParserTokenType.WORD+"\" or identifier");
+        }
+        String name=((NamedToken)token).value;
+        ArrayList<ParserToken> typeTokens=new ArrayList<>();
+        while((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.END){
+            typeTokens.add(token);
+        }
+        context.defType(name,typeFromTokens(context,typeTokens));
+    }
+    private Expression expressionFromTokens(String procName,Type.Proc procType,ParserContext context, ArrayList<ParserToken> tokens){
+        //1. read brackets
+        // (<Expr>)
+        // (<Type>:)
+        // {<Expr>,<Expr>,<Expr>}
+        // {<Expr>'='<Expr>,<Expr>'='<Expr>,<Expr>'='<Expr>}
+        // {'.'<Name>'='<Expr>,'.'<Name>'='<Expr>,'.'<Name>'='<Expr>}
+        //'['<Expr>']'
+        //'['<Expr>':'<Expr>?']'
+        //'['':'<Expr>']'
+        //addLater? [._] [_.] popFirst,popLast
+        ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();
+        ArrayList<ParserToken> tokenBuffer=new ArrayList<>();
+        ArrayList<Expression> exprBuffer=new ArrayList<>();
+        ArrayList<String> nameBuffer=new ArrayList<>();
+        ExpressionParserState state=ExpressionParserState.ROOT;
+        for(int i=0;i<tokens.size();i++){
+            updateBracketStack(tokens.get(i), bracketStack);
+            switch (state){
+                case ROOT:
+                    if(bracketStack.size()>0){
+                        if(bracketStack.peekLast()==ParserTokenType.OPEN_BRACKET){
+                            tokens.remove(i--);
+                            state=ExpressionParserState.BRACKET;
+                        }else if(bracketStack.peekLast()==ParserTokenType.OPEN_SQ_BRACKET){
+                            tokens.remove(i--);
+                            state=ExpressionParserState.INDEX;
+                        }else if(bracketStack.peekLast()==ParserTokenType.OPEN_CR_BRACKET){
+                            tokens.remove(i--);
+                            if(i+1<tokens.size()&&tokens.get(i+1).tokenType==ParserTokenType.DOT){
+                                state=ExpressionParserState.STRUCT_NAME;
+                            }else{
+                                state=ExpressionParserState.ARRAY;
+                            }
+                        }
+                    }
+                    break;
+                case BRACKET:
+                    if(bracketStack.isEmpty()){
+                        if(tokenBuffer.size()>0&&
+                                tokenBuffer.get(tokenBuffer.size()-1).tokenType==ParserTokenType.SEPARATOR){
+                            tokenBuffer.remove(tokenBuffer.size()-1);//(<Type>:) -> type-cast
+                            tokens.set(i,new TypeToken(typeFromTokens(context,tokenBuffer)));
+                        }else{//(<Expr>) -> <Expr>
+                            tokens.set(i,new ExprToken(expressionFromTokens(procName,procType,context,tokenBuffer)));
+                        }
+                        tokenBuffer.clear();
+                        state=ExpressionParserState.ROOT;
+                    }else{
+                        tokenBuffer.add(tokens.remove(i--));
+                    }
+                    break;
+                case ARRAY://'{'<Expr>(','<Expr>)*'}'
+                    if(bracketStack.isEmpty()||
+                            (bracketStack.size()==1&&tokens.get(i).tokenType==ParserTokenType.COMMA)){
+                        if (bracketStack.size()>0||tokenBuffer.size()>0||exprBuffer.size()>0) {
+                            exprBuffer.add(expressionFromTokens(procName,procType,context,tokenBuffer));
+                            tokenBuffer.clear();
+                        }
+                        if(bracketStack.isEmpty()){
+                            tokens.set(i,new ExprToken(InitStructOrArray.newArray(exprBuffer)));
+                            state=ExpressionParserState.ROOT;
+                        }else{
+                            tokens.remove(i--);
+                        }
+                    }else{
+                        tokenBuffer.add(tokens.remove(i--));
+                    }
+                    break;
+                case STRUCT_NAME://'.'<ID>'='
+                    if(i+2<tokens.size()&&tokens.remove(i).tokenType==ParserTokenType.DOT&&
+                            tokens.get(i).tokenType==ParserTokenType.WORD&&
+                            tokens.remove(i+1).tokenType==ParserTokenType.ASSIGN){
+                        nameBuffer.add(((NamedToken)tokens.remove(i--)).value);
+                        state=ExpressionParserState.STRUCT_VALUE;
+                    }else{
+                        throw new IllegalArgumentException("Invalid syntax for " +
+                                "struct entry name expected: . <ID> = ");
+                    }
+                    break;
+                case STRUCT_VALUE:// <Expr> ',' or <Expr> END_OF_BRACKET
+                    if(bracketStack.isEmpty()||
+                            (bracketStack.size()==1&&tokens.get(i).tokenType==ParserTokenType.COMMA)){
+                        exprBuffer.add(expressionFromTokens(procName,procType,context,tokenBuffer));
+                        tokenBuffer.clear();
+                        if(bracketStack.isEmpty()){
+                            tokens.set(i,new ExprToken(InitStructOrArray.newStruct(exprBuffer,nameBuffer)));
+                            state=ExpressionParserState.ROOT;
+                        }else{
+                            tokens.remove(i--);
+                            state=ExpressionParserState.STRUCT_NAME;
+                        }
+                    }else{
+                        tokenBuffer.add(tokens.remove(i--));
+                    }
+                    break;
+                case INDEX:
+                    if(bracketStack.isEmpty()){
+                        Expression index=expressionFromTokens(procName,procType,context,tokenBuffer);
+                        tokenBuffer.clear();
+                        tokens.set(i,new ExprToken(true,index));
+                        state=ExpressionParserState.ROOT;
+                    }else if(bracketStack.size()==1&&tokens.get(i).tokenType==ParserTokenType.SEPARATOR){
+                        tokens.remove(i--);
+                        exprBuffer.add(tokenBuffer.isEmpty()?null:
+                                expressionFromTokens(procName,procType,context,tokenBuffer));
+                        tokenBuffer.clear();
+                        state=ExpressionParserState.RANGE;
+                    }else{
+                        tokenBuffer.add(tokens.remove(i--));
+                    }
+                    break;
+                case RANGE:
+                    //addLater change syntax for range operators:
+                    // [._],[_.] popFirst/Last
+                    // ['>'<Expr>],['<'<Expr>]
+                    // [<Expr>:<Expr>]
+                    if(bracketStack.isEmpty()){
+                        Expression right=tokenBuffer.isEmpty()?null:
+                                expressionFromTokens(procName,procType,context,tokenBuffer);
+                        tokenBuffer.clear();
+                        tokens.set(i,new ExprToken(//placeholder
+                                Value.createPrimitive(Type.Numeric.INT32,0)));
+                        //TODO create Range access operator from right and exprBuffer
+                        state=ExpressionParserState.ROOT;
+                    }else if(bracketStack.size()==1&&tokens.get(i).tokenType==ParserTokenType.SEPARATOR){
+                        throw new IllegalArgumentException("invalid syntax for range expected " +
+                                "[<Expr>:<Expr>]");
+                    }else{
+                        tokenBuffer.add(tokens.remove(i--));
+                    }
+                    break;
+            }
+        }
+        //2. read Values/Vars
+        int id;
+        Expression tmpL,tmpR;
+        for(int i=0;i<tokens.size();i++){
+            if(tokens.get(i).tokenType == ParserTokenType.WORD&&
+                    (i==0||(tokens.get(i-1).tokenType !=ParserTokenType.DOT))){
+                String name = ((NamedToken) tokens.get(i)).value;
+                id=context.getVarId(name);
+                if(id<0){
+                    if(name.equals(procName)){
+                        tokens.set(i,new ExprToken(new ThisExpr(procType)));
+                    }else {
+                        Value v=context.getConst(name);
+                        if(v==null){
+                            v=context.getProc(name);
+                        }//no else
+                        if(v!=null){
+                            tokens.set(i,new ExprToken(v));
+                        }else{
+                            throw new IllegalArgumentException("Unknown Identifier:"+name);
+                        }
+                    }
+                }else {
+                    tokens.set(i, new ExprToken(new VarExpression(context.getVarType(id), id)));
+                }
+            }
+        }
+        //3. access operators . [.]
+        for(int i=1;i<tokens.size();i++){
+            if(tokens.get(i-1).tokenType==ParserTokenType.EXPRESSION){
+                if(tokens.get(i).tokenType==ParserTokenType.DOT&&
+                tokens.get(i+1).tokenType==ParserTokenType.WORD){
+                    String fieldName=((NamedToken)tokens.remove(i+1)).value;
+                    tokens.set(i-1,new ExprToken(new GetField(
+                            ((ExprToken)tokens.get(i-1)).expr,
+                            fieldName)));
+                    tokens.remove(i--);
+                }else if(tokens.get(i).tokenType==ParserTokenType.INDEX){
+                    tokens.set(i-1,new ExprToken(new GetIndex(
+                            ((ExprToken)tokens.get(i-1)).expr,
+                            ((ExprToken)tokens.get(i)).expr)));
+                    tokens.remove(i--);
+                }else if(tokens.get(i).tokenType==ParserTokenType.RANGE){
+                    //TODO Range
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            }else if(tokens.get(i-1).tokenType==ParserTokenType.TYPE&&
+                tokens.get(i).tokenType==ParserTokenType.EXPRESSION){//typecast
+                tokens.set(i-1,new ExprToken(new TypeCast(
+                        ((TypeToken)tokens.get(i-1)).type,
+                        ((ExprToken)tokens.get(i)).expr)));
+                tokens.remove(i--);
+            }
+        }
+        //4. unary operators: left: + - ~ !
+        for(int i=tokens.size()-2;i>=0;i--){
+            if(tokens.get(i+1).tokenType==ParserTokenType.EXPRESSION&&
+                    (i==0||tokens.get(i-1).tokenType!=ParserTokenType.EXPRESSION)){
+                if(tokens.get(i).tokenType==ParserTokenType.OPERATOR){
+                    if(((Operator)tokens.get(i)).opType==OperatorType.PLUS){
+                        tokens.set(i, tokens.remove(i+1));
+                    }else if(((Operator)tokens.get(i)).opType==OperatorType.MINUS||
+                            ((Operator)tokens.get(i)).opType==OperatorType.FLIP||
+                            ((Operator)tokens.get(i)).opType==OperatorType.NOT
+                    ){
+                        tmpL=((ExprToken)tokens.remove(i+1)).expr;
+                        tokens.set(i,new ExprToken(new LeftUnaryOp(
+                                ((Operator)tokens.get(i)).opType,tmpL)));
+                    }
+                }
+            }
+        }
+        //5. binary operators
+        // **
+        for(int i=tokens.size()-2;i>0;i--){
+            if(tokens.get(i).tokenType==ParserTokenType.OPERATOR&&
+                    ((Operator)tokens.get(i)).opType==OperatorType.POW&&
+                    tokens.get(i+1).tokenType==ParserTokenType.EXPRESSION&&
+                    tokens.get(i-1).tokenType==ParserTokenType.EXPRESSION){
+                tmpL=((ExprToken)tokens.get(i-1)).expr;
+                tmpR=((ExprToken)tokens.remove(i+1)).expr;
+                tokens.remove(i--);
+                tokens.set(i,new ExprToken(new BinOp(tmpL,OperatorType.POW,tmpR)));
+            }
+        }
+        for(int level=0;level<=5;level++){
+            //0: / % //
+            //1: + -
+            //2: >> <<
+            //3:  & | ^
+            //4: && ||
+            //5: == <= < != > =>
+            for(int i=1;i< tokens.size()-1;i++){
+                if(tokens.get(i).tokenType==ParserTokenType.OPERATOR&&
+                        tokens.get(i+1).tokenType==ParserTokenType.EXPRESSION&&
+                        tokens.get(i-1).tokenType==ParserTokenType.EXPRESSION){
+                    if((level==0&&(
+                        (((Operator)tokens.get(i)).opType==OperatorType.DIV||
+                        ((Operator)tokens.get(i)).opType==OperatorType.MULT||
+                        ((Operator)tokens.get(i)).opType==OperatorType.INT_DIV)
+                    ))||(level==1&&(
+                        ((Operator)tokens.get(i)).opType==OperatorType.PLUS||
+                        ((Operator)tokens.get(i)).opType==OperatorType.MINUS
+                    ))||(level==2&&(
+                        ((Operator)tokens.get(i)).opType==OperatorType.LSHIFT||
+                        ((Operator)tokens.get(i)).opType==OperatorType.RSHIFT
+                    ))||(level==3&&(
+                        ((Operator)tokens.get(i)).opType==OperatorType.AND||
+                        ((Operator)tokens.get(i)).opType==OperatorType.OR||
+                        ((Operator)tokens.get(i)).opType==OperatorType.XOR
+                    ))||(level==4&&(
+                        ((Operator)tokens.get(i)).opType==OperatorType.FAST_AND||
+                        ((Operator)tokens.get(i)).opType==OperatorType.FAST_OR
+                    ))||(level==5&&(
+                        ((Operator)tokens.get(i)).opType==OperatorType.EQ||
+                        ((Operator)tokens.get(i)).opType==OperatorType.LE||
+                        ((Operator)tokens.get(i)).opType==OperatorType.LT||
+                        ((Operator)tokens.get(i)).opType==OperatorType.NE||
+                        ((Operator)tokens.get(i)).opType==OperatorType.GT||
+                        ((Operator)tokens.get(i)).opType==OperatorType.GE
+                    ))){
+                        tmpL=((ExprToken)tokens.get(i-1)).expr;
+                        tmpR=((ExprToken)tokens.remove(i+1)).expr;
+                        OperatorType opType=((Operator)tokens.remove(i--)).opType;
+                        tokens.set(i,new ExprToken(new BinOp(tmpL,opType,tmpR)));
+                    }
+                }
+            }
+        }
+        //5. trinary operator ?:
+        for(int i=tokens.size()-1;i>=4;i--){
+            if(tokens.get(i-4).tokenType==ParserTokenType.EXPRESSION&&
+                tokens.get(i-3).tokenType==ParserTokenType.OPTION&&
+                tokens.get(i-2).tokenType==ParserTokenType.EXPRESSION&&
+                tokens.get(i-1).tokenType==ParserTokenType.SEPARATOR&&
+                tokens.get(i).tokenType==ParserTokenType.EXPRESSION){
+                tokens.set(i-4,new ExprToken(new IfExpr(((ExprToken)tokens.get(i-4)).expr,
+                        ((ExprToken)tokens.get(i-2)).expr,((ExprToken)tokens.get(i)).expr)));
+                tokens.remove(i--);//i
+                tokens.remove(i);//i-1
+                tokens.remove(i-1);//i-2
+                tokens.remove(i-2);//i-3
+                if(i>tokens.size()){
+                    i=tokens.size();
+                }
+            }
+        }
+        if(tokens.size()!=1||tokens.get(0).tokenType!=ParserTokenType.EXPRESSION){
+            throw new IllegalArgumentException("Invalid syntax for Expression:"+tokens);
+        }
+        return ((ExprToken)tokens.get(0)).expr;
+    }
+
+    private void readConstDef(Tokenizer tokens,ParserContext context) throws IOException{
+        ArrayList<ParserToken> tokenBuffer=new ArrayList<>();
+        Type constType;
+        ParserToken token;
+        ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();
+        while((token=tokens.getNextToken())!=null&&(bracketStack.size()>0||
+                token.tokenType!=ParserTokenType.SEPARATOR)){
+            updateBracketStack(token,bracketStack);
+            tokenBuffer.add(token);
+        }
+        constType=typeFromTokens(context,tokenBuffer);
+        //addLater restrict usage of generics in constants (only in proc-arguments)
+        tokenBuffer.clear();
+        if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.WORD){
+            throw new IllegalArgumentException("invalid syntax for const definition, expected const <Name>=<Expr>;");
+        }
+        String constName=((NamedToken)token).value;
+        if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.ASSIGN){
+            throw new IllegalArgumentException("invalid syntax for const definition, expected const <Name>=<Expr>;");
+        }
+        while((token=tokens.getNextToken())!=null&&token.tokenType!=ParserTokenType.END){
+            tokenBuffer.add(token);
+        }
+        if(token==null){
+            throw new IllegalArgumentException("unfinished const expression");
+        }
+        context.addConstant(constName,expressionFromTokens(null,null,context,tokenBuffer)
+                .evaluate(null,new ArrayList<>()).get().castTo(constType));
+    }
+
+    private void readProcDef(String name,Tokenizer tokens,ParserContext context) throws IOException {
+        ParserToken token;
+        ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();
+        //1. '('
+        if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.OPEN_BRACKET){
+            throw new IOException("wrong syntax for procedure, expected:" +
+                    " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
+        }
+        bracketStack.addLast(ParserTokenType.OPEN_BRACKET);
+        //2. <Type> (',' <Type>)* ')'
+        ArrayList<Type> argTypes=new ArrayList<>();
+        ArrayList<ParserToken> tokenBuffer=new ArrayList<>();
+        while(bracketStack.size()>0&&(token=tokens.getNextToken())!=null){
+            updateBracketStack(token,bracketStack);
+            if(bracketStack.isEmpty()||(bracketStack.size()==1&&
+                    token.tokenType ==ParserTokenType.COMMA)){
+                if(bracketStack.size()>0||tokenBuffer.size()>0){//ignore empty buffer only at end
+                    argTypes.add(typeFromTokens(context,tokenBuffer));
+                }
+                tokenBuffer.clear();
+            }else{
+                tokenBuffer.add(token);
+            }
+        }
+        Type.Proc procType=new Type.Proc(argTypes.toArray(new Type[0]));
+        if(token==null){
+            throw new IOException("Unexpected end of file");
+        }
+        //3. ':' '('
+        if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.SEPARATOR){
+            throw new IOException("wrong syntax for procedure, expected:" +
+                    " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
+            }
+        if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.OPEN_BRACKET){
+            throw new IOException("wrong syntax for procedure, expected:" +
+                    " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
+        }
+        //4. <Name> (',' <Name>)* ')'
+        ArrayList<String> argNames=new ArrayList<>(argTypes.size());
+        boolean wasWord=false;
+        while((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.CLOSE_BRACKET){
+            if(token.tokenType ==ParserTokenType.COMMA){
+                if(wasWord){
+                    wasWord=false;
+                }else{
+                    throw new IOException(" syntax for ArgNames: Expected <Name>(','<Name>)* ");
+                }
+            }else if(token.tokenType ==ParserTokenType.WORD){
+                if(wasWord){
+                    throw new IOException(" syntax for ArgNames: Expected <Name>(','<Name>)* ");
+               }else{
+                    argNames.add(((NamedToken)token).value);
+                    Type type = argTypes.get(argNames.size() - 1);
+                    context.declareVariable(((NamedToken)token).value,type);
+                    wasWord=true;
+                }
+            }else{
+                throw new IOException("wrong syntax for ArgNames: Expected <Name>(','<Name>)* ");
+            }
+        }
+        if(argNames.size()!=argTypes.size()){
+            throw new IOException("Number of arguments Types ("+argTypes.size()
+                    +") does not match number of arguments ("+argNames.size()+")");
+        }
+        //5. '=>' '{'
+        if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.MAPS_TO){
+            throw new IOException("wrong syntax for procedure, expected:" +
+                    " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
+        }
+        if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.OPEN_CR_BRACKET){
+            throw new IOException("wrong syntax for procedure, expected:" +
+                    " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
+        }
+        //6. (<Action>';')* '}'
+        ArrayList<Action> actions=new ArrayList<>();
+        tokenBuffer.clear();
+        //<Assign-Expr>'=' <Expr>;      -> Assignment
+        //<Type>':' <name> '=' <Expr>;  -> VarDeclaration
+        ActionParserState state=ActionParserState.ROOT;
+        Type defType=null;
+        String defName=null;
+        Expression assignTarget=null;
+        bracketStack.clear();
+        while((token=tokens.getNextToken())!=null&&
+                (bracketStack.size()>0||token.tokenType !=ParserTokenType.CLOSE_CR_BRACKET)){
+            updateBracketStack(token,bracketStack);
+            switch (state){
+                case ROOT:
+                    if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
+                        if(tokenBuffer.size()>0){
+                            throw new IllegalArgumentException("Unexpected semicolon");
+                        }
+                    }else if(bracketStack.isEmpty()&&
+                            token.tokenType==ParserTokenType.SEPARATOR){
+                        defType=typeFromTokens(context,tokenBuffer);
+                        tokenBuffer.clear();
+                        token=tokens.getNextToken();
+                        if(token==null||token.tokenType!=ParserTokenType.WORD){
+                            throw new IllegalArgumentException("Illegal Name for procedure name:" +
+                                    token+" expected: Word");
+                        }
+                        defName=((NamedToken)token).value;
+                        token=tokens.getNextToken();
+                        if(token==null||token.tokenType!=ParserTokenType.ASSIGN){
+                            throw new IllegalArgumentException("Illegal syntax for procedure definition " +
+                                    "expected <Type>:<Name>=<Expr>");
+                        }
+                        state=ActionParserState.DEF_EXPR;
+                    }else if(bracketStack.isEmpty()&&
+                            token.tokenType==ParserTokenType.ASSIGN){
+                        assignTarget=expressionFromTokens(name,procType,context,tokenBuffer);
+                                                tokenBuffer.clear();
+                        state=ActionParserState.ASSIGN_EXPR;
+                    }else{
+                        tokenBuffer.add(token);
+                    }
+                    break;
+                case ASSIGN_EXPR:
+                    if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
+                        Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
+                        if(!Type.canAssign(assignTarget.expectedType(),expr.expectedType(),null)){
+                            throw new IllegalArgumentException("Type-Error: cannot assign " +
+                                    expr.expectedType()+ " to "+assignTarget.expectedType());
+                        }
+                        actions.add(new Assignment(assignTarget,expr));
+                        tokenBuffer.clear();
+                        state=ActionParserState.ROOT;
+                    }else{
+                        tokenBuffer.add(token);
+                    }
+                    break;
+                case DEF_EXPR:
+                    if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
+                        Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
+                        actions.add(new ValDef(defType,expr));
+                        context.declareVariable(defName,defType);
+                        tokenBuffer.clear();
+                        state=ActionParserState.ROOT;
+                    }else{
+                        tokenBuffer.add(token);
+                    }
+                    break;
+            }
+        }
+        if(state!=ActionParserState.ROOT){
+            throw new IllegalArgumentException("Unfinished Action");
+        }
+        //7. '=>' '['
+        if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.MAPS_TO){
+            throw new IOException("wrong syntax for procedure, expected:" +
+                    " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
+        }
+        if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.OPEN_SQ_BRACKET){
+            throw new IOException("wrong syntax for procedure, expected:" +
+                    " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
+        }
+        //8. '<Name>'('<Name>(,<Name>)*')' (','<Name>'('<Name>(,<Name>)*')')*' ']'
+        ArrayList<Procedure.ProcChild> targets=new ArrayList<>();
+        ArrayList<Expression[]> args=new ArrayList<>();
+        ArrayList<Expression> argBuffer;
+        Expression[] argArray;
+        Type[] outTypes;
+        Procedure proc;
+        String procName;
+        tokenBuffer.clear();
+        do{
+            token=tokens.getNextToken();
+            if(token==null||token.tokenType !=ParserTokenType.WORD){
+                if(token!=null&&token.tokenType==ParserTokenType.CLOSE_SQ_BRACKET){
+                    break;//end of proc block
+                }
+                throw new IOException("illegal syntax for procedure-call: "+token+" " +
+                        "expected: <Name>'('<Args>')'");
+            }
+            procName=((NamedToken)token).value;
+            proc= context.getProc(procName);
+            if(proc==null){
+                int id=context.getVarId(procName);
+                if(id>=0&&context.getVarType(id) instanceof Type.Proc){
+                   targets.add(new Procedure.DynamicProcChild(id));
+                   outTypes=((Type.Proc)context.getVarType(id)).getArgTypes();
+                }else if(procName.equals(name)){
+                    targets.add(Procedure.RECURSIVE_CALL);
+                    outTypes=argTypes.toArray(new Type[0]);
+                }else{
+                    throw new IOException("procedure \"" + ((NamedToken) token).value + "\" is not defined");
+                }
+            }else{
+                outTypes=proc.argTypes();
+                targets.add(new Procedure.StaticProcChild(proc));
+            }
+            token=tokens.getNextToken();
+            if(token==null||token.tokenType !=ParserTokenType.OPEN_BRACKET){
+                throw new IOException("illegal syntax for procedure-call: "+token+" " +
+                        "expected: <Name>'('<Args>')'");
+            }
+            argBuffer=new ArrayList<>(outTypes.length);
+            bracketStack.clear();
+            bracketStack.add(ParserTokenType.OPEN_BRACKET);
+            while((token=tokens.getNextToken())!=null){
+                updateBracketStack(token,bracketStack);
+                if(bracketStack.size()==0||(bracketStack.size()==1&&(token.tokenType==ParserTokenType.COMMA))){
+                    argBuffer.add(expressionFromTokens(name,procType,context,tokenBuffer));
+                    tokenBuffer.clear();
+                    if(bracketStack.size()==0){
+                        break;
+                    }
+                }else{
+                    tokenBuffer.add(token);
+                }
+            }
+            if(token==null){
+                throw new IllegalArgumentException("missing closing bracket in proc-call");
+            }
+            if(argBuffer.size()!=outTypes.length){
+                throw new IOException("Number of arguments Arguments for \""+procName+
+                        "\" ("+argBuffer.size()+") does not match the expected number of " +
+                        "arguments ("+outTypes.length+")");
+            }
+            argArray=new Expression[argBuffer.size()];
+            HashMap<String, Type.GenericBound> generics=new HashMap<>();
+            for(int i=0;i< argBuffer.size();i++){
+                //TODO prevent passing a mutable object to two different procedures
+                // (unless its shared)
+                //Type-check parameters
+                if(Type.canAssign(outTypes[i],argBuffer.get(i).expectedType(),generics)){
+                    argArray[i]=argBuffer.get(i);
+                }else{
+                    throw new IllegalArgumentException("Cannot assign "+
+                            argBuffer.get(i).expectedType()+" to "+outTypes[i]+" generics:"+generics);
+                }
+            }
+            args.add(argArray);
+        }while((token=tokens.getNextToken())!=null&&token.tokenType ==ParserTokenType.COMMA);
+        if(token==null||token.tokenType !=ParserTokenType.CLOSE_SQ_BRACKET){
+            throw new IOException("wrong syntax for procedure, expected:" +
+                    " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
+        }
+        proc = new Procedure(procType,actions.toArray(new Action[0]),
+                targets.toArray(new Procedure.ProcChild[0]),
+                args.toArray(new Expression[0][]), context.varCount());
+        context.declareProcedure(name, proc);
+    }
+
+
+    public Procedure parse(Reader input) throws IOException {
+        Tokenizer tokens=new Tokenizer(input);
+        ParserToken token;
+        while((token=tokens.getNextToken())!=null){
+            if(token.tokenType ==ParserTokenType.WORD){
+                if(((NamedToken)token).value.equals("typedef")){
+                    readTypeDef(tokens,context);
+                }else if(((NamedToken)token).value.equals("const")){
+                    readConstDef(tokens,context);
+                }else if(!context.hasName(((NamedToken)token).value)){
+                    readProcDef(((NamedToken)token).value,tokens,context);
+                }else{
+                    throw new IOException("\""+token+"\" is already defined");
+                }
+            }else{
+              throw new IOException("Illegal root level token:\""+token+
+                      "\" expected \"typedef\" or identifier");
+            }
+        }
+        Procedure main=context.getProc("main");
+        if(main==null){
+            throw new IllegalArgumentException("No \"main\" procedure found");
+        }
+        Type[] mainTypes= main.argTypes();
+        if(mainTypes.length>0){
+            if (mainTypes.length != 1 || !(mainTypes[0] instanceof Type.Array) ||
+                ((Type.Array) mainTypes[0]).content != Type.Primitive.STRING) {
+                    throw new IllegalArgumentException("wrong signature of main, " +
+                            "expected ()=>? or (string[])=>?");
+                }
+        }
+        return main;
+    }
+
+
+}
