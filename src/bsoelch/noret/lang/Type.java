@@ -1,5 +1,7 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.TypeError;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -51,7 +53,7 @@ public class Type {
         private Primitive(String name){
             super(name);
             if(primitives.put(name,this)!=null){
-                throw new IllegalArgumentException("The primitive \""+name+"\" already exists");
+                throw new RuntimeException("The primitive \""+name+"\" already exists");
             }
             initFields();
         }
@@ -263,7 +265,7 @@ public class Type {
         private final HashSet<String> fieldNames=new HashSet<>();
         private static String structName(Type[] types,String[] names) {
             if(types.length!=names.length){
-                throw new IllegalArgumentException();
+                throw new IllegalArgumentException("lengths of types and names do not match");
             }
             StringBuilder ret=new StringBuilder("{");
             for(int i=0;i<types.length;i++){
@@ -279,7 +281,7 @@ public class Type {
             super(structName(types,names));
             for(int i=0;i<names.length;i++){
                 if(fields.put(names[i],types[i])!=null){
-                    throw new IllegalArgumentException("duplicate or reserved field-name \""+names[i]+"\" in struct "+this);
+                    throw new TypeError("duplicate or reserved field-name \""+names[i]+"\" in struct "+this);
                 }
                 fieldNames.add(names[i]);
             }

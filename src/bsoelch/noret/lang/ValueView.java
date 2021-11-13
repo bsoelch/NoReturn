@@ -1,5 +1,7 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.SyntaxError;
+
 public interface ValueView {
     Value get();
     void set(Value newValue);
@@ -21,7 +23,7 @@ public interface ValueView {
 
         @Override
         public void set(Value newValue) {
-            throw new IllegalArgumentException("Unable to modify const Value");
+            throw new SyntaxError("Unable to modify const Value");
         }
     }
 }

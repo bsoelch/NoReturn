@@ -1,5 +1,7 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.TypeError;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 
@@ -12,8 +14,7 @@ public class ValDef implements Action {
             this.type = type;
             this.initValue = initValue;
         }else{
-            throw new IllegalArgumentException("Cannot assign "+
-                    initValue.expectedType()+" to "+type);
+            throw new TypeError("Cannot assign "+initValue.expectedType()+" to "+type);
         }
     }
 

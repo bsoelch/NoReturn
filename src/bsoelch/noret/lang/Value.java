@@ -1,5 +1,9 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.NoRetRuntimeError;
+import bsoelch.noret.SyntaxError;
+import bsoelch.noret.TypeError;
+
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -25,7 +29,7 @@ public abstract class Value {
                 //TODO OptionalValue
                 throw new UnsupportedOperationException("Unimplemented");
             }else{
-                throw new IllegalArgumentException("Cannot cast none to \""+t+"\"");
+                throw new TypeError("Cannot cast none to \""+t+"\"");
             }
         }
         @Override
@@ -49,7 +53,7 @@ public abstract class Value {
             }else if(t instanceof Type.Proc){
                 return new Procedure((Type.Proc) t);
             }else{
-                throw new IllegalArgumentException("Cannot cast NOP to\""+t+"\"");
+                throw new TypeError("Cannot cast NOP to\""+t+"\"");
             }
         }
         @Override
@@ -68,7 +72,7 @@ public abstract class Value {
         }
         void put(String key,V value){
             if(map.put(key,value)!=null){
-                throw new IllegalArgumentException("element \""+key+"\" already exists");
+                throw new RuntimeException("element \""+key+"\" already exists");
             }
         }
     }
@@ -124,44 +128,37 @@ public abstract class Value {
     public final Value getField(String fieldId) {
         Supplier<Value> get= getters.get(fieldId);
         if(get==null){
-            throw new IllegalArgumentException("Field \""+fieldId+
-                    "\" of "+getType()+" cannot be read");
+            throw new SyntaxError("Field \""+fieldId+"\" of "+getType()+" cannot be read");
         }
         return get.get();
     }
     public Value setField(String fieldId, Value value) {
         Function<Value,Value> set= setters.get(fieldId);
         if(set==null){
-            throw new IllegalArgumentException("Field \""+fieldId+
-                    "\" of "+getType()+" cannot be modified");
+            throw new SyntaxError("Field \""+fieldId+ "\" of "+getType()+" cannot be modified");
         }
         return set.apply(value);
     }
 
     //addLater? make IndexOperators return optional
     public Value getAtIndex(Value index) {
-        throw new IllegalArgumentException("Index access is not supported" +
-                " for "+getType());
+        throw new SyntaxError("Index access is not supported" + " for "+getType());
     }
     public Value setAtIndex(Value index,Value value) {
-        throw new IllegalArgumentException("Index access is not supported" +
-                " for "+getType());
+        throw new SyntaxError("Index access is not supported" + " for "+getType());
     }
 
     public Value getRange(Value off,Value to) {
-        throw new IllegalArgumentException("Range access is not supported" +
-                " for "+getType());
+        throw new SyntaxError("Range access is not supported" +" for "+getType());
     }
     public Value setRange(Value off,Value to,Value value) {
-        throw new IllegalArgumentException("Range access is not supported" +
-                " for "+getType());
+        throw new SyntaxError("Range access is not supported" +" for "+getType());
     }
 
     public static Value createPrimitive(Type.Primitive type, Object value){
         //addLater? typeCheck value
         if(type== Type.Primitive.ANY){
-            throw new IllegalArgumentException("Cannot create instances of Type \""
-                    +Type.Primitive.ANY+"\"");
+            throw new TypeError("Cannot create instances of Type \""+Type.Primitive.ANY+"\"");
         }
         if(type== Type.Primitive.STRING){
             return new StringValue((String)value);
@@ -183,7 +180,7 @@ public abstract class Value {
             if(t==type||t==Type.Primitive.ANY||t instanceof Type.Generic){
                 return this;
             }else{
-                throw new IllegalArgumentException("Cannot cast "+type+" to "+t);
+                throw new TypeError("Cannot cast "+type+" to "+t);
             }
         }
         @Override
@@ -223,7 +220,7 @@ public abstract class Value {
                             return (NumericValue) createPrimitive((Type.Numeric)t,
                                     ((Number)value).doubleValue());
                         default:
-                            throw new IllegalArgumentException("exceeded maximum number capacity");
+                            throw new SyntaxError("exceeded maximum number capacity");
                     }
                 }else{
                     switch (((Type.Numeric) t).level){
@@ -240,11 +237,11 @@ public abstract class Value {
                             return (NumericValue) createPrimitive((Type.Numeric)t,
                                     ((Number)value).longValue());
                         default:
-                            throw new IllegalArgumentException("exceeded maximum number capacity");
+                            throw new SyntaxError("exceeded maximum number capacity");
                     }
                 }
             }else {
-                throw new IllegalArgumentException("Cannot cast "+type+" to "+t);
+                throw new TypeError("Cannot cast "+type+" to "+t);
             }
         }
         @Override
@@ -285,8 +282,7 @@ public abstract class Value {
                 //TODO cast String to Array
                 throw new UnsupportedOperationException("Unimplemented");
             }else{
-                throw new IllegalArgumentException("Cannot cast "+Type.Primitive.STRING+
-                        " to "+t);
+                throw new TypeError("Cannot cast "+Type.Primitive.STRING+" to "+t);
             }
         }
         @Override
@@ -403,12 +399,11 @@ public abstract class Value {
                     }
                     return new Array(t,newElements);
                 }else{
-                    throw new IllegalArgumentException("Cannot cast type:"+type+
-                            " to "+t);
+                    throw new TypeError("Cannot cast type:"+type+ " to "+t);
                 }
             }
             //addLater? uint8[] -> String
-            throw new IllegalArgumentException("Cannot cast "+type+" to "+t);
+            throw new TypeError("Cannot cast "+type+" to "+t);
         }
         @Override
         public boolean equals(Object o) {
@@ -441,7 +436,7 @@ public abstract class Value {
             //long since indices are internally uint64
             long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
             if(lIndex<0||lIndex>=elements.length){
-                throw new IllegalArgumentException("index out of Bounds:"+lIndex);
+                throw new NoRetRuntimeError("index out of Bounds:"+lIndex);
             }else{
                 return elements[(int)lIndex];
             }
@@ -451,7 +446,7 @@ public abstract class Value {
             //long since indices are internally uint64
             long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
             if(lIndex<0||lIndex>=elements.length){
-                throw new IllegalArgumentException("index out of Bounds:"+lIndex);
+                throw new NoRetRuntimeError("index out of Bounds:"+lIndex);
             }else{
                 //TODO create independent copy if necessary
                 elements[(int)lIndex]=value.castTo(((Type.Array)type).content);
@@ -554,8 +549,7 @@ public abstract class Value {
                     }
                     return new Struct(newElements,names);
                 }else{
-                    throw new IllegalArgumentException("Cannot cast type:"+type+
-                            " to "+t);
+                    throw new TypeError("Cannot cast type:"+type+ " to "+t);
                 }
             }
             throw new UnsupportedOperationException("Unimplemented");

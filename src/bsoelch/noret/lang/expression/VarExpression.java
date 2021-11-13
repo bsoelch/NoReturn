@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -23,8 +24,7 @@ public class VarExpression implements Expression {
             @Override
             public void set(Value newValue) {
                 if(!Type.canAssign(varType,newValue.getType(),null)){
-                    throw new IllegalArgumentException("unresolved Type-Error cannot assign " +
-                            newValue.getType()+" to "+varType);
+                    throw new TypeError("cannot assign " +newValue.getType()+" to "+varType);
                 }
                 newValue=newValue.castTo(varType);
                 newValue.bind(id);

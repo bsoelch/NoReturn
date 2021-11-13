@@ -1,5 +1,7 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.TypeError;
+
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -47,7 +49,7 @@ public class Procedure extends Value{
         if(Type.canAssign(t,type,new HashMap<>())){
             return this;
         }else{
-            throw new IllegalArgumentException("cannot cast:"+type+" to "+t);
+            throw new TypeError("cannot cast:"+type+" to "+t);
         }
     }
     @Override

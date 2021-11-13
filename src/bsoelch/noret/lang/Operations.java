@@ -1,5 +1,8 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.SyntaxError;
+import bsoelch.noret.TypeError;
+
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -61,7 +64,7 @@ public class Operations {
                                         r.castTo(Type.Numeric.FLOAT64)).value);
                         break;
                     default:
-                        throw new IllegalArgumentException("exceeded maximum number capacity");
+                        throw new SyntaxError("exceeded maximum number capacity");
                 }
             }else{
                 switch (level){
@@ -94,15 +97,14 @@ public class Operations {
                                 .apply(signed);
                         break;
                     default:
-                        throw new IllegalArgumentException("exceeded maximum number capacity");
+                        throw new SyntaxError("exceeded maximum number capacity");
                 }
             }
         }else{
             res=valueOp.apply(l,r);
         }
         if(res==null){
-            throw new IllegalArgumentException("Unsupported types for "+opName+
-                        ":"+l.type+", "+r.type);
+            throw new TypeError("Unsupported types for "+opName+":"+l.type+", "+r.type);
         }else{
             return res;
         }
@@ -377,7 +379,7 @@ public class Operations {
                         res=f64Op.apply((Double) ((Value.NumericValue)v).value);
                         break;
                     default:
-                        throw new IllegalArgumentException("exceeded maximum number capacity");
+                        throw new SyntaxError("exceeded maximum number capacity");
                 }
             }else{
                 boolean s=((Type.Numeric) v.type).signed;
@@ -395,14 +397,14 @@ public class Operations {
                         res=i64Op.apply(s,(Long) ((Value.NumericValue)v).value);
                         break;
                     default:
-                        throw new IllegalArgumentException("exceeded maximum number capacity");
+                        throw new SyntaxError("exceeded maximum number capacity");
                 }
             }
         }else{
             res=valueOp.apply(v);
         }
         if(res==null){
-            throw new IllegalArgumentException("Unsupported type for "+opName+ ":"+v.type);
+            throw new TypeError("Unsupported type for "+opName+ ":"+v.type);
         }else{
             return res;
         }
@@ -412,7 +414,7 @@ public class Operations {
         if(Type.canAssign(Type.Primitive.BOOL,lVal.type,null)){
             return Value.createPrimitive(Type.Primitive.BOOL,!asBool(lVal));
         }else{
-            throw new IllegalArgumentException("unsupported type for !:"+lVal.type);
+            throw new TypeError("unsupported type for !:"+lVal.type);
         }
     }
 
@@ -468,7 +470,7 @@ public class Operations {
                     case 3:
                         return Type.Numeric.FLOAT64;
                     default:
-                        throw new IllegalArgumentException("exceeded maximum number capacity");
+                        throw new SyntaxError("exceeded maximum number capacity");
                 }
             }else{
                 switch (level){
@@ -481,18 +483,18 @@ public class Operations {
                     case 3:
                         return signed?Type.Numeric.INT64: Type.Numeric.UINT64;
                     default:
-                        throw new IllegalArgumentException("exceeded maximum number capacity");
+                        throw new SyntaxError("exceeded maximum number capacity");
                 }
             }
         }else{
-            throw new IllegalArgumentException("Unsupported types for operation"+opName+": "+lType+", "+rType);
+            throw new TypeError("Unsupported types for operation"+opName+": "+lType+", "+rType);
         }
     }
 
     public static Type typeBiIntOp(String opName,Type lType, Type rType){
         Type.Numeric t=typeCalc(opName, lType, rType);
         if(t.isFloat){
-            throw new IllegalArgumentException("Unsupported types for operation"+opName+": "+lType+", "+rType);
+            throw new TypeError("Unsupported types for operation"+opName+": "+lType+", "+rType);
         }
         return t;
     }
@@ -524,7 +526,7 @@ public class Operations {
                 case 3:
                     return Type.Numeric.FLOAT64;
                 default:
-                    throw new IllegalArgumentException("exceeded maximum number capacity");
+                    throw new SyntaxError("exceeded maximum number capacity");
             }
         }
     }
@@ -533,7 +535,7 @@ public class Operations {
         if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
             return Type.Numeric.FLOAT64;
         }else{
-            throw new IllegalArgumentException("Unsupported types for operation ** : "+lType+", "+rType);
+            throw new TypeError("Unsupported types for operation ** : "+lType+", "+rType);
         }
     }
 

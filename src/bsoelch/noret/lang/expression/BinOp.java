@@ -1,5 +1,7 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.SyntaxError;
+import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -76,9 +78,9 @@ public class BinOp implements Expression {
             case IF:
             case NOT:
             case FLIP:
-                throw new IllegalArgumentException(op+" is no binary operator");
+                throw new SyntaxError(op+" is no binary operator");
         }
-        throw new IllegalArgumentException(op+" is no valid operator");
+        throw new SyntaxError(op+" is no valid operator");
     }
 
     @Override
@@ -120,8 +122,7 @@ public class BinOp implements Expression {
                         Type.canAssign(Type.Primitive.BOOL,rType,null)){
                     return Type.Primitive.BOOL;
                 }else{
-                    //addLater! own exception
-                    throw new IllegalArgumentException("Type-Error");
+                    throw new TypeError("invalid arguments for "+(op==OperatorType.FAST_AND?"&&":"||")+": "+lType+", "+rType);
                 }
             case EQ:
             case NE://eq functions for any expressions
@@ -131,13 +132,13 @@ public class BinOp implements Expression {
             case LE:
             case LT:
                 if(!Operations.typeCheckCompare(lType,rType)){
-                    throw new IllegalArgumentException("Type-Error");
+                    throw new TypeError(lType+" and "+rType+" are not compareable");
                 }
                 return Type.Primitive.BOOL;
             case IF:
             case NOT:
             case FLIP:
-                throw new IllegalArgumentException(op+" is no binary operator");
+                throw new SyntaxError(op+" is no binary operator");
         }
         return null;
     }

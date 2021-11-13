@@ -1,5 +1,7 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.SyntaxError;
+import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -47,9 +49,9 @@ public class LeftUnaryOp implements Expression {
             case LE:
             case LT:
             case IF:
-                throw new IllegalArgumentException(op+" is no left-unary operator");
+                throw new SyntaxError(op+" is no left-unary operator");
         }
-        throw new IllegalArgumentException(op+" is no valid operator");
+        throw new SyntaxError(op+" is no valid operator");
     }
 
     @Override
@@ -80,15 +82,15 @@ public class LeftUnaryOp implements Expression {
                         }
                     }
                 }
-                throw new IllegalArgumentException("Type-Error");
+                throw new TypeError("illegal operand for "+(op==OperatorType.PLUS?"+":"-")+":"+argType);
             case FLIP:
                 if(argType instanceof Type.Numeric&&(!((Type.Numeric) argType).isFloat))
                     return argType;
-                throw new IllegalArgumentException("Type-Error");
+                throw new TypeError("illegal operand for flip:"+argType);
             case NOT:
                 if(Type.canAssign(Type.Primitive.BOOL,argType,null))
                     return Type.Primitive.BOOL;
-                throw new IllegalArgumentException("Type-Error");
+                throw new TypeError("illegal operand for not:"+argType);
             case MULT:
             case DIV:
             case INT_DIV:
@@ -108,9 +110,9 @@ public class LeftUnaryOp implements Expression {
             case LE:
             case LT:
             case IF:
-                throw new IllegalArgumentException(op+" is no left-unary operator");
+                throw new SyntaxError(op+" is no left-unary operator");
         }
-        throw new IllegalArgumentException(op+" is no valid operator");
+        throw new SyntaxError(op+" is no valid operator");
     }
 }
 

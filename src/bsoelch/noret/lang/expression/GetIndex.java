@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -19,7 +20,7 @@ public class GetIndex implements Expression{
             }else if(Type.canAssign(Type.Numeric.STRING, indType,null)){
                 this.type = Type.Numeric.UINT64;//index of string
             }else{
-                throw new IllegalArgumentException("Invalid type for string index:"+
+                throw new TypeError("Invalid type for string index:"+
                         indType+ " string indices have to be unsigned integers or strings");
             }
         }else {
@@ -27,11 +28,11 @@ public class GetIndex implements Expression{
                 if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
                     this.type =((Type.Array) valType).content;
                 }else{
-                    throw new IllegalArgumentException("Invalid type for array index:"+
+                    throw new TypeError("Invalid type for array index:"+
                             indType+ " Array indices have to be unsigned integers");
                 }
             }else{
-                throw new IllegalArgumentException("Invalid type for array/dictionary access: \"" +
+                throw new TypeError("Invalid type for array/dictionary access: \"" +
                         valType +"\" only dictionary, arrays and string support dict-access");
             }
         }
@@ -50,8 +51,7 @@ public class GetIndex implements Expression{
             @Override
             public void set(Value newValue) {
                 if(!Type.canAssign(type,newValue.getType(),null)){
-                    throw new IllegalArgumentException("unresolved Type-Error cannot assign " +
-                            newValue.getType()+" to "+type);
+                    throw new TypeError("cannot assign " +newValue.getType()+" to "+type);
                 }
                 newValue=newValue.castTo(type);
                 source.set(source.get().setAtIndex(indexValue,newValue));

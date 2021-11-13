@@ -1,5 +1,7 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.SyntaxError;
+import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -14,8 +16,7 @@ public class GetField implements Expression{
         Type valType = value.expectedType();
         type=valType.getField(fieldName);
         if(type==null){
-            throw new IllegalArgumentException("Type "+valType+
-                    " does not have a field \""+fieldName+"\"");
+            throw new SyntaxError("Type "+valType+" does not have a field \""+fieldName+"\"");
         }
     }
 
@@ -31,8 +32,7 @@ public class GetField implements Expression{
             @Override
             public void set(Value newValue) {
                 if(!Type.canAssign(type,newValue.getType(),null)){
-                    throw new IllegalArgumentException("unresolved Type-Error cannot assign " +
-                            newValue.getType()+" to "+type);
+                    throw new TypeError("cannot assign " + newValue.getType()+" to "+type);
                 }
                 newValue=newValue.castTo(type);
                 source.set(source.get().setField(fieldName,newValue));

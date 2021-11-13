@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -11,8 +12,7 @@ public class TypeCast implements Expression{
     public TypeCast(Type castType, Expression value) {
         this.value = value;
         if(!Type.canCast(castType,value.expectedType(),null)){
-            throw new IllegalArgumentException("Values of type "+value.expectedType()+
-                    " cannot be cast to "+castType);
+            throw new TypeError("Values of type "+value.expectedType()+ " cannot be cast to "+castType);
         }
         //typecasts are evaluated at runtime
         type=castType;

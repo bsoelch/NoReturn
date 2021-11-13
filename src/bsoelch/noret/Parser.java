@@ -142,7 +142,7 @@ public class Parser {
         private int forceNextChar() throws IOException {
             int c=nextChar();
             if (c < 0) {
-                throw new IOException("Unexpected end of File");
+                throw new SyntaxError("Unexpected end of File");
             }
             return c;
         }
@@ -466,7 +466,7 @@ public class Parser {
                 }
             }
             if(state!=WordState.ROOT){
-                throw new IOException("Unexpected end of File");
+                throw new SyntaxError("Unexpected end of File");
             }
             finishWord(tokenBuffer,buffer);
         }
@@ -529,7 +529,7 @@ public class Parser {
                         addWord(tokens, str);
                     }
                 }catch (NumberFormatException nfe){
-                    throw new IllegalArgumentException(nfe);//addLater own exception
+                    throw new SyntaxError(nfe);
                 }
                 buffer.setLength(0);
                 return true;
@@ -565,7 +565,7 @@ public class Parser {
                     long l = Long.parseLong(str, base);
                     tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT64, l)));
                 } catch (NumberFormatException nfeL) {
-                    throw new IllegalArgumentException("Number out of Range:"+str);
+                    throw new SyntaxError("Number out of Range:"+str);
                 }
             }
         }
@@ -587,7 +587,7 @@ public class Parser {
                         break;
                     case '.':
                         if(d2!=0){
-                            throw new IllegalArgumentException("Duplicate decimal point");
+                            throw new SyntaxError("Duplicate decimal point");
                         }
                         d2=1;
                         break;
@@ -639,7 +639,7 @@ public class Parser {
                         break;
                     case '.':
                         if(d2!=0){
-                            throw new IllegalArgumentException("Duplicate decimal point");
+                            throw new SyntaxError("Duplicate decimal point");
                         }
                         d2=1;
                         break;
@@ -679,14 +679,14 @@ public class Parser {
 
         public void defType(String name,Type type){
             if(hasName(name)){
-                throw new IllegalArgumentException(name+" is already defined");
+                throw new SyntaxError(name+" is already defined");
             }else{
                 typeNames.put(name,type);
             }
         }
         public void declareVariable(String name,Type type){
             if(hasName(name)){
-                throw new IllegalArgumentException(name+" is already defined");
+                throw new SyntaxError(name+" is already defined");
             }else{
                 varIds.put(name,varIds.size());
                 varTypes.add(type);
@@ -715,7 +715,7 @@ public class Parser {
 
         public void addConstant(String constName, Value constValue) {
             if(hasName(constName)){
-                throw new IllegalArgumentException(constName+" is already defined");
+                throw new SyntaxError(constName+" is already defined");
             }else{
                 //TODO mark value as constant
                 constValue.bind(Value.GLOBAL_VAR);
@@ -764,17 +764,17 @@ public class Parser {
         }else if(nextTokens.tokenType ==ParserTokenType.CLOSE_BRACKET){
             if(bracketStack.isEmpty()||
                     bracketStack.removeLast()!=ParserTokenType.OPEN_BRACKET){
-                throw new IllegalArgumentException("unexpected closing bracket");
+                throw new SyntaxError("unexpected closing bracket");
             }
         }else if(nextTokens.tokenType ==ParserTokenType.CLOSE_SQ_BRACKET){
             if(bracketStack.isEmpty()||
                     bracketStack.removeLast()!=ParserTokenType.OPEN_SQ_BRACKET){
-                throw new IllegalArgumentException("unexpected end of struct");
+                throw new SyntaxError("unexpected end of struct");
             }
         }else if(nextTokens.tokenType ==ParserTokenType.CLOSE_CR_BRACKET){
             if(bracketStack.isEmpty()||
                     bracketStack.removeLast()!=ParserTokenType.OPEN_CR_BRACKET){
-                throw new IllegalArgumentException("unexpected end of struct");
+                throw new SyntaxError("unexpected end of struct");
             }
         }
     }
@@ -791,7 +791,7 @@ public class Parser {
                 //word preceded with : is param name
                 tmp=context.getType(((NamedToken)tokens.get(i)).value);
                 if(tmp==null){
-                    throw new IllegalArgumentException("Not a typeName:"+
+                    throw new SyntaxError("Not a typeName:"+
                             ((NamedToken)tokens.get(i)).value);
                 }
                 tokens.set(i,new TypeToken(tmp));
@@ -838,7 +838,7 @@ public class Parser {
                                typeBuffer.clear();
                                 state=TypeParserState.ROOT;
                             }else{
-                                throw new IllegalArgumentException("invalid syntax for bracket:" +
+                                throw new SyntaxError("invalid syntax for bracket:" +
                                         "expected '('<Type>')' or '('<Type>(','<Type>)*')=>?'");
                             }
                         }else{
@@ -864,7 +864,7 @@ public class Parser {
                         nameBuffer.add(((NamedToken)tokens.remove(i)).value);
                         if(tokens.get(i).tokenType==ParserTokenType.CLOSE_CR_BRACKET){
                             if(bracketStack.removeLast()!=ParserTokenType.OPEN_CR_BRACKET){
-                                throw new IllegalArgumentException("mismatched bracket");
+                                throw new SyntaxError("mismatched bracket");
                             }
                             tokens.set(i,new TypeToken(new Type.Struct(typeBuffer.toArray(new Type[0]),
                                     nameBuffer.toArray(new String[0]))));
@@ -874,11 +874,11 @@ public class Parser {
                         }else if (tokens.remove(i--).tokenType==ParserTokenType.COMMA){
                             state=TypeParserState.STRUCT_TYPE;
                         }else{
-                            throw new IllegalArgumentException("invalid syntax for struct entry:" +
+                            throw new SyntaxError("invalid syntax for struct entry:" +
                                     "expected <Type>':'<Name>','");
                         }
                     }else{
-                        throw new IllegalArgumentException(
+                        throw new SyntaxError(
                                 "unexpected token for struct-entry name:\""+ tokens.get(i)+
                                         "\" expected Word");
                     }
@@ -904,7 +904,7 @@ public class Parser {
                     tokens.remove(i+1);
                     tokens.set(i,new TypeToken(new Type.Array(tmp)));
                 }else{
-                    throw new IllegalArgumentException("Illegal Syntax for Array: expected " +
+                    throw new SyntaxError("Illegal Syntax for Array: expected " +
                             "<Type>'[]'or <Type>'['<Type>']'");
                 }
             }
@@ -919,7 +919,7 @@ public class Parser {
             }
         }
         if(tokens.size()!=1||tokens.get(0).tokenType !=ParserTokenType.TYPE){
-            throw new IllegalArgumentException("Invalid syntax for Type:"+tokens);
+            throw new SyntaxError("Invalid syntax for Type:"+tokens);
         }else{
             return ((TypeToken)tokens.get(0)).type;
         }
@@ -927,7 +927,7 @@ public class Parser {
     private void readTypeDef(Tokenizer tokens,ParserContext context) throws IOException {
         ParserToken token= tokens.getNextToken();
         if(token.tokenType !=ParserTokenType.WORD){
-            throw new IOException("Illegal token-type for type-name:\""+token.tokenType.toString()+
+            throw new SyntaxError("Illegal token-type for type-name:\""+token.tokenType.toString()+
                     "\" expected \""+ParserTokenType.WORD+"\" or identifier");
         }
         String name=((NamedToken)token).value;
@@ -1013,7 +1013,7 @@ public class Parser {
                         nameBuffer.add(((NamedToken)tokens.remove(i--)).value);
                         state=ExpressionParserState.STRUCT_VALUE;
                     }else{
-                        throw new IllegalArgumentException("Invalid syntax for " +
+                        throw new SyntaxError("Invalid syntax for " +
                                 "struct entry name expected: . <ID> = ");
                     }
                     break;
@@ -1063,7 +1063,7 @@ public class Parser {
                         //TODO create Range access operator from right and exprBuffer
                         state=ExpressionParserState.ROOT;
                     }else if(bracketStack.size()==1&&tokens.get(i).tokenType==ParserTokenType.SEPARATOR){
-                        throw new IllegalArgumentException("invalid syntax for range expected " +
+                        throw new SyntaxError("invalid syntax for range expected " +
                                 "[<Expr>:<Expr>]");
                     }else{
                         tokenBuffer.add(tokens.remove(i--));
@@ -1090,7 +1090,7 @@ public class Parser {
                         if(v!=null){
                             tokens.set(i,new ExprToken(v));
                         }else{
-                            throw new IllegalArgumentException("Unknown Identifier:"+name);
+                            throw new SyntaxError("Unknown Identifier:"+name);
                         }
                     }
                 }else {
@@ -1219,7 +1219,7 @@ public class Parser {
             }
         }
         if(tokens.size()!=1||tokens.get(0).tokenType!=ParserTokenType.EXPRESSION){
-            throw new IllegalArgumentException("Invalid syntax for Expression:"+tokens);
+            throw new SyntaxError("Invalid syntax for Expression:"+tokens);
         }
         return ((ExprToken)tokens.get(0)).expr;
     }
@@ -1238,17 +1238,17 @@ public class Parser {
         //addLater restrict usage of generics in constants (only in proc-arguments)
         tokenBuffer.clear();
         if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.WORD){
-            throw new IllegalArgumentException("invalid syntax for const definition, expected const <Name>=<Expr>;");
+            throw new SyntaxError("invalid syntax for const definition, expected const <Name>=<Expr>;");
         }
         String constName=((NamedToken)token).value;
         if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.ASSIGN){
-            throw new IllegalArgumentException("invalid syntax for const definition, expected const <Name>=<Expr>;");
+            throw new SyntaxError("invalid syntax for const definition, expected const <Name>=<Expr>;");
         }
         while((token=tokens.getNextToken())!=null&&token.tokenType!=ParserTokenType.END){
             tokenBuffer.add(token);
         }
         if(token==null){
-            throw new IllegalArgumentException("unfinished const expression");
+            throw new SyntaxError("unfinished const expression");
         }
         context.addConstant(constName,expressionFromTokens(null,null,context,tokenBuffer)
                 .evaluate(null,new ArrayList<>()).get().castTo(constType));
@@ -1259,7 +1259,7 @@ public class Parser {
         ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();
         //1. '('
         if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.OPEN_BRACKET){
-            throw new IOException("wrong syntax for procedure, expected:" +
+            throw new SyntaxError("wrong syntax for procedure, expected:" +
                     " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
         }
         bracketStack.addLast(ParserTokenType.OPEN_BRACKET);
@@ -1280,15 +1280,15 @@ public class Parser {
         }
         Type.Proc procType=new Type.Proc(argTypes.toArray(new Type[0]));
         if(token==null){
-            throw new IOException("Unexpected end of file");
+            throw new SyntaxError("Unexpected end of file");
         }
         //3. ':' '('
         if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.SEPARATOR){
-            throw new IOException("wrong syntax for procedure, expected:" +
+            throw new SyntaxError("wrong syntax for procedure, expected:" +
                     " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
             }
         if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.OPEN_BRACKET){
-            throw new IOException("wrong syntax for procedure, expected:" +
+            throw new SyntaxError("wrong syntax for procedure, expected:" +
                     " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
         }
         //4. <Name> (',' <Name>)* ')'
@@ -1299,11 +1299,11 @@ public class Parser {
                 if(wasWord){
                     wasWord=false;
                 }else{
-                    throw new IOException(" syntax for ArgNames: Expected <Name>(','<Name>)* ");
+                    throw new SyntaxError(" syntax for ArgNames: Expected <Name>(','<Name>)* ");
                 }
             }else if(token.tokenType ==ParserTokenType.WORD){
                 if(wasWord){
-                    throw new IOException(" syntax for ArgNames: Expected <Name>(','<Name>)* ");
+                    throw new SyntaxError(" syntax for ArgNames: Expected <Name>(','<Name>)* ");
                }else{
                     argNames.add(((NamedToken)token).value);
                     Type type = argTypes.get(argNames.size() - 1);
@@ -1311,20 +1311,20 @@ public class Parser {
                     wasWord=true;
                 }
             }else{
-                throw new IOException("wrong syntax for ArgNames: Expected <Name>(','<Name>)* ");
+                throw new SyntaxError("wrong syntax for ArgNames: Expected <Name>(','<Name>)* ");
             }
         }
         if(argNames.size()!=argTypes.size()){
-            throw new IOException("Number of arguments Types ("+argTypes.size()
+            throw new SyntaxError("Number of arguments Types ("+argTypes.size()
                     +") does not match number of arguments ("+argNames.size()+")");
         }
         //5. '=>' '{'
         if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.MAPS_TO){
-            throw new IOException("wrong syntax for procedure, expected:" +
+            throw new SyntaxError("wrong syntax for procedure, expected:" +
                     " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
         }
         if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.OPEN_CR_BRACKET){
-            throw new IOException("wrong syntax for procedure, expected:" +
+            throw new SyntaxError("wrong syntax for procedure, expected:" +
                     " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
         }
         //6. (<Action>';')* '}'
@@ -1344,7 +1344,7 @@ public class Parser {
                 case ROOT:
                     if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
                         if(tokenBuffer.size()>0){
-                            throw new IllegalArgumentException("Unexpected semicolon");
+                            throw new SyntaxError("Unexpected semicolon");
                         }
                     }else if(bracketStack.isEmpty()&&
                             token.tokenType==ParserTokenType.SEPARATOR){
@@ -1352,13 +1352,13 @@ public class Parser {
                         tokenBuffer.clear();
                         token=tokens.getNextToken();
                         if(token==null||token.tokenType!=ParserTokenType.WORD){
-                            throw new IllegalArgumentException("Illegal Name for procedure name:" +
+                            throw new SyntaxError("Illegal Name for procedure name:" +
                                     token+" expected: Word");
                         }
                         defName=((NamedToken)token).value;
                         token=tokens.getNextToken();
                         if(token==null||token.tokenType!=ParserTokenType.ASSIGN){
-                            throw new IllegalArgumentException("Illegal syntax for procedure definition " +
+                            throw new SyntaxError("Illegal syntax for procedure definition " +
                                     "expected <Type>:<Name>=<Expr>");
                         }
                         state=ActionParserState.DEF_EXPR;
@@ -1375,8 +1375,7 @@ public class Parser {
                     if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
                         Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
                         if(!Type.canAssign(assignTarget.expectedType(),expr.expectedType(),null)){
-                            throw new IllegalArgumentException("Type-Error: cannot assign " +
-                                    expr.expectedType()+ " to "+assignTarget.expectedType());
+                            throw new TypeError("cannot assign " +expr.expectedType()+ " to "+assignTarget.expectedType());
                         }
                         actions.add(new Assignment(assignTarget,expr));
                         tokenBuffer.clear();
@@ -1399,15 +1398,15 @@ public class Parser {
             }
         }
         if(state!=ActionParserState.ROOT){
-            throw new IllegalArgumentException("Unfinished Action");
+            throw new SyntaxError("Unfinished Action");
         }
         //7. '=>' '['
         if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.MAPS_TO){
-            throw new IOException("wrong syntax for procedure, expected:" +
+            throw new SyntaxError("wrong syntax for procedure, expected:" +
                     " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
         }
         if((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.OPEN_SQ_BRACKET){
-            throw new IOException("wrong syntax for procedure, expected:" +
+            throw new SyntaxError("wrong syntax for procedure, expected:" +
                     " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
         }
         //8. '<Name>'('<Name>(,<Name>)*')' (','<Name>'('<Name>(,<Name>)*')')*' ']'
@@ -1425,7 +1424,7 @@ public class Parser {
                 if(token!=null&&token.tokenType==ParserTokenType.CLOSE_SQ_BRACKET){
                     break;//end of proc block
                 }
-                throw new IOException("illegal syntax for procedure-call: "+token+" " +
+                throw new SyntaxError("illegal syntax for procedure-call: "+token+" " +
                         "expected: <Name>'('<Args>')'");
             }
             procName=((NamedToken)token).value;
@@ -1439,7 +1438,7 @@ public class Parser {
                     targets.add(Procedure.RECURSIVE_CALL);
                     outTypes=argTypes.toArray(new Type[0]);
                 }else{
-                    throw new IOException("procedure \"" + ((NamedToken) token).value + "\" is not defined");
+                    throw new SyntaxError("procedure \"" + ((NamedToken) token).value + "\" is not defined");
                 }
             }else{
                 outTypes=proc.argTypes();
@@ -1447,7 +1446,7 @@ public class Parser {
             }
             token=tokens.getNextToken();
             if(token==null||token.tokenType !=ParserTokenType.OPEN_BRACKET){
-                throw new IOException("illegal syntax for procedure-call: "+token+" " +
+                throw new SyntaxError("illegal syntax for procedure-call: "+token+" " +
                         "expected: <Name>'('<Args>')'");
             }
             argBuffer=new ArrayList<>(outTypes.length);
@@ -1466,10 +1465,10 @@ public class Parser {
                 }
             }
             if(token==null){
-                throw new IllegalArgumentException("missing closing bracket in proc-call");
+                throw new SyntaxError("missing closing bracket in proc-call");
             }
             if(argBuffer.size()!=outTypes.length){
-                throw new IOException("Number of arguments Arguments for \""+procName+
+                throw new SyntaxError("Number of arguments Arguments for \""+procName+
                         "\" ("+argBuffer.size()+") does not match the expected number of " +
                         "arguments ("+outTypes.length+")");
             }
@@ -1482,14 +1481,13 @@ public class Parser {
                 if(Type.canAssign(outTypes[i],argBuffer.get(i).expectedType(),generics)){
                     argArray[i]=argBuffer.get(i);
                 }else{
-                    throw new IllegalArgumentException("Cannot assign "+
-                            argBuffer.get(i).expectedType()+" to "+outTypes[i]+" generics:"+generics);
+                    throw new TypeError("Cannot assign "+ argBuffer.get(i).expectedType()+" to "+outTypes[i]+" generics:"+generics);
                 }
             }
             args.add(argArray);
         }while((token=tokens.getNextToken())!=null&&token.tokenType ==ParserTokenType.COMMA);
         if(token==null||token.tokenType !=ParserTokenType.CLOSE_SQ_BRACKET){
-            throw new IOException("wrong syntax for procedure, expected:" +
+            throw new SyntaxError("wrong syntax for procedure, expected:" +
                     " <name>(<Types>):(<ArgNames>) => {<Actions>} => [<Procedures>]");
         }
         proc = new Procedure(procType,actions.toArray(new Action[0]),
@@ -1511,22 +1509,22 @@ public class Parser {
                 }else if(!context.hasName(((NamedToken)token).value)){
                     readProcDef(((NamedToken)token).value,tokens,context);
                 }else{
-                    throw new IOException("\""+token+"\" is already defined");
+                    throw new SyntaxError("\""+token+"\" is already defined");
                 }
             }else{
-              throw new IOException("Illegal root level token:\""+token+
+              throw new SyntaxError("Illegal root level token:\""+token+
                       "\" expected \"typedef\" or identifier");
             }
         }
         Procedure main=context.getProc("main");
         if(main==null){
-            throw new IllegalArgumentException("No \"main\" procedure found");
+            throw new SyntaxError("No \"main\" procedure found");
         }
         Type[] mainTypes= main.argTypes();
         if(mainTypes.length>0){
             if (mainTypes.length != 1 || !(mainTypes[0] instanceof Type.Array) ||
                 ((Type.Array) mainTypes[0]).content != Type.Primitive.STRING) {
-                    throw new IllegalArgumentException("wrong signature of main, " +
+                    throw new SyntaxError("wrong signature of main, " +
                             "expected ()=>? or (string[])=>?");
                 }
         }
