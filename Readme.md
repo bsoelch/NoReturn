@@ -16,16 +16,16 @@ There are 14 atomic types:
 - type: a Type
 - any: Wildcard Type that can contain any value
 ####Containers
-- arrays: (syntax: < Type >'[]') contain a sequence of values of 
+- arrays: (syntax: `<Type>'[]'`) contain a sequence of values of 
 Type < Type > indexed with an uint64 
 elements of an array are accessible though the [] operator
-- optionals: (syntax: < Type >'?') contains a value of Type < Type >
+- optionals: (syntax: `<Type>'?'`) contains a value of Type < Type >
 or none
-- reference: (syntax '@'< Type >) contains a reference to a value 
+- reference: (syntax `'@'<Type>`) contains a reference to a value 
 of Type < Type >, can be used to share values 
 between different procedures
-- Struct: (syntax: '{'< Type >':'< Name >
-(','< Type >':'< Name >)*'}') can be used to group
+- Struct: (syntax: `'{'<Type>':'<Name>
+(','<Type>':'<Name )*'}'`) can be used to group
 data, fields of a Struct can be accessed with .
 
 Examples:
@@ -44,7 +44,7 @@ is currently only partially implement !!!
 ####Procedures
 Procedures are treated as normal values, 
 types of procedures are defined though the syntax:
-'('< Type >(','< Type >)')=>?'
+`'('<Type>(','<Type>)')=>?'`
 ####Generics
 A generic type is declared though $ followed by an 
 identifier, generic allow declaration of dependent types 
@@ -86,4 +86,31 @@ const float64:pi=3.14159265358979;
 const float64:sq_pi=pi*pi;
 ```
 ##Procedures
-!!!TODO!!!
+Procedures are the main building block of no-ret programs.
+Each procedure takes the given arguments, preforms 
+the atomic actions in the procedure-body and the calls 
+zero or more child-procedures
+A procedure definition has the syntax:
+```
+<Name>'('<ArgTypes>'):('<ArgNames>') => {'
+<Actions>'
+} => ['<Calls>']'
+```
+- `<Name>`: A procedure name is any valid identifier that is
+not already in use for a typedef, const or (native) procedure
+- `<ArgTypes>`:The types for the arguments of the procedure
+separated by ,
+- `<ArgNames>`:The names for the procedure arguments
+that will be used in its body
+- `<Actions>`: A sequence of [atomic Actions](https://github.com/bsoelch/NoReturn#Actions) 
+terminated by semicolons
+- `<Calls>`: zero or more calls to child procedures
+each call has the form `<ProcName>'('<Expr>(','<Expr>)*')'`
+with `<ProcName>` being the name of called procedure
+(local or global) variable and `<Expr>` being an 
+[expression](https://github.com/bsoelch/NoReturn#Expressions)
+##Actions
+!!TODO!!
+##Expressions
+!!TODO!!
+
