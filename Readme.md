@@ -83,7 +83,7 @@ Constant definitions have the syntax:
 Example:
 ```C
 const float64:pi=3.14159265358979;
-const float64:sq_pi:pi*pi;
+const float64:sq_pi=pi*pi;
 ```
 ##Procedures
 !!!TODO!!!
