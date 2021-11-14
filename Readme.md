@@ -5,6 +5,16 @@ procedures do not return to the position where they were called
 !!! This language is currently in early development !!!
 
 ## Syntax
+### Comments
+Line comments start with `##`, 
+block comments are surrounded by `#_` and `_#`
+
+Example:
+```
+this = code; ## line comment
+that #_block comment_# = code;
+```
+
 ### Types
 #### Atomic Types
 There are 14 atomic types:
@@ -75,7 +85,7 @@ typedef float64 double;
 create type aliases for the primitive java types
 int, long, float and double
 
-## Constants
+### Constants
 The "const" keyword can be used to define global constants.
 Constant definitions have the syntax:
 'const '< Type >':'< Name >'='< Expression >';'
@@ -85,7 +95,7 @@ Example:
 const float64:pi=3.14159265358979;
 const float64:sq_pi=pi*pi;
 ```
-## Procedures
+### Procedures
 Procedures are the main building block of no-ret programs.
 Each procedure takes the given arguments, preforms 
 the atomic actions in the procedure-body and the calls 
@@ -110,11 +120,173 @@ with `<ProcName>` being the name of called procedure
 (local or global) variable and `<Expr>` being an 
 [expression](https://github.com/bsoelch/NoReturn#Expressions)
 
-## Actions
+### Actions
+Currently, there are two types of actions:
+#### Variable declarations:
+Creates a new local variable with 
+the given type and initial value.
+syntax: `<Type>':'<Name>'='<Expr>';'`
 
-!!TODO!!
+Examples:
+```
+int32:x=16;
+any : value = {1,2,3,{4,5,6}};
+{int64:num,uint64:den} : frac={.num=2,.den=(uint64:)3};
+```
 
-## Expressions
+#### Assignments
+Assigns a new value to (a field/element of) a variable.
+syntax: `<Expr>'='<Expr>';'`
+The left-hand side supports local variables,
+array-access, field access and typecasts, changes to value 
+in one variable do not have effect on other variables
+(!!! the current version has not yet implemented that behaviour!!!)
 
-!!TODO!!
+Examples:
+```
+x=3;
+array[0]={1,2,3};
+(({int32:val}[]:)y)[0].val=17;
+```
+
+### Expressions
+#### Values
+##### Numbers
+Integers or floats in base 2,10 or 16.
+Floating points numbers in base 2 and 16 are 
+completely in that base, including the exponent part
+(`0b1E-10` is 2<sup>-2</sup> and `0x1P10` is 16<sup>16</sup> )
+ 
+Examples:
+```
+int32:i=1;
+float64[]:array={1.0,0x3.4P1a,0b11.01E-11};
+int64:l=0x123456789abcdef;
+int8:bin=(int8:)0b11001001;
+```
+##### Strings
+String literals start and end with `"`,
+`\` can be used for escaping.
+
+(escape sequences are currently not supported)
+
+```
+string:s1="Hello World!";
+string:escaped="\"Hello\" World!";
+```
+
+##### native Constants
+The following Names are reserved for native constants:
+- true: true boolean
+- false: false boolean
+- none: empty optional (can be cast to any optional type)
+- NOP: no-op procedure (can be cast to any procedure type)
+##### Arrays
+Arrays are declared as a list of elements surround by
+{}
+
+Example:
+```
+float64[]:array={1.0,0x3.4P1a,0b11.01E-11};
+```
+##### Structs
+The struct declaration syntax is like in C a list
+of statements of the form `'.'<field>'='<Value>`
+Example:
+```
+{int64:num,uint64:den}:frac={.num=2,.den=(uint64:)3};
+```
+
+#### Variables
+All identifiers that are not numbers, typedefs or fields accesses
+are interpreted as variable names. Variables can be
+local variables, constants or procedure names.
+
+Example:
+```C
+const int32:constant=42;
+
+procedure(int32):(a)=>{
+    int32:ret=a*a-constant;
+    res=ret<0?procedure:NOP;
+}=>[res(ret)]
+```
+##### field access
+Fields of variables can be accessed with .
+- All values have an immutable field `type` which contains 
+the type of that value.
+- Arrays and Strings additionally have an immutable field `length`
+containing their length as an unsigned 64-bit integer.
+- Structs have a mutable field for each element
+
+```
+type:t=1.type;
+uint64:len={1,2,3,4}.length;
+{int64:num,uint64:den} fract={.num=22,.den=(uint64:)7};
+int64:num=frac.num;
+frac.num=355;
+frac.den=113;
+```
+
+##### index access
+With the `[]` operator it is possible to access elements
+of arrays and strings.
+Strings are interpreted as `uint8[]` containing their 
+UTF-8 representation.
+
+```
+int32[]:array={1,2,3,4,5,6,7};
+int32:frist=array[0];
+string:s="Hello World";
+uint8:char=s[6];
+s[4]=0x20;
+array[0]=0;
+```
+
+##### range access
+Range access operations are currently not implemented
+
+#### Operators
+Binary Operators:
+- `+` adds two numbers, concatenates strings or arrays
+- `-`,`*` subtractions/product of two numbers
+- `/` floating point division
+- `//` integer division
+- `%` remainder
+- `**` power-operator
+- `<<` `>>` bit-shift operators 
+or push first/last if one operand is an array
+- `&` `|` `^` bitwise logical operations
+- `&&` `||` logical and/or
+- `<=` `<` `>` `>=` comparison operators
+(work for strings or numbers)
+- `==` `!=` equals/not equals
+Unary Operators:
+- `+` `-` sign operators
+- `!` logical not
+- `~` flip all bits
+
+Examples:
+```
+any[]:array={-1+2,3/4,5**6,7*8,9&10,11|12,13^14}
+array=0>>(array<<15)
+```
+results in 
+```
+array={0,1,0.75,15625.0,56,8,15,3,15}
+```
+
+#### Typecasts
+The syntax `(<Type>:)<Expr>` allows to cast an expression 
+to a different type. It is possible to directly assign 
+values of a type to another type if the assignment does 
+not lead to a loss of data.
+
+Examples:
+```
+uint8:byte=(uint8:)1234;
+float64:aFloat=16;
+any:value={"string",{1,2,3,{}}};
+```
+
 

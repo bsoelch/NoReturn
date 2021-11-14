@@ -112,8 +112,8 @@ public class Parser {
                                                       DEC_FLOAT_MAGNITUDE+"([Ee][+-]?"+DEC_DIGIT+"+)?)");
         static final Pattern floatHex=Pattern.compile(HEX_FLOAT_MAGNITUDE+"([Pp][+-]?"+HEX_DIGIT+"+)?");
         static final Pattern floatBin=Pattern.compile(BIN_FLOAT_MAGNITUDE+"([Ee][+-]?"+BIN_DIGIT+"+)?");
-        static final Pattern floatExpPrefix =Pattern.compile("(("+BIN_FLOAT_MAGNITUDE+")|("
-                +DEC_FLOAT_MAGNITUDE+")[Ee])|("+HEX_FLOAT_MAGNITUDE+"[Pp])");
+        static final Pattern floatExpPrefix =Pattern.compile("((("+BIN_FLOAT_MAGNITUDE+")|("
+                +DEC_FLOAT_MAGNITUDE+"))[Ee])|("+HEX_FLOAT_MAGNITUDE+"[Pp])");
 
         private WordState state=WordState.ROOT;
         private int stringStart=-1;
@@ -217,7 +217,7 @@ public class Parser {
                                 case '+':
                                 case '-':
                                     if(floatExpPrefix.matcher(buffer).matches()){
-                                        buffer.append(c);
+                                        buffer.append((char)c);
                                         break;
                                     }
                                     finishWord(tokenBuffer, buffer);
@@ -475,6 +475,7 @@ public class Parser {
             if (buffer.length() > 0) {
                 String str=buffer.toString();
                 try{
+                    //TODO u postfix for unsigned numbers
                     if(intDec.matcher(str).matches()){//dez-Int
                         parseInt(tokens, str, 10);
                     }else if(intBin.matcher(str).matches()){//bin-Int
@@ -942,7 +943,6 @@ public class Parser {
         // (<Expr>)
         // (<Type>:)
         // {<Expr>,<Expr>,<Expr>}
-        // {<Expr>'='<Expr>,<Expr>'='<Expr>,<Expr>'='<Expr>}
         // {'.'<Name>'='<Expr>,'.'<Name>'='<Expr>,'.'<Name>'='<Expr>}
         //'['<Expr>']'
         //'['<Expr>':'<Expr>?']'
