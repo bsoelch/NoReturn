@@ -10,14 +10,24 @@ public class GetField implements Expression{
     final Expression value;
     final String fieldName;
     final Type type;
-    public GetField(Expression value, String fieldName) {
-        this.value=value;
-        this.fieldName=fieldName;
+
+    public static Expression create(Expression value, String fieldName){
         Type valType = value.expectedType();
-        type=valType.getField(fieldName);
+        Type type=valType.getField(fieldName);
         if(type==null){
             throw new SyntaxError("Type "+valType+" does not have a field \""+fieldName+"\"");
         }
+        if(value instanceof ValueExpression){//constant folding
+            //set field is not supported for constants
+            return new ValueExpression(((ValueExpression) value).value.getField(fieldName));
+        }
+        return new GetField(value,fieldName,type);
+    }
+
+    private GetField(Expression value, String fieldName,Type fieldType) {
+        this.value=value;
+        this.fieldName=fieldName;
+        this.type=fieldType;
     }
 
     @Override

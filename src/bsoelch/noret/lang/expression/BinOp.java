@@ -5,6 +5,7 @@ import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
+import java.util.function.Supplier;
 
 public class BinOp implements Expression {
     final Expression left;
@@ -13,68 +14,72 @@ public class BinOp implements Expression {
 
     final Type expectedOutput;
 
-    public BinOp(Expression left, OperatorType op, Expression right) {
+    public static Expression create(Expression left, OperatorType op, Expression right){
+        Type type=typeCheck(left, op, right);
+        if(left instanceof ValueExpression&&right instanceof ValueExpression){//fold constants
+            return new ValueExpression(evaluate(((ValueExpression) left).value,op,()->((ValueExpression) right).value));
+        }
+        return new BinOp(left, op, right,type);
+    }
+
+    private BinOp(Expression left, OperatorType op, Expression right,Type expectedOutput) {
         this.left = left;
         this.op = op;
         this.right = right;
-        expectedOutput=typeCheck();
+        this.expectedOutput=expectedOutput;
     }
 
-    @Override
-    public ValueView evaluate(Procedure parent, ArrayList<Value> context) {
-        Value lVal=left.evaluate(parent, context).get();
+    public static Value evaluate(Value lVal,OperatorType op, Supplier<Value> lazyRight){
         //don't evaluate r-val to allow fast-and/or
         switch (op){
             case PLUS:
-                return ValueView.wrap(Operations.plus(lVal,right.evaluate(parent, context).get()));
+                return Operations.plus(lVal,lazyRight.get());
             case MINUS:
-                return ValueView.wrap(Operations.minus(lVal,right.evaluate(parent, context).get()));
+                return Operations.minus(lVal,lazyRight.get());
             case MULT:
-                return ValueView.wrap(Operations.multiply(lVal,right.evaluate(parent, context).get()));
+                return Operations.multiply(lVal,lazyRight.get());
             case DIV:
-                return ValueView.wrap(Operations.div(lVal,right.evaluate(parent, context).get()));
+                return Operations.div(lVal,lazyRight.get());
             case INT_DIV:
-                return ValueView.wrap(Operations.intDiv(lVal,right.evaluate(parent, context).get()));
+                return Operations.intDiv(lVal,lazyRight.get());
             case MOD:
-                return ValueView.wrap(Operations.mod(lVal,right.evaluate(parent, context).get()));
+                return Operations.mod(lVal,lazyRight.get());
             case POW:
-                return ValueView.wrap(Operations.pow(lVal,right.evaluate(parent, context).get()));
+                return Operations.pow(lVal,lazyRight.get());
             case LSHIFT:
-                return ValueView.wrap(Operations.lshift(lVal,right.evaluate(parent, context).get()));
+                return Operations.lshift(lVal,lazyRight.get());
             case RSHIFT:
-                return ValueView.wrap(Operations.rshift(lVal,right.evaluate(parent, context).get()));
+                return Operations.rshift(lVal,lazyRight.get());
             case AND:
-                return ValueView.wrap(Operations.and(lVal,right.evaluate(parent, context).get()));
+                return Operations.and(lVal,lazyRight.get());
             case OR:
-                return ValueView.wrap(Operations.or(lVal,right.evaluate(parent, context).get()));
+                return Operations.or(lVal,lazyRight.get());
             case XOR:
-                return ValueView.wrap(Operations.xor(lVal,right.evaluate(parent, context).get()));
+                return Operations.xor(lVal,lazyRight.get());
             case FAST_AND:
-                return ValueView.wrap(Value.createPrimitive(Type.Primitive.BOOL,
-                        Operations.asBool(lVal)&&
-                                Operations.asBool(right.evaluate(parent, context).get())));
+                return Value.createPrimitive(Type.Primitive.BOOL,
+                        Operations.asBool(lVal)&&Operations.asBool(lazyRight.get()));
             case FAST_OR:
-                return ValueView.wrap(Value.createPrimitive(Type.Primitive.BOOL,
-                        Operations.asBool(lVal)||
-                                Operations.asBool(right.evaluate(parent, context).get())));
+                return Value.createPrimitive(Type.Primitive.BOOL,
+                        Operations.asBool(lVal)||Operations.asBool(lazyRight.get()));
             case NE:
-                return ValueView.wrap(Value.createPrimitive(Type.Primitive.BOOL,
-                        Operations.eq(lVal,right.evaluate(parent, context).get())));
+                return Value.createPrimitive(Type.Primitive.BOOL,
+                        Operations.eq(lVal,lazyRight.get()));
             case EQ:
-                return ValueView.wrap(Value.createPrimitive(Type.Primitive.BOOL,
-                        !Operations.eq(lVal,right.evaluate(parent, context).get())));
+                return Value.createPrimitive(Type.Primitive.BOOL,
+                        !Operations.eq(lVal,lazyRight.get()));
             case GT:
-                return ValueView.wrap(Value.createPrimitive(Type.Primitive.BOOL,
-                        Operations.compare(lVal,right.evaluate(parent, context).get())>0));
+                return Value.createPrimitive(Type.Primitive.BOOL,
+                        Operations.compare(lVal,lazyRight.get())>0);
             case GE:
-                return ValueView.wrap(Value.createPrimitive(Type.Primitive.BOOL,
-                        Operations.compare(lVal,right.evaluate(parent, context).get())>=0));
+                return Value.createPrimitive(Type.Primitive.BOOL,
+                        Operations.compare(lVal,lazyRight.get())>=0);
             case LE:
-                return ValueView.wrap(Value.createPrimitive(Type.Primitive.BOOL,
-                        Operations.compare(lVal,right.evaluate(parent, context).get())<=0));
+                return Value.createPrimitive(Type.Primitive.BOOL,
+                        Operations.compare(lVal,lazyRight.get())<=0);
             case LT:
-                return ValueView.wrap(Value.createPrimitive(Type.Primitive.BOOL,
-                        Operations.compare(lVal,right.evaluate(parent, context).get())<0));
+                return Value.createPrimitive(Type.Primitive.BOOL,
+                        Operations.compare(lVal,lazyRight.get())<0);
             case IF:
             case NOT:
             case FLIP:
@@ -84,11 +89,16 @@ public class BinOp implements Expression {
     }
 
     @Override
+    public ValueView evaluate(Procedure parent, ArrayList<Value> context) {
+        return ValueView.wrap(evaluate(left.evaluate(parent, context).get(),op,()->right.evaluate(parent, context).get()));
+    }
+
+    @Override
     public Type expectedType() {
         return expectedOutput;
     }
 
-    private Type typeCheck() {
+    private static Type typeCheck(Expression left,OperatorType op,Expression right) {
         Type lType=left.expectedType();
         Type rType=right.expectedType();
         switch (op){

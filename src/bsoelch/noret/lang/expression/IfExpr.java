@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -11,7 +12,18 @@ public class IfExpr implements Expression {
 
     final Type expectedOutput;
 
-    public IfExpr(Expression cond, Expression ifVal, Expression elseVal) {
+    public static Expression create(Expression cond, Expression ifVal, Expression elseVal){
+        if(!Type.canCast(cond.expectedType(),Type.Primitive.BOOL,null)){
+            throw new TypeError("cannot assign \""+cond.expectedType()+"\" to "+Type.Primitive.BOOL);
+        }
+        if(cond instanceof ValueExpression){//constant folding
+            return ((Boolean)((Value.Primitive)((ValueExpression) cond).value.castTo(Type.Primitive.BOOL)).getValue())?
+                    ifVal:elseVal;
+        }
+        return new IfExpr(cond, ifVal, elseVal);
+    }
+
+    private IfExpr(Expression cond, Expression ifVal, Expression elseVal) {
         this.cond = cond;
         this.ifVal = ifVal;
         this.elseVal = elseVal;

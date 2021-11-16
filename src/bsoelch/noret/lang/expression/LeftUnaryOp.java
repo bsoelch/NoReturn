@@ -12,24 +12,29 @@ public class LeftUnaryOp implements Expression {
 
     final Type expectedOutput;
 
-    public LeftUnaryOp( OperatorType op, Expression expr) {
+    public static Expression create(OperatorType op, Expression expr){
+        Type expectedOut=typeCheck(op,expr.expectedType());
+        if(expr instanceof ValueExpression){//constant folding
+            return new ValueExpression(evaluate(op,((ValueExpression) expr).value));
+        }
+        return new LeftUnaryOp(op, expr,expectedOut);
+    }
+    private LeftUnaryOp( OperatorType op, Expression expr,Type expectedOutput) {
         this.op = op;
         this.expr = expr;
-        expectedOutput=typeCheck();
+        this.expectedOutput=expectedOutput;
     }
 
-    @Override
-    public ValueView evaluate(Procedure parent, ArrayList<Value> context) {
-        Value lVal=expr.evaluate(parent, context).get();
+    private static Value evaluate(OperatorType op,Value lVal) {
         switch (op){
             case PLUS:
-                return ValueView.wrap(lVal);
+                return lVal;
             case MINUS:
-                return ValueView.wrap(Operations.negate(lVal));
+                return Operations.negate(lVal);
             case NOT:
-                return ValueView.wrap(Operations.not(lVal));
+                return Operations.not(lVal);
             case FLIP:
-                return ValueView.wrap(Operations.flip(lVal));
+                return Operations.flip(lVal);
             case MULT:
             case DIV:
             case INT_DIV:
@@ -55,12 +60,16 @@ public class LeftUnaryOp implements Expression {
     }
 
     @Override
+    public ValueView evaluate(Procedure parent, ArrayList<Value> context) {
+        return ValueView.wrap(evaluate(op,expr.evaluate(parent, context).get()));
+    }
+
+    @Override
     public Type expectedType() {
         return expectedOutput;
     }
 
-    public Type typeCheck() {
-        Type argType=expr.expectedType();
+    private static Type typeCheck(OperatorType op,Type argType) {
         switch (op){
             case PLUS:
             case MINUS:

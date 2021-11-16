@@ -9,11 +9,17 @@ public class TypeCast implements Expression{
     final Expression value;
     final Type type;
 
-    public TypeCast(Type castType, Expression value) {
-        this.value = value;
+    public static Expression create(Type castType, Expression value){
         if(!Type.canCast(castType,value.expectedType(),null)){
             throw new TypeError("Values of type "+value.expectedType()+ " cannot be cast to "+castType);
         }
+        if(value instanceof ValueExpression){
+            return new ValueExpression(((ValueExpression) value).value.castTo(castType));
+        }
+        return new TypeCast(castType,value);
+    }
+    private TypeCast(Type castType, Expression value) {
+        this.value = value;
         //typecasts are evaluated at runtime
         type=castType;
     }

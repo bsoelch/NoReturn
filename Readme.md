@@ -171,12 +171,13 @@ int64:l=0x123456789abcdef;
 int8:bin=(int8:)0b11001001;
 ```
 ##### Strings
-String literals start and end with `"`,
+String literals start can be surrounded by `"` or `'`,
 `\ ` can be used for escaping.
 
 ```
 string:s1="Hello World!";
-string:escaped="\"Hello\" World!";
+string:s2='"Hello" World!';
+string:escaped="\"Hello\" 'World'!";
 ```
 
 ##### native Constants

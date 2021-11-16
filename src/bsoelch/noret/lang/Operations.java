@@ -420,9 +420,9 @@ public class Operations {
 
     public static Value negate(Value lVal) {
         return unaryOperation("-",lVal,
-                (s,b)->s?wrap(true,(byte)-b):wrap(false,(short)-b),
-                (s,sV)->s?wrap(true,(short) -sV):wrap(false,-sV),
-                (s,i)->s?wrap(true, -i):wrap(false,-(long)i),
+                (s,b)->s?wrap(true,(byte)-b):wrap(true,(short)-b),
+                (s,sV)->s?wrap(true,(short) -sV):wrap(true,-sV),
+                (s,i)->s?wrap(true, -i):wrap(true,-(long)i),
                 (s,l)->wrap(s, -l),
                 f->wrap(-f),
                 d->wrap(-d),

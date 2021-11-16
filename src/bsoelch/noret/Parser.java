@@ -460,7 +460,8 @@ public class Parser {
                         }
                         break;
                     case STRING:
-                        if(c==stringStart){//TODO stringStart = ' => char-literal
+                        if(c==stringStart){
+                            //char-literals are not possible since a single unicode-codepoints may be multiple chars long
                             tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
                                     Type.Primitive.STRING,buffer.toString()), currentPos()));
                             buffer.setLength(0);
@@ -522,7 +523,6 @@ public class Parser {
             if (buffer.length() > 0) {
                 String str=buffer.toString();
                 try{
-                    //TODO u postfix for unsigned numbers
                     if(intDec.matcher(str).matches()){//dez-Int
                         parseInt(tokens, str, 10);
                     }else if(intBin.matcher(str).matches()){//bin-Int
@@ -1009,7 +1009,7 @@ public class Parser {
         }
         context.defType(name,typeFromTokens(context,typeTokens));
     }
-    //TODO evaluate constant expressions
+
     private Expression expressionFromTokens(String procName,Type.Proc procType,ParserContext context, ArrayList<ParserToken> tokens){
         //1. read brackets
         // (<Expr>)
@@ -1178,12 +1178,12 @@ public class Parser {
                 if(tokens.get(i).tokenType==ParserTokenType.DOT&&
                 tokens.get(i+1).tokenType==ParserTokenType.WORD){
                     String fieldName=((NamedToken)tokens.remove(i+1)).value;
-                    tokens.set(i-1,new ExprToken(new GetField(
+                    tokens.set(i-1,new ExprToken(GetField.create(
                             ((ExprToken)tokens.get(i-1)).expr,
                             fieldName),tokens.get(i-1).pos));
                     tokens.remove(i--);
                 }else if(tokens.get(i).tokenType==ParserTokenType.INDEX){
-                    tokens.set(i-1,new ExprToken(new GetIndex(
+                    tokens.set(i-1,new ExprToken(GetIndex.create(
                             ((ExprToken)tokens.get(i-1)).expr,
                             ((ExprToken)tokens.get(i)).expr),tokens.get(i-1).pos));
                     tokens.remove(i--);
@@ -1193,7 +1193,7 @@ public class Parser {
                 }
             }else if(tokens.get(i-1).tokenType==ParserTokenType.TYPE&&
                 tokens.get(i).tokenType==ParserTokenType.EXPRESSION){//typecast
-                tokens.set(i-1,new ExprToken(new TypeCast(
+                tokens.set(i-1,new ExprToken(TypeCast.create(
                         ((TypeToken)tokens.get(i-1)).type,
                         ((ExprToken)tokens.get(i)).expr),tokens.get(i-1).pos));
                 tokens.remove(i--);
@@ -1211,8 +1211,7 @@ public class Parser {
                             ((Operator)tokens.get(i)).opType==OperatorType.NOT
                     ){
                         tmpL=((ExprToken)tokens.remove(i+1)).expr;
-                        tokens.set(i,new ExprToken(new LeftUnaryOp(
-                                ((Operator)tokens.get(i)).opType,tmpL),tokens.get(i).pos));
+                        tokens.set(i,new ExprToken(LeftUnaryOp.create(((Operator)tokens.get(i)).opType,tmpL),tokens.get(i).pos));
                     }
                 }
             }
@@ -1227,7 +1226,7 @@ public class Parser {
                 tmpL=((ExprToken)tokens.get(i-1)).expr;
                 tmpR=((ExprToken)tokens.remove(i+1)).expr;
                 tokens.remove(i--);
-                tokens.set(i,new ExprToken(new BinOp(tmpL,OperatorType.POW,tmpR),tokens.get(i).pos));
+                tokens.set(i,new ExprToken(BinOp.create(tmpL,OperatorType.POW,tmpR),tokens.get(i).pos));
             }
         }
         for(int level=0;level<=5;level++){
@@ -1269,7 +1268,7 @@ public class Parser {
                         tmpL=((ExprToken)tokens.get(i-1)).expr;
                         tmpR=((ExprToken)tokens.remove(i+1)).expr;
                         OperatorType opType=((Operator)tokens.remove(i--)).opType;
-                        tokens.set(i,new ExprToken(new BinOp(tmpL,opType,tmpR),tokens.get(i).pos));
+                        tokens.set(i,new ExprToken(BinOp.create(tmpL,opType,tmpR),tokens.get(i).pos));
                     }
                 }
             }
@@ -1281,7 +1280,7 @@ public class Parser {
                 tokens.get(i-2).tokenType==ParserTokenType.EXPRESSION&&
                 tokens.get(i-1).tokenType==ParserTokenType.SEPARATOR&&
                 tokens.get(i).tokenType==ParserTokenType.EXPRESSION){
-                tokens.set(i-4,new ExprToken(new IfExpr(((ExprToken)tokens.get(i-4)).expr,
+                tokens.set(i-4,new ExprToken(IfExpr.create(((ExprToken)tokens.get(i-4)).expr,
                         ((ExprToken)tokens.get(i-2)).expr,((ExprToken)tokens.get(i)).expr),tokens.get(i-4).pos));
                 tokens.remove(i--);//i
                 tokens.remove(i);//i-1

@@ -9,16 +9,16 @@ public class GetIndex implements Expression{
     final Expression value;
     final Expression index;
     final Type type;
-    public GetIndex(Expression value, Expression index) {
-        this.value=value;
-        this.index=index;
+
+    public static Expression create(Expression value, Expression index){
         Type valType = value.expectedType();
         Type indType = index.expectedType();
+        Type type;
         if(valType == Type.Primitive.STRING){
             if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                this.type = Type.Numeric.UINT8;//utf8 char-code
+                type = Type.Numeric.UINT8;//utf8 char-code
             }else if(Type.canAssign(Type.Numeric.STRING, indType,null)){
-                this.type = Type.Numeric.UINT64;//index of string
+                type = Type.Numeric.UINT64;//index of string
             }else{
                 throw new TypeError("Invalid type for string index:"+
                         indType+ " string indices have to be unsigned integers or strings");
@@ -26,7 +26,7 @@ public class GetIndex implements Expression{
         }else {
             if(valType instanceof Type.Array){
                 if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                    this.type =((Type.Array) valType).content;
+                    type =((Type.Array) valType).content;
                 }else{
                     throw new TypeError("Invalid type for array index:"+
                             indType+ " Array indices have to be unsigned integers");
@@ -36,6 +36,17 @@ public class GetIndex implements Expression{
                         valType +"\" only dictionary, arrays and string support dict-access");
             }
         }
+        if(value instanceof ValueExpression&&index instanceof ValueExpression){//constant folding
+            //set index is not supported for constants
+            return new ValueExpression(((ValueExpression) value).value.getAtIndex(((ValueExpression) index).value));
+        }
+        return new GetIndex(value, index,type);
+    }
+
+    private GetIndex(Expression value, Expression index,Type valType) {
+        this.value=value;
+        this.index=index;
+        this.type=valType;
     }
 
     @Override

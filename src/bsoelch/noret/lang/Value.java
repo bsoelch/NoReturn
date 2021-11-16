@@ -175,6 +175,10 @@ public abstract class Value {
             this.value = value;
         }
 
+        public Object getValue() {
+            return value;
+        }
+
         @Override
         public Primitive castTo(Type t) {
             if(t==type||t==Type.Primitive.ANY||t instanceof Type.Generic){
