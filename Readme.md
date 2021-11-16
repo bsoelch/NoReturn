@@ -170,14 +170,26 @@ float64[]:array={1.0,0x3.4P1a,0b11.01E-11};
 int64:l=0x123456789abcdef;
 int8:bin=(int8:)0b11001001;
 ```
+
+
 ##### Strings
-String literals start can be surrounded by `"` or `'`,
+String literals start and end with `"`,
 `\ ` can be used for escaping.
 
 ```
 string:s1="Hello World!";
-string:s2='"Hello" World!';
-string:escaped="\"Hello\" 'World'!";
+string:escaped="\"Hello\" World!";
+```
+
+##### Characters
+A character literal is a single unicode character
+surrounded by `'`, `\ ` can be used for escaping.
+Character literals evaluate to the unicode codepoint-id
+of their character (as uint32)
+
+```
+uint32:c1='A';
+uint32:c2='\n';
 ```
 
 ##### native Constants
@@ -236,8 +248,8 @@ frac.den=113;
 ##### index access
 With the `[]` operator it is possible to access elements
 of arrays and strings.
-Strings are interpreted as `uint8[]` containing their 
-UTF-8 representation.
+Strings are interpreted as `uint32[]` containing their 
+unicode codepoints
 
 ```
 int32[]:array={1,2,3,4,5,6,7};

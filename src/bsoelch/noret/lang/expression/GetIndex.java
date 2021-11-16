@@ -16,7 +16,7 @@ public class GetIndex implements Expression{
         Type type;
         if(valType == Type.Primitive.STRING){
             if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                type = Type.Numeric.UINT8;//utf8 char-code
+                type = Type.Numeric.UINT32;//unicode codepoint id
             }else if(Type.canAssign(Type.Numeric.STRING, indType,null)){
                 type = Type.Numeric.UINT64;//index of string
             }else{

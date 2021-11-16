@@ -461,9 +461,17 @@ public class Parser {
                         break;
                     case STRING:
                         if(c==stringStart){
-                            //char-literals are not possible since a single unicode-codepoints may be multiple chars long
-                            tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
-                                    Type.Primitive.STRING,buffer.toString()), currentPos()));
+                            if(c=='\''){//char literal
+                                if(buffer.codePoints().count()==1){
+                                    tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
+                                            Type.Numeric.UINT32,buffer.codePointAt(0)), currentPos()));
+                                }else{
+                                    throw new SyntaxError("A char-literal must contain exactly one character");
+                                }
+                            }else{
+                                tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
+                                        Type.Primitive.STRING,buffer.toString()), currentPos()));
+                            }
                             buffer.setLength(0);
                             state=WordState.ROOT;
                             return;

@@ -4,6 +4,7 @@ import bsoelch.noret.NoRetRuntimeError;
 import bsoelch.noret.SyntaxError;
 import bsoelch.noret.TypeError;
 
+import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
@@ -307,11 +308,11 @@ public abstract class Value {
 
         @Override
         public Value getAtIndex(Value index) {
-            //TODO String.getAtIndex
-            throw new UnsupportedOperationException("Unimplemented");
+            long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
+            return Value.createPrimitive(Type.Numeric.UINT32,value.codePointAt((int)lIndex));
         }
         @Override
-        public Value setAtIndex(Value index, Value value) {
+        public Value setAtIndex(Value index, Value newValue) {
             //TODO String.setAtIndex
             throw new UnsupportedOperationException("Unimplemented");
         }
