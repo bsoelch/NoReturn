@@ -23,13 +23,28 @@ public class Parser {
         INDEX,RANGE
     }
 
+    static class TokenPosition{
+        //addLater file
+        final long line;
+        final int posInLine;
+
+        TokenPosition(long line, int posInLine) {
+            this.line = line;
+            this.posInLine = posInLine;
+        }
+
+        @Override
+        public String toString() {
+            return line+":"+posInLine;
+        }
+    }
     static class ParserToken{
         final ParserTokenType tokenType;
-        ParserToken(ParserTokenType tokenType) {
+        final TokenPosition pos;
+        ParserToken(ParserTokenType tokenType, TokenPosition pos) {
             this.tokenType = tokenType;
+            this.pos = pos;
         }
-        //TODO? token positions
-
         @Override
         public String toString() {
             return tokenType.toString();
@@ -37,8 +52,8 @@ public class Parser {
     }
     static class NamedToken extends ParserToken{
         final String value;
-        NamedToken(ParserTokenType type, String value) {
-            super(type);
+        NamedToken(ParserTokenType type, String value, TokenPosition pos) {
+            super(type, pos);
             this.value=value;
         }
         @Override
@@ -48,8 +63,8 @@ public class Parser {
     }
     static class Operator extends ParserToken{
         final OperatorType opType;
-        Operator(OperatorType opType) {
-            super(ParserTokenType.OPERATOR);
+        Operator(OperatorType opType, TokenPosition pos) {
+            super(ParserTokenType.OPERATOR, pos);
             this.opType=opType;
         }
         @Override
@@ -59,8 +74,8 @@ public class Parser {
     }
     static class TypeToken extends ParserToken{
         final Type type;
-        TypeToken(Type type) {
-            super(ParserTokenType.TYPE);
+        TypeToken(Type type, TokenPosition pos) {
+            super(ParserTokenType.TYPE,pos);
             this.type=type;
         }
         @Override
@@ -70,14 +85,14 @@ public class Parser {
     }
     static class ExprToken extends ParserToken{
         final Expression expr;
-        ExprToken(Value value) {
-            this(false,new ValueExpression(value));
+        ExprToken(Value value, TokenPosition pos) {
+            this(false,new ValueExpression(value), pos);
         }
-        ExprToken(Expression expr) {
-            this(false,expr);
+        ExprToken(Expression expr, TokenPosition pos) {
+            this(false,expr, pos);
         }
-        ExprToken(boolean isIndex,Expression expr) {
-            super(isIndex?ParserTokenType.INDEX:ParserTokenType.EXPRESSION);
+        ExprToken(boolean isIndex,Expression expr, TokenPosition pos) {
+            super(isIndex?ParserTokenType.INDEX:ParserTokenType.EXPRESSION, pos);
             this.expr=expr;
         }
         @Override
@@ -120,6 +135,9 @@ public class Parser {
         private int stringStart=-1;
         private int cached=-1;
 
+        private int line =0;
+        private int posInLine =0;
+
         private Tokenizer(Reader input) {
             this.input = input;
         }
@@ -151,6 +169,11 @@ public class Parser {
         private void prepareToken() throws IOException {
             int c;
             while((c=nextChar())>=0){
+                posInLine++;
+                if(c=='\n'){//addLater? support for \r line separator
+                    line++;
+                    posInLine=0;
+                }
                 switch(state){
                     case ROOT:
                         if(Character.isWhitespace(c)){
@@ -185,35 +208,35 @@ public class Parser {
                                     break;
                                 case '(':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPEN_BRACKET));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPEN_BRACKET,currentPos()));
                                     return;
                                 case ')':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.CLOSE_BRACKET));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.CLOSE_BRACKET,currentPos()));
                                     return;
                                 case '[':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPEN_SQ_BRACKET));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPEN_SQ_BRACKET,currentPos()));
                                     return;
                                 case ']':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.CLOSE_SQ_BRACKET));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.CLOSE_SQ_BRACKET,currentPos()));
                                     return;
                                 case '{':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPEN_CR_BRACKET));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPEN_CR_BRACKET,currentPos()));
                                     return;
                                 case '}':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.CLOSE_CR_BRACKET));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.CLOSE_CR_BRACKET,currentPos()));
                                     return;
                                 case '@':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.AT));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.AT, currentPos()));
                                     return;
                                 case '$':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.DOLLAR));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.DOLLAR,currentPos()));
                                     return;
                                 case '+':
                                 case '-':
@@ -222,31 +245,32 @@ public class Parser {
                                         break;
                                     }
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new Operator(c=='+'?OperatorType.PLUS:OperatorType.MINUS));
+                                    tokenBuffer.addLast(new Operator(c=='+'?OperatorType.PLUS:OperatorType.MINUS,
+                                            currentPos()));
                                     return;
                                 case '%':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new Operator(OperatorType.MOD));
+                                    tokenBuffer.addLast(new Operator(OperatorType.MOD,currentPos()));
                                     return;
                                 case '~':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new Operator(OperatorType.FLIP));
+                                    tokenBuffer.addLast(new Operator(OperatorType.FLIP,currentPos()));
                                     return;
                                 case '^':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new Operator(OperatorType.XOR));
+                                    tokenBuffer.addLast(new Operator(OperatorType.XOR,currentPos()));
                                     return;
                                 case '?':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPTION));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.OPTION,currentPos()));
                                     return;
                                 case ':':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.SEPARATOR));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.SEPARATOR,currentPos()));
                                     return;
                                 case ';':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.END));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.END,currentPos()));
                                     return;
                                 case '.':
                                     if(floatDotPrefix.matcher(buffer).matches()){
@@ -254,11 +278,11 @@ public class Parser {
                                         break;//. after int -> floating point number
                                     }
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.DOT));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.DOT, currentPos()));
                                     return;
                                 case ',':
                                     finishWord(tokenBuffer, buffer);
-                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.COMMA));
+                                    tokenBuffer.addLast(new ParserToken(ParserTokenType.COMMA, currentPos()));
                                     return;
                                 //detect multi-char operators
                                 case '*'://* **
@@ -266,18 +290,18 @@ public class Parser {
                                     c = forceNextChar();
                                     switch(c){
                                         case '*':
-                                            tokenBuffer.addLast(new Operator(OperatorType.POW));
+                                            tokenBuffer.addLast(new Operator(OperatorType.POW,currentPos()));
                                             return;
                                         case '-':
-                                            tokenBuffer.addLast(new Operator(OperatorType.MULT));
-                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MULT, currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS,currentPos()));
                                             return;
                                         case '+':
-                                            tokenBuffer.addLast(new Operator(OperatorType.MULT));
-                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MULT, currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS, currentPos()));
                                             return;
                                         default:
-                                            tokenBuffer.addLast(new Operator(OperatorType.MULT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MULT,currentPos()));
                                             cached=c;
                                             return;
                                     }
@@ -286,18 +310,18 @@ public class Parser {
                                     c = forceNextChar();
                                     switch(c){
                                         case '/':
-                                            tokenBuffer.addLast(new Operator(OperatorType.INT_DIV));
+                                            tokenBuffer.addLast(new Operator(OperatorType.INT_DIV,currentPos()));
                                             return;
                                         case '-':
-                                            tokenBuffer.addLast(new Operator(OperatorType.DIV));
-                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.DIV,currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS, currentPos()));
                                             return;
                                         case '+':
-                                            tokenBuffer.addLast(new Operator(OperatorType.DIV));
-                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.DIV, currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS, currentPos()));
                                             return;
                                         default:
-                                            tokenBuffer.addLast(new Operator(OperatorType.DIV));
+                                            tokenBuffer.addLast(new Operator(OperatorType.DIV, currentPos()));
                                             cached=c;
                                             return;
                                     }
@@ -306,18 +330,18 @@ public class Parser {
                                     c = forceNextChar();
                                     switch(c){
                                         case '&':
-                                            tokenBuffer.addLast(new Operator(OperatorType.FAST_AND));
+                                            tokenBuffer.addLast(new Operator(OperatorType.FAST_AND, currentPos()));
                                             return;
                                         case '-':
-                                            tokenBuffer.addLast(new Operator(OperatorType.AND));
-                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.AND,currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS, currentPos()));
                                             return;
                                         case '+':
-                                            tokenBuffer.addLast(new Operator(OperatorType.AND));
-                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.AND,  currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS, currentPos()));
                                             return;
                                         default:
-                                            tokenBuffer.addLast(new Operator(OperatorType.AND));
+                                            tokenBuffer.addLast(new Operator(OperatorType.AND, currentPos()));
                                             cached=c;
                                             return;
                                     }
@@ -326,18 +350,18 @@ public class Parser {
                                     c = forceNextChar();
                                     switch(c){
                                         case '|':
-                                            tokenBuffer.addLast(new Operator(OperatorType.FAST_OR));
+                                            tokenBuffer.addLast(new Operator(OperatorType.FAST_OR, currentPos()));
                                             return;
                                         case '-':
-                                            tokenBuffer.addLast(new Operator(OperatorType.OR));
-                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.OR, currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS, currentPos()));
                                             return;
                                         case '+':
-                                            tokenBuffer.addLast(new Operator(OperatorType.OR));
-                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.OR, currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS, currentPos()));
                                             return;
                                         default:
-                                            tokenBuffer.addLast(new Operator(OperatorType.OR));
+                                            tokenBuffer.addLast(new Operator(OperatorType.OR, currentPos()));
                                             cached=c;
                                             return;
                                     }
@@ -346,21 +370,21 @@ public class Parser {
                                     c = forceNextChar();
                                     switch(c){
                                         case '>':
-                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.MAPS_TO));
+                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.MAPS_TO, currentPos()));
                                             return;
                                         case '=':
-                                            tokenBuffer.addLast(new Operator(OperatorType.EQ));
+                                            tokenBuffer.addLast(new Operator(OperatorType.EQ, currentPos()));
                                             return;
                                         case '-':
-                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.ASSIGN));
-                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.ASSIGN, currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS, currentPos()));
                                             return;
                                         case '+':
-                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.ASSIGN));
-                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.ASSIGN, currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS, currentPos()));
                                             return;
                                         default:
-                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.ASSIGN));
+                                            tokenBuffer.addLast(new ParserToken(ParserTokenType.ASSIGN, currentPos()));
                                             cached=c;
                                             return;
                                     }
@@ -369,18 +393,18 @@ public class Parser {
                                     c = forceNextChar();
                                     switch(c){
                                         case '=':
-                                            tokenBuffer.addLast(new Operator(OperatorType.NE));
+                                            tokenBuffer.addLast(new Operator(OperatorType.NE, currentPos()));
                                             return;
                                         case '-':
-                                            tokenBuffer.addLast(new Operator(OperatorType.NOT));
-                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.NOT,  currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS,currentPos()));
                                             return;
                                         case '+':
-                                            tokenBuffer.addLast(new Operator(OperatorType.NOT));
-                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.NOT, currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS,currentPos()));
                                             return;
                                         default:
-                                            tokenBuffer.addLast(new Operator(OperatorType.NOT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.NOT, currentPos()));
                                             cached=c;
                                             return;
                                     }
@@ -389,21 +413,21 @@ public class Parser {
                                     c = forceNextChar();
                                     switch(c){
                                         case '=':
-                                            tokenBuffer.addLast(new Operator(OperatorType.LE));
+                                            tokenBuffer.addLast(new Operator(OperatorType.LE,    currentPos()));
                                             return;
                                         case '<':
-                                            tokenBuffer.addLast(new Operator(OperatorType.LSHIFT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.LSHIFT,currentPos()));
                                             return;
                                         case '-':
-                                            tokenBuffer.addLast(new Operator(OperatorType.LT));
-                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.LT,    currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS, currentPos()));
                                             return;
                                         case '+':
-                                            tokenBuffer.addLast(new Operator(OperatorType.LT));
-                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.LT,    currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS,  currentPos()));
                                             return;
                                         default:
-                                            tokenBuffer.addLast(new Operator(OperatorType.LT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.LT,    currentPos()));
                                             cached=c;
                                             return;
                                     }
@@ -412,21 +436,21 @@ public class Parser {
                                     c = forceNextChar();
                                     switch(c){
                                         case '=':
-                                            tokenBuffer.addLast(new Operator(OperatorType.GE));
+                                            tokenBuffer.addLast(new Operator(OperatorType.GE, currentPos()));
                                             return;
                                         case '>':
-                                            tokenBuffer.addLast(new Operator(OperatorType.RSHIFT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.RSHIFT,currentPos()));
                                             return;
                                         case '-':
-                                            tokenBuffer.addLast(new Operator(OperatorType.GT));
-                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.GT, currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.MINUS, currentPos()));
                                             return;
                                         case '+':
-                                            tokenBuffer.addLast(new Operator(OperatorType.GT));
-                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS));
+                                            tokenBuffer.addLast(new Operator(OperatorType.GT,  currentPos()));
+                                            tokenBuffer.addLast(new Operator(OperatorType.PLUS,currentPos()));
                                             return;
                                         default:
-                                            tokenBuffer.addLast(new Operator(OperatorType.GT));
+                                            tokenBuffer.addLast(new Operator(OperatorType.GT, currentPos()));
                                             cached=c;
                                             return;
                                     }
@@ -438,8 +462,7 @@ public class Parser {
                     case STRING:
                         if(c==stringStart){//TODO stringStart = ' => char-literal
                             tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
-                                    Type.Primitive.STRING,buffer.toString())
-                            ));
+                                    Type.Primitive.STRING,buffer.toString()), currentPos()));
                             buffer.setLength(0);
                             state=WordState.ROOT;
                             return;
@@ -491,6 +514,10 @@ public class Parser {
             finishWord(tokenBuffer,buffer);
         }
 
+        private TokenPosition currentPos() {
+            return new TokenPosition(line, posInLine);
+        }
+
         private boolean finishWord(ArrayDeque<ParserToken> tokens, StringBuilder buffer) {
             if (buffer.length() > 0) {
                 String str=buffer.toString();
@@ -508,42 +535,45 @@ public class Parser {
                         //dez-Float
                         double d = Double.parseDouble(str);
                         tokens.addLast(new ExprToken(
-                                Value.createPrimitive(Type.Numeric.FLOAT64, d)));
+                                Value.createPrimitive(Type.Numeric.FLOAT64, d),
+                                currentPos()));
                     }else if(floatBin.matcher(str).matches()){
                         //bin-Float
                         double d=parseBinFloat(
                                 str.replaceAll(BIN_PREFIX,"")//remove header
                         );
                         tokens.addLast(new ExprToken(
-                                Value.createPrimitive(Type.Numeric.FLOAT64, d)));
+                                Value.createPrimitive(Type.Numeric.FLOAT64, d),
+                                currentPos()));
                     }else if(floatHex.matcher(str).matches()){
                         //hex-Float
                         double d=parseHexFloat(
                                 str.replaceAll(HEX_PREFIX,"")//remove header
                         );
                         tokens.addLast(new ExprToken(
-                                Value.createPrimitive(Type.Numeric.FLOAT64, d)));
+                                Value.createPrimitive(Type.Numeric.FLOAT64, d),
+                                currentPos()));
                     }else {
                         {//split string at . , + -
                             int i = str.indexOf('.');
                             if (i != -1) {
                                 if (i > 0)
                                     addWord(tokens, str.substring(0, i));
-                                tokens.addLast(new ParserToken(ParserTokenType.DOT));
+                                tokens.addLast(new ParserToken(ParserTokenType.DOT, currentPos()));
                                 str = str.substring(i + 1);
                             }
                             i = str.indexOf('+');
                             if (i != -1) {
                                 if (i > 0)
                                     addWord(tokens, str.substring(0, i));
-                                tokens.addLast(new Operator(OperatorType.PLUS));
+                                tokens.addLast(new Operator(OperatorType.PLUS, currentPos()));
                                 str = str.substring(i + 1);
                             }
                             i = str.indexOf('-');
                             if (i != -1) {
                                 if (i > 0)
                                     addWord(tokens, str.substring(0, i));
-                                tokens.addLast(new Operator(OperatorType.MINUS));
+                                tokens.addLast(new Operator(OperatorType.MINUS,currentPos()));
                                 str = str.substring(i + 1);
                             }
                         }
@@ -561,19 +591,19 @@ public class Parser {
         private void addWord(ArrayDeque<ParserToken> tokens, String str) {
             switch(str){
                 case "none":
-                    tokens.addLast(new ExprToken(Value.NONE));
+                    tokens.addLast(new ExprToken(Value.NONE, currentPos()));
                     break;
                 case "NOP":
-                    tokens.addLast(new ExprToken(Value.NOP));
+                    tokens.addLast(new ExprToken(Value.NOP, currentPos()));
                     break;
                 case "true":
-                    tokens.addLast(new ExprToken(Value.TRUE));
+                    tokens.addLast(new ExprToken(Value.TRUE,currentPos()));
                     break;
                 case "false":
-                    tokens.addLast(new ExprToken(Value.FALSE));
+                    tokens.addLast(new ExprToken(Value.FALSE, currentPos()));
                     break;
                 default:
-                    tokens.addLast(new NamedToken(ParserTokenType.WORD, str));
+                    tokens.addLast(new NamedToken(ParserTokenType.WORD, str, currentPos()));
             }
         }
 
@@ -582,11 +612,13 @@ public class Parser {
                 str=str.substring(0,str.length()-1);
                 try {
                     int i = Integer.parseUnsignedInt(str, base);
-                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT32, i)));
+                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT32, i),
+                            currentPos()));
                 } catch (NumberFormatException nfeI) {
                     try {
                         long l = Long.parseUnsignedLong(str, base);
-                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT64, l)));
+                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT64, l),
+                                currentPos()));
                     } catch (NumberFormatException nfeL) {
                         throw new SyntaxError("Number out of Range:"+str);
                     }
@@ -594,11 +626,13 @@ public class Parser {
             }else{
                 try {
                     int i = Integer.parseInt(str, base);
-                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT32, i)));
+                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT32, i),
+                            currentPos()));
                 } catch (NumberFormatException nfeI) {
                     try {
                         long l = Long.parseLong(str, base);
-                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT64, l)));
+                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT64, l),
+                                currentPos()));
                     } catch (NumberFormatException nfeL) {
                         throw new SyntaxError("Number out of Range:"+str);
                     }
@@ -819,20 +853,22 @@ public class Parser {
         //1. parse primitives to TYPE
         // <Primitive> | <typedef Type>
         Type tmp;
+        ParserToken token;
         for(int i=0;i<tokens.size();i++){
-            if(i>0&&tokens.get(i-1).tokenType==ParserTokenType.DOLLAR){
-                tokens.set(i-1,new TypeToken(new Type.Generic(((NamedToken)tokens.remove(i--)).value)));
-            }else if(tokens.get(i).tokenType ==ParserTokenType.WORD&&
-                    (i==0||tokens.get(i-1).tokenType !=ParserTokenType.SEPARATOR)){
-                //word preceded with : is param name
-                tmp=context.getType(((NamedToken)tokens.get(i)).value);
-                if(tmp==null){
-                    throw new SyntaxError("Not a typeName:"+
-                            ((NamedToken)tokens.get(i)).value);
+            if(tokens.get(i).tokenType ==ParserTokenType.WORD) {
+                if (i > 0 && tokens.get(i - 1).tokenType == ParserTokenType.DOLLAR) {
+                    token = tokens.remove(i--);
+                    tokens.set(i, new TypeToken(new Type.Generic(((NamedToken) token).value), token.pos));
+                } else if (i == 0 || tokens.get(i - 1).tokenType != ParserTokenType.SEPARATOR) {
+                    //word preceded with : is param name
+                    token=tokens.get(i);
+                    tmp = context.getType(((NamedToken) token).value);
+                    if (tmp == null) {
+                        throw new SyntaxError("Not a typeName: \"" +((NamedToken)token).value+"\" at "+token.pos);
+                    }
+                    tokens.set(i, new TypeToken(tmp, token.pos));
                 }
-                tokens.set(i,new TypeToken(tmp));
             }
-
         }
         //2. parse parentheses
         // '('<Type>')'
@@ -866,11 +902,11 @@ public class Parser {
                                 tokens.remove(i+2);
                                 tokens.remove(i+1);
                                 tokens.set(i,new TypeToken(
-                                        new Type.Proc(typeBuffer.toArray(new Type[0]))));
+                                        new Type.Proc(typeBuffer.toArray(new Type[0])),tokens.get(i).pos));
                                 typeBuffer.clear();
                                 state=TypeParserState.ROOT;
                             }else if(typeBuffer.size()==1){
-                               tokens.set(i,new TypeToken(typeBuffer.get(0)));
+                               tokens.set(i,new TypeToken(typeBuffer.get(0),tokens.get(i).pos));
                                typeBuffer.clear();
                                 state=TypeParserState.ROOT;
                             }else{
@@ -903,7 +939,7 @@ public class Parser {
                                 throw new SyntaxError("mismatched bracket");
                             }
                             tokens.set(i,new TypeToken(new Type.Struct(typeBuffer.toArray(new Type[0]),
-                                    nameBuffer.toArray(new String[0]))));
+                                    nameBuffer.toArray(new String[0])),tokens.get(i).pos));
                             nameBuffer.clear();
                             typeBuffer.clear();
                             state=TypeParserState.ROOT;
@@ -931,14 +967,14 @@ public class Parser {
                 tmp=((TypeToken)tokens.get(i)).type;
                 tokens.remove(i+1);
                 //addLater? caching of Types
-                tokens.set(i,new TypeToken(new Type.Optional(tmp)));
+                tokens.set(i,new TypeToken(new Type.Optional(tmp),tokens.get(i).pos));
             }else if(tokens.get(i).tokenType ==ParserTokenType.TYPE&&
                     tokens.get(i+1).tokenType ==ParserTokenType.OPEN_SQ_BRACKET){
                 tmp=((TypeToken)tokens.get(i)).type;
                 tokens.remove(i+1);
                 if(i+1<tokens.size()&&tokens.get(i+1).tokenType ==ParserTokenType.CLOSE_SQ_BRACKET){//Array
                     tokens.remove(i+1);
-                    tokens.set(i,new TypeToken(new Type.Array(tmp)));
+                    tokens.set(i,new TypeToken(new Type.Array(tmp),tokens.get(i).pos));
                 }else{
                     throw new SyntaxError("Illegal Syntax for Array: expected " +
                             "<Type>'[]'or <Type>'['<Type>']'");
@@ -951,7 +987,7 @@ public class Parser {
             if(tokens.get(i).tokenType ==ParserTokenType.TYPE&&
                     tokens.get(i-1).tokenType !=ParserTokenType.AT){
                 tmp=((TypeToken)tokens.remove(i)).type;
-                tokens.set(i-1,new TypeToken(new Type.Reference(tmp)));
+                tokens.set(i-1,new TypeToken(new Type.Reference(tmp),tokens.get(i).pos));
             }
         }
         if(tokens.size()!=1||tokens.get(0).tokenType !=ParserTokenType.TYPE){
@@ -973,6 +1009,7 @@ public class Parser {
         }
         context.defType(name,typeFromTokens(context,typeTokens));
     }
+    //TODO evaluate constant expressions
     private Expression expressionFromTokens(String procName,Type.Proc procType,ParserContext context, ArrayList<ParserToken> tokens){
         //1. read brackets
         // (<Expr>)
@@ -1014,9 +1051,10 @@ public class Parser {
                         if(tokenBuffer.size()>0&&
                                 tokenBuffer.get(tokenBuffer.size()-1).tokenType==ParserTokenType.SEPARATOR){
                             tokenBuffer.remove(tokenBuffer.size()-1);//(<Type>:) -> type-cast
-                            tokens.set(i,new TypeToken(typeFromTokens(context,tokenBuffer)));
+                            tokens.set(i,new TypeToken(typeFromTokens(context,tokenBuffer),tokens.get(i).pos));
                         }else{//(<Expr>) -> <Expr>
-                            tokens.set(i,new ExprToken(expressionFromTokens(procName,procType,context,tokenBuffer)));
+                            tokens.set(i,new ExprToken(expressionFromTokens(procName,procType,context,tokenBuffer),
+                                    tokens.get(i).pos));
                         }
                         tokenBuffer.clear();
                         state=ExpressionParserState.ROOT;
@@ -1032,7 +1070,7 @@ public class Parser {
                             tokenBuffer.clear();
                         }
                         if(bracketStack.isEmpty()){
-                            tokens.set(i,new ExprToken(InitStructOrArray.newArray(exprBuffer)));
+                            tokens.set(i,new ExprToken(InitStructOrArray.newArray(exprBuffer),tokens.get(i).pos));
                             state=ExpressionParserState.ROOT;
                         }else{
                             tokens.remove(i--);
@@ -1058,7 +1096,8 @@ public class Parser {
                         exprBuffer.add(expressionFromTokens(procName,procType,context,tokenBuffer));
                         tokenBuffer.clear();
                         if(bracketStack.isEmpty()){
-                            tokens.set(i,new ExprToken(InitStructOrArray.newStruct(exprBuffer,nameBuffer)));
+                            tokens.set(i,new ExprToken(InitStructOrArray.newStruct(exprBuffer,nameBuffer),
+                                    tokens.get(i).pos));
                             state=ExpressionParserState.ROOT;
                         }else{
                             tokens.remove(i--);
@@ -1072,7 +1111,7 @@ public class Parser {
                     if(bracketStack.isEmpty()){
                         Expression index=expressionFromTokens(procName,procType,context,tokenBuffer);
                         tokenBuffer.clear();
-                        tokens.set(i,new ExprToken(true,index));
+                        tokens.set(i,new ExprToken(true,index,tokens.get(i).pos));
                         state=ExpressionParserState.ROOT;
                     }else if(bracketStack.size()==1&&tokens.get(i).tokenType==ParserTokenType.SEPARATOR){
                         tokens.remove(i--);
@@ -1094,7 +1133,7 @@ public class Parser {
                                 expressionFromTokens(procName,procType,context,tokenBuffer);
                         tokenBuffer.clear();
                         tokens.set(i,new ExprToken(//placeholder
-                                Value.createPrimitive(Type.Numeric.INT32,0)));
+                                Value.createPrimitive(Type.Numeric.INT32,0),tokens.get(i).pos));
                         //TODO create Range access operator from right and exprBuffer
                         state=ExpressionParserState.ROOT;
                     }else if(bracketStack.size()==1&&tokens.get(i).tokenType==ParserTokenType.SEPARATOR){
@@ -1116,20 +1155,20 @@ public class Parser {
                 id=context.getVarId(name);
                 if(id<0){
                     if(name.equals(procName)){
-                        tokens.set(i,new ExprToken(new ThisExpr(procType)));
+                        tokens.set(i,new ExprToken(new ThisExpr(procType),tokens.get(i).pos));
                     }else {
                         Value v=context.getConst(name);
                         if(v==null){
                             v=context.getProc(name);
                         }//no else
                         if(v!=null){
-                            tokens.set(i,new ExprToken(v));
+                            tokens.set(i,new ExprToken(v,tokens.get(i).pos));
                         }else{
-                            throw new SyntaxError("Unknown Identifier:"+name);
+                            throw new SyntaxError("Unknown Identifier: \""+name+"\" at "+tokens.get(i).pos);
                         }
                     }
                 }else {
-                    tokens.set(i, new ExprToken(new VarExpression(context.getVarType(id), id)));
+                    tokens.set(i, new ExprToken(new VarExpression(context.getVarType(id), id),tokens.get(i).pos));
                 }
             }
         }
@@ -1141,12 +1180,12 @@ public class Parser {
                     String fieldName=((NamedToken)tokens.remove(i+1)).value;
                     tokens.set(i-1,new ExprToken(new GetField(
                             ((ExprToken)tokens.get(i-1)).expr,
-                            fieldName)));
+                            fieldName),tokens.get(i-1).pos));
                     tokens.remove(i--);
                 }else if(tokens.get(i).tokenType==ParserTokenType.INDEX){
                     tokens.set(i-1,new ExprToken(new GetIndex(
                             ((ExprToken)tokens.get(i-1)).expr,
-                            ((ExprToken)tokens.get(i)).expr)));
+                            ((ExprToken)tokens.get(i)).expr),tokens.get(i-1).pos));
                     tokens.remove(i--);
                 }else if(tokens.get(i).tokenType==ParserTokenType.RANGE){
                     //TODO Range
@@ -1156,7 +1195,7 @@ public class Parser {
                 tokens.get(i).tokenType==ParserTokenType.EXPRESSION){//typecast
                 tokens.set(i-1,new ExprToken(new TypeCast(
                         ((TypeToken)tokens.get(i-1)).type,
-                        ((ExprToken)tokens.get(i)).expr)));
+                        ((ExprToken)tokens.get(i)).expr),tokens.get(i-1).pos));
                 tokens.remove(i--);
             }
         }
@@ -1173,7 +1212,7 @@ public class Parser {
                     ){
                         tmpL=((ExprToken)tokens.remove(i+1)).expr;
                         tokens.set(i,new ExprToken(new LeftUnaryOp(
-                                ((Operator)tokens.get(i)).opType,tmpL)));
+                                ((Operator)tokens.get(i)).opType,tmpL),tokens.get(i).pos));
                     }
                 }
             }
@@ -1188,7 +1227,7 @@ public class Parser {
                 tmpL=((ExprToken)tokens.get(i-1)).expr;
                 tmpR=((ExprToken)tokens.remove(i+1)).expr;
                 tokens.remove(i--);
-                tokens.set(i,new ExprToken(new BinOp(tmpL,OperatorType.POW,tmpR)));
+                tokens.set(i,new ExprToken(new BinOp(tmpL,OperatorType.POW,tmpR),tokens.get(i).pos));
             }
         }
         for(int level=0;level<=5;level++){
@@ -1230,7 +1269,7 @@ public class Parser {
                         tmpL=((ExprToken)tokens.get(i-1)).expr;
                         tmpR=((ExprToken)tokens.remove(i+1)).expr;
                         OperatorType opType=((Operator)tokens.remove(i--)).opType;
-                        tokens.set(i,new ExprToken(new BinOp(tmpL,opType,tmpR)));
+                        tokens.set(i,new ExprToken(new BinOp(tmpL,opType,tmpR),tokens.get(i).pos));
                     }
                 }
             }
@@ -1243,7 +1282,7 @@ public class Parser {
                 tokens.get(i-1).tokenType==ParserTokenType.SEPARATOR&&
                 tokens.get(i).tokenType==ParserTokenType.EXPRESSION){
                 tokens.set(i-4,new ExprToken(new IfExpr(((ExprToken)tokens.get(i-4)).expr,
-                        ((ExprToken)tokens.get(i-2)).expr,((ExprToken)tokens.get(i)).expr)));
+                        ((ExprToken)tokens.get(i-2)).expr,((ExprToken)tokens.get(i)).expr),tokens.get(i-4).pos));
                 tokens.remove(i--);//i
                 tokens.remove(i);//i-1
                 tokens.remove(i-1);//i-2
