@@ -155,20 +155,24 @@ array[0]={1,2,3};
 Integers or floats in base 2,10 or 16.
 Floating points numbers in base 2 and 16 are 
 completely in that base, including the exponent part
-(`0b1E-10` is 2<sup>-2</sup> and `0x1P10` is 16<sup>16</sup> )
- 
+(`0b1E-10` is 2<sup>-2</sup> and `0x1P10` is 16<sup>16</sup>)
+Integer literals are interpreted as int32, if they don't fit into an int32 
+they are interpreted as int64. 
+Integers ending with `u` or `U` are interpreted as unsigned.
+(uint32 or uint64). 
+All float literals are interpreted as double by default.
+
 Examples:
 ```
 int32:i=1;
+uint64:m=1234u;
 float64[]:array={1.0,0x3.4P1a,0b11.01E-11};
 int64:l=0x123456789abcdef;
 int8:bin=(int8:)0b11001001;
 ```
 ##### Strings
 String literals start and end with `"`,
-`\` can be used for escaping.
-
-(escape sequences are currently not supported)
+`\ ` can be used for escaping.
 
 ```
 string:s1="Hello World!";
@@ -194,7 +198,7 @@ The struct declaration syntax is like in C a list
 of statements of the form `'.'<field>'='<Value>`
 Example:
 ```
-{int64:num,uint64:den}:frac={.num=2,.den=(uint64:)3};
+{int64:num,uint64:den}:frac={.num=2,.den=3u};
 ```
 
 #### Variables
@@ -222,7 +226,7 @@ containing their length as an unsigned 64-bit integer.
 ```
 type:t=1.type;
 uint64:len={1,2,3,4}.length;
-{int64:num,uint64:den} fract={.num=22,.den=(uint64:)7};
+{int64:num,uint64:den} fract={.num=22,.den=7u};
 int64:num=frac.num;
 frac.num=355;
 frac.den=113;

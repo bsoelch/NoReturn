@@ -95,14 +95,15 @@ public class Parser {
         static final String DEC_DIGIT = "[0-9]";
         static final String BIN_DIGIT = "[01]";
         static final String HEX_DIGIT = "[0-9a-fA-F]";
+        static final String UNSIGNED_POSTFIX = "[u|U]?";
         static final String BIN_PREFIX = "0b";
         static final String HEX_PREFIX = "0x";
         static final String DEC_INT_PATTERN = DEC_DIGIT + "+";
         static final String BIN_INT_PATTERN = BIN_PREFIX + BIN_DIGIT + "+";
         static final String HEX_INT_PATTERN = HEX_PREFIX + HEX_DIGIT + "+";
-        static final Pattern intDec=Pattern.compile(DEC_INT_PATTERN);
-        static final Pattern intBin=Pattern.compile(BIN_INT_PATTERN);
-        static final Pattern intHex=Pattern.compile(HEX_INT_PATTERN);
+        static final Pattern intDec=Pattern.compile(DEC_INT_PATTERN+UNSIGNED_POSTFIX);
+        static final Pattern intBin=Pattern.compile(BIN_INT_PATTERN+UNSIGNED_POSTFIX);
+        static final Pattern intHex=Pattern.compile(HEX_INT_PATTERN+UNSIGNED_POSTFIX);
         static final Pattern floatDotPrefix =Pattern.compile(//pattern for prefixes of . or , that lead to floats
                 "("+BIN_INT_PATTERN+")|("+DEC_INT_PATTERN+")|("+HEX_INT_PATTERN+")");
         static final String DEC_FLOAT_MAGNITUDE = DEC_INT_PATTERN + "\\.?"+DEC_DIGIT+"*";
@@ -435,7 +436,7 @@ public class Parser {
                         }
                         break;
                     case STRING:
-                        if(c==stringStart){
+                        if(c==stringStart){//TODO stringStart = ' => char-literal
                             tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
                                     Type.Primitive.STRING,buffer.toString())
                             ));
@@ -443,9 +444,28 @@ public class Parser {
                             state=WordState.ROOT;
                             return;
                         }else{
-                            buffer.append((char)c);
                             if(c=='\\'){
                                 c = forceNextChar();
+                                switch (c){
+                                    case '\\':
+                                    case '\'':
+                                    case '"':
+                                        buffer.append((char)c);
+                                        break;
+                                    case 'n':
+                                        buffer.append('\n');
+                                        break;
+                                    case 't':
+                                        buffer.append('\t');
+                                        break;
+                                    case 'r':
+                                        buffer.append('\r');
+                                        break;
+                                    //addLater more escape sequences
+                                    default:
+                                        throw new IllegalArgumentException("The escape sequence: '\\"+c+"' is not supported");
+                                }
+                            }else{
                                 buffer.append((char)c);
                             }
                         }
@@ -558,15 +578,30 @@ public class Parser {
         }
 
         private void parseInt(ArrayDeque<ParserToken> tokens, String str, int base) {
-            try {
-                int i = Integer.parseInt(str, base);
-                tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT32, i)));
-            } catch (NumberFormatException nfeI) {
+            if(str.endsWith("u")||str.endsWith("U")){//unsigned
+                str=str.substring(0,str.length()-1);
                 try {
-                    long l = Long.parseLong(str, base);
-                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT64, l)));
-                } catch (NumberFormatException nfeL) {
-                    throw new SyntaxError("Number out of Range:"+str);
+                    int i = Integer.parseUnsignedInt(str, base);
+                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT32, i)));
+                } catch (NumberFormatException nfeI) {
+                    try {
+                        long l = Long.parseUnsignedLong(str, base);
+                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT64, l)));
+                    } catch (NumberFormatException nfeL) {
+                        throw new SyntaxError("Number out of Range:"+str);
+                    }
+                }
+            }else{
+                try {
+                    int i = Integer.parseInt(str, base);
+                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT32, i)));
+                } catch (NumberFormatException nfeI) {
+                    try {
+                        long l = Long.parseLong(str, base);
+                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT64, l)));
+                    } catch (NumberFormatException nfeL) {
+                        throw new SyntaxError("Number out of Range:"+str);
+                    }
                 }
             }
         }
