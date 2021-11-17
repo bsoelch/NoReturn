@@ -121,12 +121,12 @@ public class Operations {
             (lVal,rVal)->{
                 //addLater? mutable Strings/arrays
                 if(lVal.type== Type.Primitive.STRING){
-                    String s1=((Value.StringValue)lVal).value;
-                    String s2=((Value.StringValue)rVal.castTo(Type.Primitive.STRING)).value;
+                    String s1=lVal.valueToString();
+                    String s2=rVal.castTo(Type.Primitive.STRING).valueToString();
                     return Value.createPrimitive(Type.Primitive.STRING,s1+s2);
                 }else if(rVal.type== Type.Primitive.STRING){
-                    String s1=((Value.StringValue)lVal.castTo(Type.Primitive.STRING)).value;
-                    String s2=((Value.StringValue)rVal).value;
+                    String s1=lVal.castTo(Type.Primitive.STRING).valueToString();
+                    String s2=rVal.valueToString();
                     return Value.createPrimitive(Type.Primitive.STRING,s1+s2);
                 }else if(lVal.type instanceof Type.Array&&rVal.type instanceof Type.Array){
                     Value[] newArray=new Value[((Value.Array)lVal).elements.length+
@@ -319,9 +319,7 @@ public class Operations {
                 (x1,x2)-> {
                     if(x1.type== Type.Primitive.STRING&&
                         x2.type== Type.Primitive.STRING){
-                        return ((Value.StringValue)x1).value.compareTo(
-                                ((Value.StringValue) x2).value
-                        );
+                        return ((Value.StringValue)x1).compareTo(((Value.StringValue) x2));
                     }else{
                         return null;
                     }
@@ -336,17 +334,7 @@ public class Operations {
                 (l1,l2)->(s)->l1.equals(l2),
                 Float::equals,
                 Double::equals,
-                (x1,x2)-> {
-                    //TODO equals for arbitrary values
-                    if(x1.type== Type.Primitive.STRING&&
-                            x2.type== Type.Primitive.STRING){
-                        return ((Value.StringValue)x1).value.equals(
-                                ((Value.StringValue) x2).value
-                        );
-                    }else{
-                        return null;
-                    }
-                }
+                Value::equals
         );
     }
 

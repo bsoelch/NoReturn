@@ -16,9 +16,9 @@ public class GetIndex implements Expression{
         Type type;
         if(valType == Type.Primitive.STRING){
             if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                type = Type.Numeric.UINT32;//unicode codepoint id
+                type = Type.Numeric.UINT8;//utf8-byte
             }else if(Type.canAssign(Type.Numeric.STRING, indType,null)){
-                type = Type.Numeric.UINT64;//index of string
+                type = Type.Numeric.UINT64;//index of substring
             }else{
                 throw new TypeError("Invalid type for string index:"+
                         indType+ " string indices have to be unsigned integers or strings");

@@ -248,8 +248,8 @@ frac.den=113;
 ##### index access
 With the `[]` operator it is possible to access elements
 of arrays and strings.
-Strings are interpreted as `uint32[]` containing their 
-unicode codepoints
+Strings are interpreted as `uint8[]` containing their 
+utf8 representation
 
 ```
 int32[]:array={1,2,3,4,5,6,7};

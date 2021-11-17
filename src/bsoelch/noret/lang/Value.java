@@ -262,18 +262,19 @@ public abstract class Value {
             return Objects.hash(type,value);
         }
     }
-    public static class StringValue extends Value{
-        final String value;
+    public static class StringValue extends Value implements Comparable<StringValue>{
+        final byte[] utf8Bytes;
         private StringValue(String value) {
             super(Type.Primitive.STRING);
-            this.value=value;
+            this.utf8Bytes=value.getBytes(StandardCharsets.UTF_8);
             getters.put(Type.FIELD_NAME_LENGTH,
                     ()->createPrimitive(Type.Numeric.UINT64,value.length()));
         }
+
         @Override
         public Value independentCopy(int ignoredId){
             if(isBoundExcept(ignoredId)) {
-                return createPrimitive(Type.Primitive.STRING, value);
+                return createPrimitive(Type.Primitive.STRING, new String(utf8Bytes,StandardCharsets.UTF_8));
             }else{
                 return this;
             }
@@ -284,7 +285,7 @@ public abstract class Value {
                 return this;
             }else if(t instanceof Type.Array&&
                     Type.canCast(((Type.Array)t).content, Type.Numeric.UINT8,null)){
-                //TODO cast String to Array
+                //TODO cast String to Array (uint8 -> UTF8, uint16 -> UTF16, uint32 -> UTF32)
                 throw new UnsupportedOperationException("Unimplemented");
             }else{
                 throw new TypeError("Cannot cast "+Type.Primitive.STRING+" to "+t);
@@ -295,21 +296,31 @@ public abstract class Value {
             if (this == o) return true;
             if (!(o instanceof StringValue)) return false;
             StringValue that = (StringValue) o;
-            return Objects.equals(value, that.value);
+            return Arrays.equals(utf8Bytes, that.utf8Bytes);
         }
         @Override
         public int hashCode() {
-            return value.hashCode();
+            return Arrays.hashCode(utf8Bytes);
         }
         @Override
         protected String valueToString() {
-            return value;
+            return new String(utf8Bytes,StandardCharsets.UTF_8);
+        }
+
+        @Override
+        public int compareTo(StringValue o) {
+            //TODO more effective Method?
+            return new String(utf8Bytes).compareTo(new String(o.utf8Bytes));
         }
 
         @Override
         public Value getAtIndex(Value index) {
+            //TODO? getAtIndex -> utf8-bytes
             long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
-            return Value.createPrimitive(Type.Numeric.UINT32,value.codePointAt((int)lIndex));
+            if(lIndex<0||lIndex>= utf8Bytes.length){
+                throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
+            }
+            return Value.createPrimitive(Type.Numeric.UINT8,utf8Bytes[(int)lIndex]);
         }
         @Override
         public Value setAtIndex(Value index, Value newValue) {
@@ -407,7 +418,7 @@ public abstract class Value {
                     throw new TypeError("Cannot cast type:"+type+ " to "+t);
                 }
             }
-            //addLater? uint8[] -> String
+            //addLater? Array -> String (utf8,utf16,utf32)
             throw new TypeError("Cannot cast "+type+" to "+t);
         }
         @Override
