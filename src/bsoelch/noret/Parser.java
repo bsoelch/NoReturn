@@ -1557,7 +1557,6 @@ public class Parser {
             HashMap<String, Type.GenericBound> generics=new HashMap<>();
             for(int i=0;i< argBuffer.size();i++){
                 //TODO prevent passing a mutable object to two different procedures
-                // (unless its shared)
                 //Type-check parameters
                 if(Type.canAssign(outTypes[i],argBuffer.get(i).expectedType(),generics)){
                     argArray[i]=argBuffer.get(i);

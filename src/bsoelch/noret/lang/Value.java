@@ -91,7 +91,6 @@ public abstract class Value {
     // Values are only stored by their types
     // all Array accesses are successful
     // all value bindings are stored
-    //TODO ensure that all proc arguments are independent (excluding shared values)
 
     public Value(Type type){
         this.type=type;
@@ -315,7 +314,7 @@ public abstract class Value {
 
         @Override
         public Value getAtIndex(Value index) {
-            //TODO? getAtIndex -> utf8-bytes
+            //TODO? getAtIndex -> Codepoints
             long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
             if(lIndex<0||lIndex>= utf8Bytes.length){
                 throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
@@ -343,7 +342,6 @@ public abstract class Value {
 
     //addLater? primitiveArrays
 
-    //TODO separate Arrays and Structs
     public static class Array extends Value{
         final Value[] elements;
 

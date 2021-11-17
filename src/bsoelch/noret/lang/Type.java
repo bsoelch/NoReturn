@@ -30,7 +30,6 @@ public class Type {
                 fields.put(FIELD_NAME_TYPE,this);
                 //addLater more fields
                 // .isArray
-                // .isMap
                 // .isStruct
                 // .isOptional
                 // .isReference
