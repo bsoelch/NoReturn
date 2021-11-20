@@ -10,8 +10,7 @@ import java.util.function.Function;
 import java.util.function.Supplier;
 
 public abstract class Value {
-    /**argument to bind values to a global variable*/
-    public static final int GLOBAL_VAR = -1;
+    //addLater? remember bindings at runtime?
 
     public static final Value NONE= new Value(Type.NONE_TYPE) {
         @Override
@@ -37,6 +36,8 @@ public abstract class Value {
         protected String valueToString() {
             return "none";
         }
+        @Override
+        public boolean isMutable() {return false;}
     };
     public static final Value NOP= new Value(Type.NOP_TYPE) {
         @Override
@@ -61,9 +62,13 @@ public abstract class Value {
         protected String valueToString() {
             return "NOP";
         }
+        @Override
+        public boolean isMutable() {return false;}
     };
     public static final Value TRUE = createPrimitive(Type.Primitive.BOOL,true) ;
     public static final Value FALSE = createPrimitive(Type.Primitive.BOOL,false) ;
+
+    public abstract boolean isMutable();
 
     /**wrapper of HashMap< String, V > that does not allow replacing entries*/
     private static class FieldMap<V>{
@@ -86,12 +91,6 @@ public abstract class Value {
     protected final FieldMap<Function<Value,Value>> setters=new FieldMap<>();
     protected final Type type;
 
-    private final HashSet<Integer> boundTo=new HashSet<>();
-    //addLater meta-Evaluate Mode for Compiler:
-    // Values are only stored by their types
-    // all Array accesses are successful
-    // all value bindings are stored
-
     public Value(Type type){
         this.type=type;
         getters.put(Type.FIELD_NAME_TYPE,()->
@@ -101,20 +100,7 @@ public abstract class Value {
         return type;
     }
 
-    public void bind(int id){
-        boundTo.add(id);
-    }
-    public boolean isBound(){
-        return boundTo.size()>0;
-    }
-    public boolean isBoundExcept(int ignoredId){
-        if(boundTo.contains(ignoredId)){
-            return boundTo.size()>1;
-        }else{
-            return boundTo.size()>0;
-        }
-    }
-    public Value independentCopy(int ignoredId){
+    public Value independentCopy(){
         return this;
     }
 
@@ -203,6 +189,8 @@ public abstract class Value {
         protected String valueToString() {
             return value.toString();
         }
+        @Override
+        public boolean isMutable() {return false;}
     }
     public static class NumericValue extends Primitive{
         private NumericValue(Type.Numeric type, Object value) {
@@ -271,12 +259,8 @@ public abstract class Value {
         }
 
         @Override
-        public Value independentCopy(int ignoredId){
-            if(isBoundExcept(ignoredId)) {
-                return createPrimitive(Type.Primitive.STRING, new String(utf8Bytes,StandardCharsets.UTF_8));
-            }else{
-                return this;
-            }
+        public Value independentCopy(){
+            return createPrimitive(Type.Primitive.STRING, new String(utf8Bytes,StandardCharsets.UTF_8));
         }
         @Override
         public Value castTo(Type t) {
@@ -338,6 +322,8 @@ public abstract class Value {
             //TODO String.setRange
             throw new UnsupportedOperationException("Unimplemented");
         }
+        @Override
+        public boolean isMutable() {return true;}
     }
 
     //addLater? primitiveArrays
@@ -363,39 +349,12 @@ public abstract class Value {
         }
 
         @Override
-        public void bind(int id) {
-            super.bind(id);
-            for(Value v:elements){
-                v.bind(id);
+        public Value independentCopy(){
+            Value[] newElements=new Value[elements.length];
+            for(int i=0;i< newElements.length;i++){
+                newElements[i]=elements[i].independentCopy();
             }
-        }
-        @Override
-        public boolean isBound() {
-            for(Value v:elements){
-                if(v.isBound())
-                    return true;
-            }
-            return super.isBound();
-        }
-        @Override
-        public boolean isBoundExcept(int ignoredId) {
-            for(Value v:elements){
-                if(v.isBoundExcept(ignoredId))
-                    return true;
-            }
-            return super.isBoundExcept(ignoredId);
-        }
-        @Override
-        public Value independentCopy(int ignoredId){
-            if(isBoundExcept(ignoredId)){
-                Value[] newElements=new Value[elements.length];
-                for(int i=0;i< newElements.length;i++){
-                    newElements[i]=elements[i].independentCopy(ignoredId);
-                }
-                return new Array(newElements);
-            }else{
-                return this;
-            }
+            return new Array(newElements);
         }
 
         @Override
@@ -479,6 +438,8 @@ public abstract class Value {
             //TODO Array.setRange
             throw new UnsupportedOperationException("unimplemented");
         }
+        @Override
+        public boolean isMutable() {return true;}
     }
     public static class Struct extends Value{
         //TODO replace with Map name->element
@@ -515,39 +476,12 @@ public abstract class Value {
             }
         }
         @Override
-        public void bind(int id) {
-            super.bind(id);
-            for(Value v:elements){
-                v.bind(id);
+        public Value independentCopy(){
+            Value[] newElements=new Value[elements.length];
+            for(int i=0;i< newElements.length;i++){
+                newElements[i]=elements[i].independentCopy();
             }
-        }
-        @Override
-        public boolean isBound() {
-            for(Value v:elements){
-                if(v.isBound())
-                    return true;
-            }
-            return super.isBound();
-        }
-        @Override
-        public boolean isBoundExcept(int ignoredId) {
-            for(Value v:elements){
-                if(v.isBoundExcept(ignoredId))
-                    return true;
-            }
-            return super.isBoundExcept(ignoredId);
-        }
-        @Override
-        public Value independentCopy(int ignoredId){
-            if(isBoundExcept(ignoredId)){
-                Value[] newElements=new Value[elements.length];
-                for(int i=0;i< newElements.length;i++){
-                    newElements[i]=elements[i].independentCopy(ignoredId);
-                }
-                return new Struct(newElements,names);
-            }else{
-                return this;
-            }
+            return new Struct(newElements,names);
         }
 
         @Override
@@ -596,7 +530,8 @@ public abstract class Value {
             }
             return str.append('}').toString();
         }
-
+        @Override
+        public boolean isMutable() {return true;}
     }
 
 }

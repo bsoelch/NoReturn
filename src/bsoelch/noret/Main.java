@@ -12,20 +12,20 @@ public class Main {
 
     public static void main(String[] args) throws IOException {
         Parser parser=new Parser();//TODO input program-name through arguments
-        Procedure main=parser.parse(new FileReader(System.getProperty("user.dir")+"/test.noret"));
+        Procedure start=parser.parse(new FileReader(System.getProperty("user.dir")+"/test.noret"));
         Value[] progArgs;
-        if(main.argTypes().length==0){
+        if(start.argTypes().length==0){
             progArgs=new Value[0];
         }else{
             progArgs=new Value[]{
-                    //TODO pass arguments to main
+                    //TODO pass arguments to start
             };
             progArgs=new Value[]{
                     new Value.Array(progArgs)
             };
         }
         CallQueue callQueue=new CallQueue();
-        callQueue.push(progArgs,main);
+        callQueue.push(progArgs,start);
         new Thread(new CallQueue.QueueConsumer(callQueue)).start();
         new CallQueue.QueueConsumer(callQueue).run();
     }

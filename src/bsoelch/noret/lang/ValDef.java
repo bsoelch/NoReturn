@@ -3,7 +3,6 @@ package bsoelch.noret.lang;
 import bsoelch.noret.TypeError;
 
 import java.util.ArrayList;
-import java.util.HashMap;
 
 public class ValDef implements Action {
     final Type type;
@@ -21,7 +20,6 @@ public class ValDef implements Action {
     @Override
     public void execute(Procedure parent,ArrayList<Value> context) {
         Value tmp = initValue.evaluate(parent, context).get().castTo(type);
-        tmp.bind(context.size());
         context.add(tmp);
     }
 }

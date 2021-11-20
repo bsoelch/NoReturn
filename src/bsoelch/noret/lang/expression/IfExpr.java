@@ -41,6 +41,12 @@ public class IfExpr implements Expression {
     }
 
     @Override
+    public boolean isBound() {
+        //addLater? prevent unnecessary coping if only one value is bound
+        return ifVal.isBound()||elseVal.isBound();
+    }
+
+    @Override
     public boolean canSet() {
         return ifVal.canSet()&&elseVal.canSet();
     }

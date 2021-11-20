@@ -15,7 +15,7 @@ public class LeftUnaryOp implements Expression {
     public static Expression create(OperatorType op, Expression expr){
         Type expectedOut=typeCheck(op,expr.expectedType());
         if(expr instanceof ValueExpression){//constant folding
-            return new ValueExpression(evaluate(op,((ValueExpression) expr).value));
+            return new ValueExpression(evaluate(op,((ValueExpression) expr).value), false);
         }
         return new LeftUnaryOp(op, expr,expectedOut);
     }
@@ -25,10 +25,15 @@ public class LeftUnaryOp implements Expression {
         this.expectedOutput=expectedOutput;
     }
 
-    private static Value evaluate(OperatorType op,Value lVal) {
+    @Override
+    public boolean isBound() {
+        return false;//LeftUnaryOp always unbinds operand
+    }
+
+    private static Value evaluate(OperatorType op, Value lVal) {
         switch (op){
             case PLUS:
-                return lVal;
+                return lVal.independentCopy();
             case MINUS:
                 return Operations.negate(lVal);
             case NOT:

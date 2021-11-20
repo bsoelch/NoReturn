@@ -6,9 +6,16 @@ import java.util.ArrayList;
 
 public class ValueExpression implements Expression {
     final Value value;
+    final boolean isConst;
 
-    public ValueExpression(Value value) {
+    public ValueExpression(Value value, boolean isConst) {
         this.value = value;
+        this.isConst = isConst;
+    }
+
+    @Override
+    public boolean isBound() {
+        return isConst&&value.isMutable();
     }
 
     @Override

@@ -14,7 +14,7 @@ public class TypeCast implements Expression{
             throw new TypeError("Values of type "+value.expectedType()+ " cannot be cast to "+castType);
         }
         if(value instanceof ValueExpression){
-            return new ValueExpression(((ValueExpression) value).value.castTo(castType));
+            return new ValueExpression(((ValueExpression) value).value.castTo(castType), false);
         }
         return new TypeCast(castType,value);
     }
@@ -24,6 +24,10 @@ public class TypeCast implements Expression{
         type=castType;
     }
 
+    @Override
+    public boolean isBound() {
+        return value.isBound();
+    }
 
     @Override
     public ValueView evaluate(Procedure parent, ArrayList<Value> context) {

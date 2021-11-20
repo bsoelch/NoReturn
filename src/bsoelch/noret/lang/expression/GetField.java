@@ -19,7 +19,7 @@ public class GetField implements Expression{
         }
         if(value instanceof ValueExpression){//constant folding
             //set field is not supported for constants
-            return new ValueExpression(((ValueExpression) value).value.getField(fieldName));
+            return new ValueExpression(((ValueExpression) value).value.getField(fieldName), false);
         }
         return new GetField(value,fieldName,type);
     }
@@ -28,6 +28,11 @@ public class GetField implements Expression{
         this.value=value;
         this.fieldName=fieldName;
         this.type=fieldType;
+    }
+
+    @Override
+    public boolean isBound() {
+        return true;
     }
 
     @Override

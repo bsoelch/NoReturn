@@ -119,7 +119,6 @@ public class Operations {
             (f1,f2)->wrap(f1+f2),
             (d1,d2)->wrap(d1+d2),
             (lVal,rVal)->{
-                //addLater? mutable Strings/arrays
                 if(lVal.type== Type.Primitive.STRING){
                     String s1=lVal.valueToString();
                     String s2=rVal.castTo(Type.Primitive.STRING).valueToString();

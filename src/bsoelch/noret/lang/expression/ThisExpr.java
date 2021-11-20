@@ -6,6 +6,12 @@ import java.util.ArrayList;
 
 public class ThisExpr implements Expression {
     final Type.Proc type;
+
+    @Override
+    public boolean isBound() {
+        return true;
+    }
+
     public ThisExpr(Type.Proc procType) {
         type = procType;
     }

@@ -38,7 +38,7 @@ public class GetIndex implements Expression{
         }
         if(value instanceof ValueExpression&&index instanceof ValueExpression){//constant folding
             //set index is not supported for constants
-            return new ValueExpression(((ValueExpression) value).value.getAtIndex(((ValueExpression) index).value));
+            return new ValueExpression(((ValueExpression) value).value.getAtIndex(((ValueExpression) index).value), false);
         }
         return new GetIndex(value, index,type);
     }
@@ -47,6 +47,11 @@ public class GetIndex implements Expression{
         this.value=value;
         this.index=index;
         this.type=valType;
+    }
+
+    @Override
+    public boolean isBound() {
+        return true;
     }
 
     @Override

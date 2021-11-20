@@ -14,6 +14,9 @@ public class Assignment implements Action {
     @Override
     public void execute(Procedure parent,ArrayList<Value> context) {
         Value tmp= expr.evaluate(parent, context).get();
+        if(expr.isBound()){//unbind value
+            tmp=tmp.independentCopy();
+        }
         target.evaluate(parent, context).set(tmp);
     }
 }

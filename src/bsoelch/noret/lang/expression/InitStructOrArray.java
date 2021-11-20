@@ -17,7 +17,7 @@ public class InitStructOrArray implements Expression {
             }
         }
         if(isConstant){
-            return new ValueExpression(new Value.Array(values));
+            return new ValueExpression(new Value.Array(values), false);
         }
         throw new UnsupportedOperationException("unimplemented");
     }
@@ -32,9 +32,14 @@ public class InitStructOrArray implements Expression {
             }
         }
         if(isConstant){
-            return new ValueExpression(new Value.Struct(values,labels.toArray(new String[0])));
+            return new ValueExpression(new Value.Struct(values,labels.toArray(new String[0])), false);
         }
         throw new UnsupportedOperationException("unimplemented");
+    }
+
+    @Override
+    public boolean isBound() {
+        return false;
     }
 
     @Override

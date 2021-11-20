@@ -17,7 +17,7 @@ public class BinOp implements Expression {
     public static Expression create(Expression left, OperatorType op, Expression right){
         Type type=typeCheck(left, op, right);
         if(left instanceof ValueExpression&&right instanceof ValueExpression){//fold constants
-            return new ValueExpression(evaluate(((ValueExpression) left).value,op,()->((ValueExpression) right).value));
+            return new ValueExpression(evaluate(((ValueExpression) left).value,op,()->((ValueExpression) right).value), false);
         }
         return new BinOp(left, op, right,type);
     }
@@ -91,6 +91,11 @@ public class BinOp implements Expression {
     @Override
     public ValueView evaluate(Procedure parent, ArrayList<Value> context) {
         return ValueView.wrap(evaluate(left.evaluate(parent, context).get(),op,()->right.evaluate(parent, context).get()));
+    }
+
+    @Override
+    public boolean isBound() {
+        return false;//bin op always creates a new value
     }
 
     @Override

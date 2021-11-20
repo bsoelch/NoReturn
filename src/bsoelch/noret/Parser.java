@@ -85,8 +85,8 @@ public class Parser {
     }
     static class ExprToken extends ParserToken{
         final Expression expr;
-        ExprToken(Value value, TokenPosition pos) {
-            this(false,new ValueExpression(value), pos);
+        ExprToken(Value value, boolean isConst, TokenPosition pos) {
+            this(false,new ValueExpression(value, isConst), pos);
         }
         ExprToken(Expression expr, TokenPosition pos) {
             this(false,expr, pos);
@@ -464,13 +464,13 @@ public class Parser {
                             if(c=='\''){//char literal
                                 if(buffer.codePoints().count()==1){
                                     tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
-                                            Type.Numeric.UINT32,buffer.codePointAt(0)), currentPos()));
+                                            Type.Numeric.UINT32,buffer.codePointAt(0)), false, currentPos()));
                                 }else{
                                     throw new SyntaxError("A char-literal must contain exactly one character");
                                 }
                             }else{
                                 tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
-                                        Type.Primitive.STRING,buffer.toString()), currentPos()));
+                                        Type.Primitive.STRING,buffer.toString()), false, currentPos()));
                             }
                             buffer.setLength(0);
                             state=WordState.ROOT;
@@ -544,7 +544,7 @@ public class Parser {
                         double d = Double.parseDouble(str);
                         tokens.addLast(new ExprToken(
                                 Value.createPrimitive(Type.Numeric.FLOAT64, d),
-                                currentPos()));
+                                false, currentPos()));
                     }else if(floatBin.matcher(str).matches()){
                         //bin-Float
                         double d=parseBinFloat(
@@ -552,7 +552,7 @@ public class Parser {
                         );
                         tokens.addLast(new ExprToken(
                                 Value.createPrimitive(Type.Numeric.FLOAT64, d),
-                                currentPos()));
+                                false, currentPos()));
                     }else if(floatHex.matcher(str).matches()){
                         //hex-Float
                         double d=parseHexFloat(
@@ -560,7 +560,7 @@ public class Parser {
                         );
                         tokens.addLast(new ExprToken(
                                 Value.createPrimitive(Type.Numeric.FLOAT64, d),
-                                currentPos()));
+                                false, currentPos()));
                     }else {
                         {//split string at . , + -
                             int i = str.indexOf('.');
@@ -599,16 +599,16 @@ public class Parser {
         private void addWord(ArrayDeque<ParserToken> tokens, String str) {
             switch(str){
                 case "none":
-                    tokens.addLast(new ExprToken(Value.NONE, currentPos()));
+                    tokens.addLast(new ExprToken(Value.NONE, false, currentPos()));
                     break;
                 case "NOP":
-                    tokens.addLast(new ExprToken(Value.NOP, currentPos()));
+                    tokens.addLast(new ExprToken(Value.NOP, false, currentPos()));
                     break;
                 case "true":
-                    tokens.addLast(new ExprToken(Value.TRUE,currentPos()));
+                    tokens.addLast(new ExprToken(Value.TRUE, false, currentPos()));
                     break;
                 case "false":
-                    tokens.addLast(new ExprToken(Value.FALSE, currentPos()));
+                    tokens.addLast(new ExprToken(Value.FALSE, false, currentPos()));
                     break;
                 default:
                     tokens.addLast(new NamedToken(ParserTokenType.WORD, str, currentPos()));
@@ -621,12 +621,12 @@ public class Parser {
                 try {
                     int i = Integer.parseUnsignedInt(str, base);
                     tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT32, i),
-                            currentPos()));
+                            false, currentPos()));
                 } catch (NumberFormatException nfeI) {
                     try {
                         long l = Long.parseUnsignedLong(str, base);
                         tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT64, l),
-                                currentPos()));
+                                false, currentPos()));
                     } catch (NumberFormatException nfeL) {
                         throw new SyntaxError("Number out of Range:"+str);
                     }
@@ -635,12 +635,12 @@ public class Parser {
                 try {
                     int i = Integer.parseInt(str, base);
                     tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT32, i),
-                            currentPos()));
+                            false, currentPos()));
                 } catch (NumberFormatException nfeI) {
                     try {
                         long l = Long.parseLong(str, base);
                         tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT64, l),
-                                currentPos()));
+                                false, currentPos()));
                     } catch (NumberFormatException nfeL) {
                         throw new SyntaxError("Number out of Range:"+str);
                     }
@@ -795,8 +795,6 @@ public class Parser {
             if(hasName(constName)){
                 throw new SyntaxError(constName+" is already defined");
             }else{
-                //TODO mark value as constant
-                constValue.bind(Value.GLOBAL_VAR);
                 constants.put(constName,constValue);
             }
         }
@@ -1141,7 +1139,7 @@ public class Parser {
                                 expressionFromTokens(procName,procType,context,tokenBuffer);
                         tokenBuffer.clear();
                         tokens.set(i,new ExprToken(//placeholder
-                                Value.createPrimitive(Type.Numeric.INT32,0),tokens.get(i).pos));
+                                Value.createPrimitive(Type.Numeric.INT32,0), false, tokens.get(i).pos));
                         //TODO create Range access operator from right and exprBuffer
                         state=ExpressionParserState.ROOT;
                     }else if(bracketStack.size()==1&&tokens.get(i).tokenType==ParserTokenType.SEPARATOR){
@@ -1170,7 +1168,7 @@ public class Parser {
                             v=context.getProc(name);
                         }//no else
                         if(v!=null){
-                            tokens.set(i,new ExprToken(v,tokens.get(i).pos));
+                            tokens.set(i,new ExprToken(v, true, tokens.get(i).pos));
                         }else{
                             throw new SyntaxError("Unknown Identifier: \""+name+"\" at "+tokens.get(i).pos);
                         }
@@ -1596,19 +1594,19 @@ public class Parser {
                       "\" expected \"typedef\" or identifier");
             }
         }
-        Procedure main=context.getProc("main");
-        if(main==null){
-            throw new SyntaxError("No \"main\" procedure found");
+        Procedure start=context.getProc("start");
+        if(start==null){
+            throw new SyntaxError("No \"start\" procedure found");
         }
-        Type[] mainTypes= main.argTypes();
-        if(mainTypes.length>0){
-            if (mainTypes.length != 1 || !(mainTypes[0] instanceof Type.Array) ||
-                ((Type.Array) mainTypes[0]).content != Type.Primitive.STRING) {
-                    throw new SyntaxError("wrong signature of main, " +
+        Type[] startTypes= start.argTypes();
+        if(startTypes.length>0){
+            if (startTypes.length != 1 || !(startTypes[0] instanceof Type.Array) ||
+                ((Type.Array) startTypes[0]).content != Type.Primitive.STRING) {
+                    throw new SyntaxError("wrong signature of start, " +
                             "expected ()=>? or (string[])=>?");
                 }
         }
-        return main;
+        return start;
     }
 
 

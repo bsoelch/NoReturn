@@ -14,6 +14,11 @@ public class VarExpression implements Expression {
     }
 
     @Override
+    public boolean isBound() {
+        return true;
+    }
+
+    @Override
     public ValueView evaluate(Procedure parent, ArrayList<Value> context) {
         return new ValueView() {
             @Override
@@ -27,7 +32,6 @@ public class VarExpression implements Expression {
                     throw new TypeError("cannot assign " +newValue.getType()+" to "+varType);
                 }
                 newValue=newValue.castTo(varType);
-                newValue.bind(id);
                 context.set(id,newValue);
             }
 
