@@ -53,6 +53,10 @@ public class Procedure extends Value{
         }
     }
     @Override
+    public boolean isMutable() {
+        return false;
+    }
+    @Override
     public boolean equals(Object o) {
         return this==o;
     }
