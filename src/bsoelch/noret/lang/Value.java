@@ -9,8 +9,7 @@ import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
-public abstract class Value {
-    //addLater? remember bindings at runtime?
+public abstract class Value{
 
     public static final Value NONE= new Value(Type.NONE_TYPE) {
         @Override
@@ -33,7 +32,7 @@ public abstract class Value {
             }
         }
         @Override
-        protected String valueToString() {
+        protected String stringRepresentation() {
             return "none";
         }
         @Override
@@ -59,7 +58,7 @@ public abstract class Value {
             }
         }
         @Override
-        protected String valueToString() {
+        protected String stringRepresentation() {
             return "NOP";
         }
         @Override
@@ -93,8 +92,7 @@ public abstract class Value {
 
     public Value(Type type){
         this.type=type;
-        getters.put(Type.FIELD_NAME_TYPE,()->
-                createPrimitive(Type.Primitive.TYPE,type));
+        getters.put(Type.FIELD_NAME_TYPE,()->new TypeValue(type));
     }
     public final Type getType() {
         return type;
@@ -105,7 +103,7 @@ public abstract class Value {
     }
 
     public abstract Value castTo(Type t);
-    protected abstract String valueToString();
+    protected abstract String stringRepresentation();
 
     /**equals on values is used for the == and != operators*/
     @Override
@@ -186,7 +184,7 @@ public abstract class Value {
             return Objects.hash(type,value);
         }
         @Override
-        protected String valueToString() {
+        protected String stringRepresentation() {
             return value.toString();
         }
         @Override
@@ -200,7 +198,7 @@ public abstract class Value {
         @Override
         public NumericValue castTo(Type t) {
             if(t==type||t==Type.Primitive.ANY||t instanceof Type.Generic){
-                return this;//addLater? extract default casts
+                return this;
             }
             if(t instanceof Type.Numeric){
                 if(((Type.Numeric) t).isFloat){
@@ -285,9 +283,13 @@ public abstract class Value {
         public int hashCode() {
             return Arrays.hashCode(utf8Bytes);
         }
-        @Override
-        protected String valueToString() {
+
+        public String stringValue() {
             return new String(utf8Bytes,StandardCharsets.UTF_8);
+        }
+        @Override
+        protected String stringRepresentation() {
+            return "\""+stringValue()+"\"";
         }
 
         @Override
@@ -299,6 +301,7 @@ public abstract class Value {
         @Override
         public Value getAtIndex(Value index) {
             //TODO? getAtIndex -> Codepoints
+            // allow setting indices to non-unicode characters "Hello World"[1]='é'
             long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
             if(lIndex<0||lIndex>= utf8Bytes.length){
                 throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
@@ -381,10 +384,10 @@ public abstract class Value {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof Struct)) return false;
-            Struct struct = (Struct) o;
-            return Objects.equals(type,struct.type)&&
-                    Arrays.equals(elements, struct.elements);
+            if (!(o instanceof Array)) return false;
+            Array array = (Array) o;
+            return Objects.equals(type,array.type)&&
+                    Arrays.equals(elements, array.elements);
         }
         @Override
         public int hashCode() {
@@ -393,13 +396,13 @@ public abstract class Value {
             return result;
         }
         @Override
-        protected String valueToString() {
+        protected String stringRepresentation() {
             StringBuilder str=new StringBuilder("{");
             for(int i=0;i< elements.length;i++){
                 if(i>0){
                     str.append(',');
                 }
-                str.append(elements[i].valueToString());
+                str.append(elements[i].stringRepresentation());
             }
             return str.append('}').toString();
         }
@@ -421,7 +424,6 @@ public abstract class Value {
             if(lIndex<0||lIndex>=elements.length){
                 throw new NoRetRuntimeError("index out of Bounds:"+lIndex);
             }else{
-                //TODO create independent copy if necessary
                 elements[(int)lIndex]=value.castTo(((Type.Array)type).content);
                 return this;
             }
@@ -442,9 +444,14 @@ public abstract class Value {
         public boolean isMutable() {return true;}
     }
     public static class Struct extends Value{
-        //TODO replace with Map name->element
-        final Value[] elements;
-        final String[] names;
+        final HashMap<String,Value> elements;
+
+        private Struct(Type.Struct type,HashMap<String,Value> elements) {
+            super(type);
+            this.elements=elements;
+            initGetters();
+            initSetters();
+        }
         private static Type typeFromElements(Value[] elements,String[] names) {
             Type[] types=new Type[elements.length];
             for(int i=0;i<types.length;i++){
@@ -454,34 +461,32 @@ public abstract class Value {
         }
         public Struct(Value[] elements,String[] names) {
             super(typeFromElements(elements,names));
-            this.elements=elements;
-            this.names=names;
+            this.elements=new HashMap<>(elements.length);
+            for(int i=0;i<elements.length;i++){
+                if(this.elements.put(names[i],elements[i])!=null){
+                    throw new SyntaxError("Duplicate name in Struct:\""+names[i]+"\"");
+                }
+            }
             initGetters();
             initSetters();
         }
         private void initGetters() {
-            for(int i=0;i<names.length;i++){
-                int j=i;
-                getters.put(names[i],()->elements[j]);
+            for(String name:elements.keySet()){
+                getters.put(name,()->elements.get(name));
             }
         }
         private void initSetters() {
-            for(int i=0;i<names.length;i++){
-                int j=i;
-                setters.put(names[i],(v)-> {
-                    //TODO! create independent copy  of Struct if necessary
-                    elements[j]=v;
-                    return this;
-                });
+            for(String name:elements.keySet()){
+                setters.put(name,(v)->elements.put(name,v));
             }
         }
         @Override
         public Value independentCopy(){
-            Value[] newElements=new Value[elements.length];
-            for(int i=0;i< newElements.length;i++){
-                newElements[i]=elements[i].independentCopy();
+            HashMap<String,Value> newElements=new HashMap<>(elements.size());
+            for(Map.Entry<String, Value> e:elements.entrySet()){
+                newElements.put(e.getKey(),e.getValue().independentCopy());
             }
-            return new Struct(newElements,names);
+            return new Struct((Type.Struct) type, newElements);
         }
 
         @Override
@@ -491,11 +496,11 @@ public abstract class Value {
             }else if(t instanceof Type.Struct){
                 if(Type.canCast(t,type,null)){
                     //addLater in-place calculation if possible
-                    Value[] newElements=new Value[elements.length];
-                    for(int i=0;i<names.length;i++){
-                        newElements[i]=elements[i].castTo(t.fields.get(names[i]));
+                    HashMap<String,Value> newElements=new HashMap<>(elements.size());
+                    for(Map.Entry<String, Value> e:elements.entrySet()){
+                        newElements.put(e.getKey(),e.getValue().castTo(t.fields.get(e.getKey())));
                     }
-                    return new Struct(newElements,names);
+                    return new Struct((Type.Struct) t,newElements);
                 }else{
                     throw new TypeError("Cannot cast type:"+type+ " to "+t);
                 }
@@ -507,26 +512,21 @@ public abstract class Value {
             if (this == o) return true;
             if (!(o instanceof Struct)) return false;
             Struct struct = (Struct) o;
-            return Objects.equals(type,struct.type)&&
-                    Arrays.equals(elements, struct.elements);
+            return Objects.equals(type,struct.type)&&elements.equals(struct.elements);
         }
         @Override
         public int hashCode() {
-            int result = type.hashCode();
-            result = 31 * result + Arrays.hashCode(elements);
-            return result;
+            return Objects.hash(type,elements);
         }
         @Override
-        protected String valueToString() {
+        protected String stringRepresentation() {
             StringBuilder str=new StringBuilder("{");
-            for(int i=0;i< elements.length;i++){
-                if(i>0){
+            for(Map.Entry<String, Value> e:elements.entrySet()){
+                if(str.length()>1){
                     str.append(',');
                 }
-                if(names[i]!=null){
-                    str.append('.').append(names[i]).append('=');
-                }
-                str.append(elements[i].valueToString());
+                str.append('.').append(e.getKey()).append('=')
+                        .append(e.getValue().stringRepresentation());
             }
             return str.append('}').toString();
         }
@@ -534,4 +534,55 @@ public abstract class Value {
         public boolean isMutable() {return true;}
     }
 
+    private static class TypeValue extends Value {
+        final Type value;
+        public TypeValue(Type type) {
+            super(Type.TYPE);
+            this.value=type;
+            getters.put("isArray",     ()->createPrimitive(Type.Primitive.BOOL,value instanceof Type.Array    ));
+            getters.put("isStruct",    ()->createPrimitive(Type.Primitive.BOOL,value instanceof Type.Struct   ));
+            getters.put("isOptional",  ()->createPrimitive(Type.Primitive.BOOL,value instanceof Type.Optional ));
+            getters.put("isReference", ()->createPrimitive(Type.Primitive.BOOL,value instanceof Type.Reference));
+            getters.put("contentType", this::contentType);
+        }
+
+        private Value contentType() {
+            if(value instanceof Type.Array){
+                return new TypeValue(((Type.Array) value).content);
+            }else  if(value instanceof Type.Optional){
+                return new TypeValue(((Type.Optional) value).content);
+            }else  if(value instanceof Type.Reference){
+                return new TypeValue(((Type.Reference) value).content);
+            }else{
+                return new TypeValue(Type.EMPTY_TYPE);
+            }
+        }
+
+        @Override
+        public boolean isMutable() {
+            return false;
+        }
+
+        @Override
+        public Value castTo(Type t) {
+            if(t==Type.TYPE||t==Type.Primitive.ANY){
+                return this;
+            }else{
+                throw new IllegalArgumentException("Cannot cast "+type+" to "+t);
+            }
+        }
+
+        @Override
+        protected String stringRepresentation() {
+            return value.toString();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            TypeValue typeValue = (TypeValue) o;
+            return Objects.equals(value, typeValue.value);
+        }
+    }
 }

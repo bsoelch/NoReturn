@@ -2,11 +2,16 @@ package bsoelch.noret.lang;
 
 import bsoelch.noret.TypeError;
 
+import java.util.ArrayDeque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 
 public class Type {
+    /*queue for storing all Types that are declared before TYPE is defined,
+    *  to allow all types to have a .type field without the need for a specific class-loading order*/
+    private static final ArrayDeque<Type> waitingForTypeType=new ArrayDeque<>();
+
     static final String FIELD_NAME_TYPE = "type";
     static final String FIELD_NAME_LENGTH = "length";
 
@@ -14,6 +19,24 @@ public class Type {
     static final String FIELD_NAME_VALUE = "value";
     static final String FIELDS_PROC_TYPES = "argTypes";
 
+    private static final class TypeType extends Type{
+        private TypeType() {
+            super("type");
+            fields.put("isArray",     Primitive.BOOL);
+            fields.put("isStruct",    Primitive.BOOL);
+            fields.put("isOptional",  Primitive.BOOL);
+            fields.put("isReference", Primitive.BOOL);
+            fields.put("contentType",           this);
+            //addLater?  .fields field
+            synchronized (waitingForTypeType){
+                for(Type t:waitingForTypeType){
+                    t.fields.put(FIELD_NAME_TYPE,this);
+                }
+            }
+        }
+    }
+    /**Type of NONE Value, assignable to any reference*/
+    public static final Type TYPE = new TypeType();
     /**Type of NONE Value, assignable to any reference*/
     public static final Type NONE_TYPE = new Type("\"none\"");
     /**Type of NOP Value, assignable to any procedure*/
@@ -23,21 +46,6 @@ public class Type {
 
     public static class Primitive extends Type{
         private static final HashMap<String,Type> primitives=new HashMap<>();
-        //addLater own class for Type type
-        public static final Primitive TYPE       = new Primitive("type") {
-            @Override
-            void initFields() {
-                fields.put(FIELD_NAME_TYPE,this);
-                //addLater more fields
-                // .isArray
-                // .isStruct
-                // .isOptional
-                // .isReference
-                // .fields
-                // .keyType
-                // .valueType
-            }
-        };
         //addLater move any to own class (any is no primitive)
         public static final Primitive ANY       = new Primitive("any");
 
@@ -93,7 +101,13 @@ public class Type {
     final HashMap<String,Type> fields=new HashMap<>();
     private Type(String name){
         this.name=name;
-        fields.put(FIELD_NAME_TYPE,Primitive.TYPE);
+        synchronized (waitingForTypeType) {
+            if(TYPE!=null){
+                fields.put(FIELD_NAME_TYPE,TYPE);
+            }else {
+                waitingForTypeType.add(this);
+            }
+        }
     }
     String wrappedName(){
         return name;

@@ -120,12 +120,12 @@ public class Operations {
             (d1,d2)->wrap(d1+d2),
             (lVal,rVal)->{
                 if(lVal.type== Type.Primitive.STRING){
-                    String s1=lVal.valueToString();
-                    String s2=rVal.castTo(Type.Primitive.STRING).valueToString();
+                    String s1=((Value.StringValue)lVal).stringValue();
+                    String s2=((Value.StringValue)rVal.castTo(Type.Primitive.STRING)).stringValue();
                     return Value.createPrimitive(Type.Primitive.STRING,s1+s2);
                 }else if(rVal.type== Type.Primitive.STRING){
-                    String s1=lVal.castTo(Type.Primitive.STRING).valueToString();
-                    String s2=rVal.valueToString();
+                    String s1=((Value.StringValue)lVal.castTo(Type.Primitive.STRING)).stringValue();
+                    String s2=((Value.StringValue)rVal).stringValue();;
                     return Value.createPrimitive(Type.Primitive.STRING,s1+s2);
                 }else if(lVal.type instanceof Type.Array&&rVal.type instanceof Type.Array){
                     Value[] newArray=new Value[((Value.Array)lVal).elements.length+

@@ -10,7 +10,7 @@ public class Native {
                 new Type.Proc(new Type[]{Type.Primitive.ANY})){
             @Override
             public void run(CallQueue queue, Value[] params) {
-                System.out.println(params[0].valueToString());
+                System.out.println(params[0].stringRepresentation());
             }
         });
         Type.Generic genericA = new Type.Generic("a");

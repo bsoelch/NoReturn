@@ -8,6 +8,6 @@ start():()=>{
     uint64:x_len=((int32[]:)x).length;
     ((int32[]:)x)[0]=123456789;
     any:x_elt=((int32[]:)x)[1];
-    any:str_len="\"hello world\"".length;
-}=>[print(x),print(x.type),print(x_len),print(x_elt),
-    print(str_len),print("Hello World"[4].type),print(y.type),print({}.type)]
+    any:struct={.this=1,.is=636,.a="hello",.struct={1,2,3,4}};
+}=>[print(x),print(x.type),print(x_len),print(x_elt),print(none.type),print(NOP.type),print({}.type),
+    print(struct),print(struct.type)]

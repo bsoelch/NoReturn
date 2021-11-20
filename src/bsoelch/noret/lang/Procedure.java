@@ -65,7 +65,7 @@ public class Procedure extends Value{
         return System.identityHashCode(this);
     }
     @Override
-    protected String valueToString() {
+    protected String stringRepresentation() {
         return "[procedure]";
     }
 
@@ -85,6 +85,7 @@ public class Procedure extends Value{
             for(Action a:primitives){
                 a.execute(this,values);
             }
+            //addLater run leaves directly
             for(int i=0;i<children.length;i++){
                 Procedure proc;
                 if(children[i] == RECURSIVE_CALL){
@@ -102,6 +103,9 @@ public class Procedure extends Value{
                 Value[] args=new Value[childArgs[i].length];
                 for(int j=0;j<childArgs[i].length;j++){
                     args[j]=childArgs[i][j].evaluate(this,values).get().castTo(proc.argTypes()[j]);
+                    if(childArgs[i][j].isBound()) {//call by value
+                        args[j]=args[j].independentCopy();
+                    }
                 }
                 queue.push(args,proc);
             }

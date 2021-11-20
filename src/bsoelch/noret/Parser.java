@@ -527,65 +527,81 @@ public class Parser {
             return new TokenPosition(line, posInLine);
         }
 
+        /**@return false if the value was an integer otherwise true*/
+        private boolean tryParseInt(ArrayDeque<ParserToken> tokens,String str){
+            if(intDec.matcher(str).matches()){//dez-Int
+                parseInt(tokens, str, 10);
+                return false;
+            }else if(intBin.matcher(str).matches()){//bin-Int
+                str=str.replaceAll(BIN_PREFIX,"");//remove header
+                parseInt(tokens, str, 2);
+                return false;
+            }else if(intHex.matcher(str).matches()){ //hex-Int
+                str=str.replaceAll(HEX_PREFIX,"");//remove header
+                parseInt(tokens, str, 16);
+                return false;
+            }
+            return true;
+        }
+
         private boolean finishWord(ArrayDeque<ParserToken> tokens, StringBuilder buffer) {
             if (buffer.length() > 0) {
                 String str=buffer.toString();
                 try{
-                    if(intDec.matcher(str).matches()){//dez-Int
-                        parseInt(tokens, str, 10);
-                    }else if(intBin.matcher(str).matches()){//bin-Int
-                        str=str.replaceAll(BIN_PREFIX,"");//remove header
-                        parseInt(tokens, str, 2);
-                    }else if(intHex.matcher(str).matches()){ //hex-Int
-                        str=str.replaceAll(HEX_PREFIX,"");//remove header
-                        parseInt(tokens, str, 16);
-                    }else if(floatDec.matcher(str).matches()){
-                        //dez-Float
-                        double d = Double.parseDouble(str);
-                        tokens.addLast(new ExprToken(
-                                Value.createPrimitive(Type.Numeric.FLOAT64, d),
-                                false, currentPos()));
-                    }else if(floatBin.matcher(str).matches()){
-                        //bin-Float
-                        double d=parseBinFloat(
-                                str.replaceAll(BIN_PREFIX,"")//remove header
-                        );
-                        tokens.addLast(new ExprToken(
-                                Value.createPrimitive(Type.Numeric.FLOAT64, d),
-                                false, currentPos()));
-                    }else if(floatHex.matcher(str).matches()){
-                        //hex-Float
-                        double d=parseHexFloat(
-                                str.replaceAll(HEX_PREFIX,"")//remove header
-                        );
-                        tokens.addLast(new ExprToken(
-                                Value.createPrimitive(Type.Numeric.FLOAT64, d),
-                                false, currentPos()));
-                    }else {
-                        {//split string at . , + -
-                            int i = str.indexOf('.');
-                            if (i != -1) {
-                                if (i > 0)
-                                    addWord(tokens, str.substring(0, i));
-                                tokens.addLast(new ParserToken(ParserTokenType.DOT, currentPos()));
-                                str = str.substring(i + 1);
+                    if (tryParseInt(tokens, str)) {
+                        if(floatDec.matcher(str).matches()){
+                            //dez-Float
+                            double d = Double.parseDouble(str);
+                            tokens.addLast(new ExprToken(
+                                    Value.createPrimitive(Type.Numeric.FLOAT64, d),
+                                    false, currentPos()));
+                        }else if(floatBin.matcher(str).matches()){
+                            //bin-Float
+                            double d=parseBinFloat(
+                                    str.replaceAll(BIN_PREFIX,"")//remove header
+                            );
+                            tokens.addLast(new ExprToken(
+                                    Value.createPrimitive(Type.Numeric.FLOAT64, d),
+                                    false, currentPos()));
+                        }else if(floatHex.matcher(str).matches()){
+                            //hex-Float
+                            double d=parseHexFloat(
+                                    str.replaceAll(HEX_PREFIX,"")//remove header
+                            );
+                            tokens.addLast(new ExprToken(
+                                    Value.createPrimitive(Type.Numeric.FLOAT64, d),
+                                    false, currentPos()));
+                        }else {
+                            {//split string at . , + -
+                                int i = str.indexOf('.');
+                                if (i != -1) {
+                                    if (i > 0) {
+                                        String tmp=str.substring(0, i);
+                                        if (tryParseInt(tokens, tmp)){
+                                            addWord(tokens, tmp);
+                                        }
+                                    }
+                                    tokens.addLast(new ParserToken(ParserTokenType.DOT, currentPos()));
+                                    str = str.substring(i + 1);
+                                }
+                                i = str.indexOf('+');
+                                if (i != -1) {
+                                    if (i > 0)
+                                        addWord(tokens, str.substring(0, i));
+                                    tokens.addLast(new Operator(OperatorType.PLUS, currentPos()));
+                                    str = str.substring(i + 1);
+                                }
+                                i = str.indexOf('-');
+                                if (i != -1) {
+                                    if (i > 0)
+                                        addWord(tokens, str.substring(0, i));
+                                    tokens.addLast(new Operator(OperatorType.MINUS,currentPos()));
+                                    str = str.substring(i + 1);
+                                }
                             }
-                            i = str.indexOf('+');
-                            if (i != -1) {
-                                if (i > 0)
-                                    addWord(tokens, str.substring(0, i));
-                                tokens.addLast(new Operator(OperatorType.PLUS, currentPos()));
-                                str = str.substring(i + 1);
-                            }
-                            i = str.indexOf('-');
-                            if (i != -1) {
-                                if (i > 0)
-                                    addWord(tokens, str.substring(0, i));
-                                tokens.addLast(new Operator(OperatorType.MINUS,currentPos()));
-                                str = str.substring(i + 1);
-                            }
+                            if(str.length()>0)
+                                addWord(tokens, str);
                         }
-                        addWord(tokens, str);
                     }
                 }catch (NumberFormatException nfe){
                     throw new SyntaxError(nfe);
@@ -741,7 +757,6 @@ public class Parser {
         final HashMap<String, Value>     constants = new HashMap<>();
 
         final HashMap<String, Integer>   varIds    = new HashMap<>();
-        //addLater ArrayList<VarData> preEval -> (varType,expectedTypes,valueBoundTo)
         final ArrayList<Type> varTypes = new ArrayList<>();
 
         public void declareProcedure(String name,Procedure proc){
@@ -1554,7 +1569,6 @@ public class Parser {
             argArray=new Expression[argBuffer.size()];
             HashMap<String, Type.GenericBound> generics=new HashMap<>();
             for(int i=0;i< argBuffer.size();i++){
-                //TODO prevent passing a mutable object to two different procedures
                 //Type-check parameters
                 if(Type.canAssign(outTypes[i],argBuffer.get(i).expectedType(),generics)){
                     argArray[i]=argBuffer.get(i);
