@@ -5,7 +5,9 @@ import bsoelch.noret.lang.Procedure;
 import bsoelch.noret.lang.Type;
 import bsoelch.noret.lang.Value;
 
+import java.io.BufferedWriter;
 import java.io.FileReader;
+import java.io.FileWriter;
 import java.io.IOException;
 
 public class Main {
@@ -16,8 +18,9 @@ public class Main {
             System.out.println(" runs the no-ret file with the given path");
             return;
         }
-        Parser parser=new Parser();
-        Procedure start=parser.parse(new FileReader(args[0]));
+        Parser parser=new Parser(new FileReader(args[0]));
+        parser.compile(new BufferedWriter(new FileWriter(args[0]+".c")));
+        Procedure start=parser.interpret();
         Value[] progArgs;
         if(start.argTypes().length==0){
             progArgs=new Value[0];

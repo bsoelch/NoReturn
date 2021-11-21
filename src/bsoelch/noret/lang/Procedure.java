@@ -65,7 +65,7 @@ public class Procedure extends Value{
         return System.identityHashCode(this);
     }
     @Override
-    protected String stringRepresentation() {
+    public String stringRepresentation() {
         return "[procedure]";
     }
 

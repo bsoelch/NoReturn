@@ -4,6 +4,7 @@ import bsoelch.noret.lang.expression.VarExpression;
 import bsoelch.noret.lang.*;
 import bsoelch.noret.lang.expression.*;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayDeque;
@@ -840,10 +841,11 @@ public class Parser {
       <Expression><bOp><Expression>|<lOp><Expression>|<Expression><rOp>
 
     */
-    public Parser(){
+    public Parser(Reader in) throws IOException {
         context=new ParserContext();
         Type.addPrimitives(context.typeNames);
         Native.addProcsTo(context.procNames);
+        parse(in);
     }
     private void updateBracketStack(ParserToken nextTokens, ArrayDeque<ParserTokenType> bracketStack) {
         if(nextTokens.tokenType ==ParserTokenType.OPEN_BRACKET){
@@ -1589,7 +1591,7 @@ public class Parser {
     }
 
 
-    public Procedure parse(Reader input) throws IOException {
+    public void parse(Reader input) throws IOException {
         Tokenizer tokens=new Tokenizer(input);
         ParserToken token;
         while((token=tokens.getNextToken())!=null){
@@ -1608,6 +1610,13 @@ public class Parser {
                       "\" expected \"typedef\" or identifier");
             }
         }
+    }
+
+    public void compile(BufferedWriter output) throws IOException {
+        (new CompileToC(output)).compile(context);
+    }
+
+    public Procedure interpret(){
         Procedure start=context.getProc("start");
         if(start==null){
             throw new SyntaxError("No \"start\" procedure found");
@@ -1615,13 +1624,12 @@ public class Parser {
         Type[] startTypes= start.argTypes();
         if(startTypes.length>0){
             if (startTypes.length != 1 || !(startTypes[0] instanceof Type.Array) ||
-                ((Type.Array) startTypes[0]).content != Type.Primitive.STRING) {
-                    throw new SyntaxError("wrong signature of start, " +
-                            "expected ()=>? or (string[])=>?");
-                }
+                    ((Type.Array) startTypes[0]).content != Type.Primitive.STRING) {
+                throw new SyntaxError("wrong signature of start, " +
+                        "expected ()=>? or (string[])=>?");
+            }
         }
         return start;
     }
-
 
 }

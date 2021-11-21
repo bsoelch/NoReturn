@@ -32,7 +32,7 @@ public abstract class Value{
             }
         }
         @Override
-        protected String stringRepresentation() {
+        public String stringRepresentation() {
             return "none";
         }
         @Override
@@ -58,7 +58,7 @@ public abstract class Value{
             }
         }
         @Override
-        protected String stringRepresentation() {
+        public String stringRepresentation() {
             return "NOP";
         }
         @Override
@@ -103,7 +103,7 @@ public abstract class Value{
     }
 
     public abstract Value castTo(Type t);
-    protected abstract String stringRepresentation();
+    public abstract String stringRepresentation();
 
     /**equals on values is used for the == and != operators*/
     @Override
@@ -184,7 +184,7 @@ public abstract class Value{
             return Objects.hash(type,value);
         }
         @Override
-        protected String stringRepresentation() {
+        public String stringRepresentation() {
             return value.toString();
         }
         @Override
@@ -288,7 +288,7 @@ public abstract class Value{
             return new String(utf8Bytes,StandardCharsets.UTF_8);
         }
         @Override
-        protected String stringRepresentation() {
+        public String stringRepresentation() {
             return "\""+stringValue()+"\"";
         }
 
@@ -396,7 +396,7 @@ public abstract class Value{
             return result;
         }
         @Override
-        protected String stringRepresentation() {
+        public String stringRepresentation() {
             StringBuilder str=new StringBuilder("{");
             for(int i=0;i< elements.length;i++){
                 if(i>0){
@@ -442,6 +442,10 @@ public abstract class Value{
         }
         @Override
         public boolean isMutable() {return true;}
+
+        public Value[] elements() {
+            return elements;
+        }
     }
     public static class Struct extends Value{
         final HashMap<String,Value> elements;
@@ -519,7 +523,7 @@ public abstract class Value{
             return Objects.hash(type,elements);
         }
         @Override
-        protected String stringRepresentation() {
+        public String stringRepresentation() {
             StringBuilder str=new StringBuilder("{");
             for(Map.Entry<String, Value> e:elements.entrySet()){
                 if(str.length()>1){
@@ -573,7 +577,7 @@ public abstract class Value{
         }
 
         @Override
-        protected String stringRepresentation() {
+        public String stringRepresentation() {
             return value.toString();
         }
 
