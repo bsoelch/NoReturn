@@ -16,6 +16,13 @@ public class CompileToC {
     private static final String[] procedureArgNames ={"args",   "argCount"  };
     private static final String procedureOut="void*";
 
+    private static final String CONST_DATA_SIGNATURE = "Value constData []";
+
+    private static class ConstData{
+        StringBuilder build=new StringBuilder(CONST_DATA_SIGNATURE + "={");
+        long off=0;
+    }
+
     private final BufferedWriter out;
     public CompileToC(BufferedWriter out) {
         this.out = out;
@@ -50,8 +57,8 @@ public class CompileToC {
         writeLine("#define MAX_ARG_SIZE 1024;");
         out.newLine();
         //Type enum //TODO better storage structure
-        writeLine("typedef enum{");
-        writeLine("  EMPTY=0,");//addLater: extract type aliases to variables in Compiler
+        writeLine("typedef enum{");//TODO better handling of types
+        writeLine("  EMPTY=0,");
         writeLine("  BOOL,");
         writeLine("  I8,");
         writeLine("  U8,");
@@ -71,7 +78,7 @@ public class CompileToC {
         //Value struct
         writeLine("typedef union ValueImpl Value;");
         writeLine("union ValueImpl{");
-        writeLine("  bool asBool;");
+        writeLine("  bool     asBool;");
         writeLine("  int8_t   asI8;");
         writeLine("  uint8_t  asU8;");
         writeLine("  int16_t  asI16;");
@@ -84,14 +91,12 @@ public class CompileToC {
         writeLine("  double   asF64;");
         writeLine("  Type     asType;");
         writeLine("  Value*   asPtr;");//reference
-        //addLater? more types
-        // type->?
-        // multi-value types:
-        // string->len,    val_ptr/raw_data
-        // array->len,     val_ptr/raw_data
-        // any->typeID,    val_ptr/raw_data
-        // opt->hasData,   data
-        writeLine("  uint64_t raw;");
+        //multi-value types:
+        //  string  ->  len,        val_ptr/raw_data
+        //  array   ->  len,        val_ptr/raw_data
+        //  any     ->  typeID,     val_ptr/raw_data
+        //  opt     ->  hasData,    data
+        writeLine("  char     raw[8];");
         writeLine("};");
         out.newLine();
         //Procedure Type
@@ -119,35 +124,96 @@ public class CompileToC {
         //TODO cache names
     }
 
-    private void writeValueAsUnion(Value v) throws IOException{
+    /**Writes a value as a array of union declarations*/
+    private void writeConstValueAsUnion(boolean isFirst,StringBuilder out,Value v, boolean inPlaceValues,boolean incOff,ConstData constData) throws IOException{
+        if(!isFirst){
+            out.append(',');
+        }
         if(v.getType() == Type.Primitive.BOOL){
-            out.write("{.asBool="+((Value.Primitive)v).getValue()+"}");
+            out.append("{.asBool=").append(((Value.Primitive) v).getValue()).append("}");
+            if(incOff){constData.off++;}
         }else if(v.getType() instanceof Type.Numeric){
             Type.Numeric t=(Type.Numeric) v.getType();
             if(t.isFloat){
-                out.write("{.asF"+(8*(1<<t.level))+"="+((Value.Primitive)v).getValue()+"}");
+                out.append("{.asF").append(8 * (1 << t.level)).append("=").append(((Value.Primitive) v).getValue()).append("}");
+                if(incOff){constData.off++;}
             }else{
-                out.write("{.as"+(t.signed?"I":"U")+(8*(1<<t.level))+"="+((Value.Primitive)v).getValue()+"}");
+                out.append("{.as").append(t.signed ? "I" : "U").append(8 * (1 << t.level)).append("=")
+                        .append(((Value.Primitive) v).getValue()).append("}");
+                if(incOff){constData.off++;}
+            }
+        }else if(v.getType()== Type.Primitive.STRING){
+            byte[] bytes=((Value.StringValue) v).utf8Bytes();
+            if(inPlaceValues){
+                out.append("{.asU64=").append(bytes.length).append("}");
+                if(incOff){constData.off++;}
+                for(int i=0;i< bytes.length;i+=8){
+                    out.append(",{.asRaw={");
+                    for(int j=0;j<8;j++){
+                        if(j>0){
+                            out.append(',');
+                        }
+                        out.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "00");
+                    }
+                    out.append("}");
+                    if(incOff){constData.off++;}
+                }
+            }else{
+                //TODO mark value to signal storage-location at runtime
+                out.append("{.asU64=").append(bytes.length).append("}");
+                if(incOff){constData.off++;}
+                if(incOff){constData.off++;}//increment before store
+                out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
+                for(int i=0;i< bytes.length;i+=8){
+                    if(constData.off>0){
+                        constData.build.append(',');
+                    }
+                    constData.build.append("{.asRaw={");
+                    for(int j=0;j<8;j++){
+                        if(j>0){
+                            constData.build.append(',');
+                        }
+                        constData.build.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "00");
+                    }
+                    constData.build.append("}");
+                    constData.off++;
+                }
             }
         }else if(v instanceof Value.Array){
-            out.write("{.asU64="+((Value.Array) v).elements().length+"}");//TODO use length in Value-Blocks not length of array
-            //addLater: variant that does not store contents in place
-            for(Value elt:((Value.Array)v).elements()){
-                out.write(',');
-                writeValueAsUnion(elt);
+            //TODO handle any[]
+            if(((Type.Array)v.getType()).content== Type.Primitive.ANY){
+                throw new UnsupportedOperationException("Type any is not supported");
+            }
+            if(inPlaceValues) {
+                out.append("{.asU64=").append(((Value.Array) v).elements().length).append("}");
+                if(incOff){constData.off++;}
+                //ensure constant block-size (1 for bool,float[N],[u]int[N],reference  2 for string, array, any, optional)
+                for (Value elt : ((Value.Array) v).elements()) {
+                    writeConstValueAsUnion(false,out,elt, false,incOff,constData);
+                }
+            }else{
+                //TODO mark value to signal storage-location at runtime
+                out.append("{.asU64=").append(((Value.Array) v).elements().length).append("}");
+                if(incOff){constData.off++;}
+                if(incOff){constData.off++;}//increment before write
+                out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
+                for (Value elt : ((Value.Array) v).elements()) {
+                    writeConstValueAsUnion(constData.off==0,constData.build, elt, true,true,constData);
+                }
             }
         }else {
             throw new UnsupportedEncodingException(v.getType()+" is currently not supported in the compiler");
         }
     }
 
-    private void writeConstant(String name, Value value) throws IOException {
+    private void writeConstant(String name, Value value, ConstData constData) throws IOException {
         comment("const "+value.getType()+" : "+name+" = "+value.stringRepresentation());
         out.write("Value const_");
         out.write(asciify(name));
         out.write(" []={");
-        writeValueAsUnion(value);
-        writeLine("};");
+        StringBuilder tmp=new StringBuilder();
+        writeConstValueAsUnion(true,tmp,value,true,false,constData);
+        writeLine(tmp.append("};").toString());
     }
 
     private void writeProcSignature(String name, Procedure proc) throws IOException{
@@ -171,11 +237,12 @@ public class CompileToC {
         writeProcSignature(name, proc);
         writeLine("{");
         //TODO procedure Body
-        writeLine("return NULL;");//tmp body
+        writeLine("return NULL;");//addLater return next procedure
         writeLine("}");
         out.newLine();
     }
     private void writeRunSignature() throws IOException {
+        comment(" main procedure handling function (written in a way that allows easy usage in pthreads)");
         out.write("void* run(void* initState)");
     }
     private void declareRun() throws IOException {
@@ -184,7 +251,6 @@ public class CompileToC {
     }
     /**writes an integrated interpreted that runs the NoRet C-Representation as a C-Program*/
     private void writeMain() throws IOException {
-        comment(" main procedure handling function (written in a way to allow easy usage of pthreads)");
         writeRunSignature();writeLine("{");
         writeLine("    Procedure f=*((Procedure*)initState);");
         writeLine("    initState+=sizeof(Procedure);");
@@ -221,18 +287,26 @@ public class CompileToC {
 
     public void compile(Parser.ParserContext context) throws IOException {
         writeFileHeader();
+        ConstData constData=new ConstData();
+        writeLine(CONST_DATA_SIGNATURE+";");
         for(Map.Entry<String, Value> e:context.constants.entrySet()){
-            writeConstant(e.getKey(),e.getValue());
+            writeConstant(e.getKey(),e.getValue(),constData);
         }
+        comment("data for values used in constants");
+        writeLine(constData.build.append("};").toString());
+        out.newLine();
         //TODO handle native procedures
         for(Map.Entry<String, Procedure> e:context.procNames.entrySet()){
             writeProcDeclaration(e.getKey(),e.getValue());
+        }
+        Procedure start= context.getProc("start");
+        if(start!=null){
+            declareRun();
         }
         out.newLine();
         for(Map.Entry<String, Procedure> e:context.procNames.entrySet()){
             writeProcImplementation(e.getKey(),e.getValue());
         }
-        Procedure start= context.getProc("start");
         if(start!=null){
             Type[] startTypes= start.argTypes();
             if(startTypes.length>0){

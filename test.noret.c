@@ -28,7 +28,7 @@ typedef enum{
 
 typedef union ValueImpl Value;
 union ValueImpl{
-  bool asBool;
+  bool     asBool;
   int8_t   asI8;
   uint8_t  asU8;
   int16_t  asI16;
@@ -41,21 +41,29 @@ union ValueImpl{
   double   asF64;
   Type     asType;
   Value*   asPtr;
-  uint64_t raw;
+  char     raw[8];
 };
 
 typedef void*(*Procedure)(Value*,size_t*);
 
+Value constData [];
 // const Type:int8 : constant = 42
 Value const_constant []={{.asI8=42}};
 // const Type:int32[] : y = {2112454933,2,3}
 Value const_y []={{.asU64=3},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
+// const Type:string[] : hello = {"Hello","World"}
+Value const_hello []={{.asU64=2},{.asU64=5},{.asPtr=(constData+0)},{.asU64=5},{.asPtr=(constData+1)}};
+// data for values used in constants
+Value constData []={{.asRaw={0x48,0x65,0x6c,0x6c,0x6f,0x00,0x00,0x00},{.asRaw={0x57,0x6f,0x72,0x6c,0x64,0x00,0x00,0x00}};
+
 // print(Type:any)
 void* proc_print(Value* args,size_t* argCount);
 // start()
 void* proc_start(Value* args,size_t* argCount);
 // readLine(Generic: $a, Type:(Type:string, Generic: $a)=>?)
 void* proc_readLine(Value* args,size_t* argCount);
+//  main procedure handling function (written in a way that allows easy usage in pthreads)
+void* run(void* initState);
 
 // print(Type:any)
 void* proc_print(Value* args,size_t* argCount){
@@ -72,7 +80,7 @@ void* proc_readLine(Value* args,size_t* argCount){
 return NULL;
 }
 
-//  main procedure handling function (written in a way to allow easy usage of pthreads)
+//  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* run(void* initState){
     Procedure f=*((Procedure*)initState);
     initState+=sizeof(Procedure);

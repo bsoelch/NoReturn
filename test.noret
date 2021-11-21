@@ -1,7 +1,7 @@
 const int8:constant=42;
 typedef int int32;
 const int[]:y={1234567890123456789,2,3.0};
-
+const any: hello ={"Hello","World"};
 
 start():()=>{
     any:x={1,-2,3U,constant};

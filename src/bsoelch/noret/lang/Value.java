@@ -327,6 +327,10 @@ public abstract class Value{
         }
         @Override
         public boolean isMutable() {return true;}
+
+        public byte[] utf8Bytes() {
+            return utf8Bytes;
+        }
     }
 
     //addLater? primitiveArrays
