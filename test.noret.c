@@ -8,6 +8,11 @@
 
 #define MAX_ARG_SIZE 0x2000
 
+#define LEN_MASK_IN_PLACE 0x0
+#define LEN_MASK_CONST    0x8000000000000000
+#define LEN_MASK_LOCAL    0x4000000000000000
+#define LEN_MASK_TMP      0xc000000000000000
+
 typedef enum{
   EMPTY=0,
   BOOL,
@@ -51,12 +56,12 @@ typedef void*(*Procedure)(Value*,size_t*,Value**);
 Value constData [];
 // const Type:int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
+// const Type:(int32[])[] : array_test = {{1,2,3},{4,5},{6}}
+const Value const_array__test []={{.asU64=0x3},{.asU64=0x8000000000000003},{.asPtr=(constData+0)},{.asU64=0x8000000000000002},{.asPtr=(constData+3)},{.asU64=0x8000000000000001},{.asPtr=(constData+5)}};
 // const Type:int32[] : y = {2112454933,2,3}
-const Value const_y []={{.asU64=3},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
-// const Type:any[] : hello = {"Hello",1,{1,"World"}}
-const Value const_hello []={{.asU64=3},{.asType=0/*Type:string8*/},{.asPtr=(constData+0)},{.asType=0/*Type:int32*/},{.asI32=1},{.asType=0/*Type:any[]*/},{.asPtr=(constData+2)}};
+const Value const_y []={{.asU64=0x3},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
 // data for values used in constants
-Value constData []={{.asU64=5},{.raw8={0x48,0x65,0x6c,0x6c,0x6f,0x0,0x0,0x0}},{.asU64=2},{.asType=0/*Type:int32*/},{.asI32=1},{.asType=0/*Type:string8*/},{.asPtr=(constData+8)},{.asU64=5},{.raw8={0x57,0x6f,0x72,0x6c,0x64,0x0,0x0,0x0}}};
+Value constData []={{.asI32=1},{.asI32=2},{.asI32=3},{.asI32=4},{.asI32=5},{.asI32=6}};
 
 // print(Type:any)
 void* proc_print(Value* args,size_t* argCount,Value** argData);
@@ -117,15 +122,15 @@ int main(int argc,char** argv){
   }
   *((Value**)(init+off))=argData;
   off+=sizeof(Value*);
-// prepare program Arguments
-// !!! currently only UTF-8 encoding is supported !!!
+  // prepare program Arguments
+  // !!! currently only UTF-8 encoding is supported !!!
   int l;
   int k0=0;
   for(int i=1;i<argc;i++){
     int l=strlen(argv[i]);
-    *((Value*)(init+off))=(Value){.asU64=l};
+    *((Value*)(init+off))=(Value){.asU64=LEN_MASK_LOCAL|l};
     off+=sizeof(Value);
-    *((Value*)(init+off))=(Value){.asPtr=argData};
+    *((Value*)(init+off))=(Value){.asPtr=argData+k0};
     off+=sizeof(Value);
     for(int j=0,k=0;j+k<l;j++){
       if(j==8){

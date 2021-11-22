@@ -69,6 +69,7 @@ public abstract class Value{
 
     public abstract boolean isMutable();
 
+
     /**wrapper of HashMap< String, V > that does not allow replacing entries*/
     private static class FieldMap<V>{
         private final HashMap<String,V> map=new HashMap<>();
@@ -104,6 +105,9 @@ public abstract class Value{
 
     public abstract Value castTo(Type t);
     public abstract String stringRepresentation();
+    public String stringValue() {
+        return stringRepresentation();
+    }
 
     /**equals on values is used for the == and != operators*/
     @Override

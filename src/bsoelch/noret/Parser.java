@@ -132,8 +132,13 @@ public class Parser {
         static final Pattern floatExpPrefix =Pattern.compile("((("+BIN_FLOAT_MAGNITUDE+")|("
                 +DEC_FLOAT_MAGNITUDE+"))[Ee])|("+HEX_FLOAT_MAGNITUDE+"[Pp])");
 
+        enum StringType{
+            AUTO,UTF8,UTF16,UTF32
+        }
+
         private WordState state=WordState.ROOT;
         private int stringStart=-1;
+        private StringType stringType;
         private int cached=-1;
 
         private int line =0;
@@ -187,8 +192,24 @@ public class Parser {
                                 case '\'':
                                     state=WordState.STRING;
                                     stringStart=(char)c;
-                                    if(finishWord(tokenBuffer, buffer)){
-                                        return;
+                                    switch (buffer.toString()){
+                                        case "":
+                                            stringType=StringType.AUTO;
+                                            break;
+                                        case "u8":
+                                            stringType=StringType.UTF8;
+                                            buffer.setLength(0);
+                                            break;
+                                        case "u16":
+                                            stringType=StringType.UTF16;
+                                            buffer.setLength(0);
+                                            break;
+                                        case "u32":
+                                            stringType=StringType.UTF32;
+                                            buffer.setLength(0);
+                                            break;
+                                        default:
+                                            throw new SyntaxError("Illegal string prefix:\""+buffer+"\"");
                                     }
                                     break;
                                 case '#':
@@ -472,12 +493,30 @@ public class Parser {
                                     throw new SyntaxError("A char-literal must contain exactly one character");
                                 }
                             }else{
+
                                 //TODO fixed type string literals u8"..."  u16"..." u32"..."
                                 String value = buffer.toString();
-                                int maxCp=value.codePoints().max().orElse(0);
+                                Type.NoRetString sType;
+                                switch (stringType){
+                                    case AUTO:
+                                        int maxCp=value.codePoints().max().orElse(0);
+                                        sType = maxCp < 0x80 ? Type.NoRetString.STRING8 :
+                                                maxCp < 0x10000 ? Type.NoRetString.STRING16 : Type.NoRetString.STRING32;
+                                        break;
+                                    case UTF8:
+                                        sType= Type.NoRetString.STRING8;
+                                        break;
+                                    case UTF16:
+                                        sType= Type.NoRetString.STRING16;
+                                        break;
+                                    case UTF32:
+                                        sType= Type.NoRetString.STRING32;
+                                        break;
+                                    default:
+                                        throw new RuntimeException("unreachable");
+                                }
                                 tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
-                                        maxCp<0x80?Type.NoRetString.STRING8:maxCp<0x10000?Type.NoRetString.STRING16:
-                                                Type.NoRetString.STRING32, value), false, currentPos()));
+                                        sType, value), false, currentPos()));
                             }
                             buffer.setLength(0);
                             state=WordState.ROOT;

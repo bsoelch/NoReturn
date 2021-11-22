@@ -1,13 +1,13 @@
 const int8:constant=42;
 typedef int int32;
 const int[]:y={1234567890123456789,2,3.0};
-const any: hello ={"Hello",1,{1,"World"}};
+const any: array_test ={{1,2,3},{4,5},{6}};
 
 start(string8[]):(args)=>{
     any:x={1,-2,3U,constant};
     uint64:x_len=((int32[]:)x).length;
     ((int32[]:)x)[0]=123456789;
     any:x_elt=((int32[]:)x)[1];
-    any:struct={.this=1,.is=636,.a="hello",.struct={1,2,3,4}};
+    any:struct={.this=1,.is=636,.a="hello"+u8" "+"world",.struct={1,2,3,4}};
 }=>[print(x),print(x.type),print(x_len),print(x_elt),print(none.type),print(NOP.type),print({}.type),
     print(struct),print(struct.type)]

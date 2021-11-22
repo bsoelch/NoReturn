@@ -19,6 +19,11 @@ public class CompileToC {
     private static final String CONST_DATA_SIGNATURE = "Value constData []";
     private static final int MAX_ARG_SIZE = 0x2000;
 
+    private static final long LEN_MASK_IN_PLACE = 0x0000000000000000L;
+    private static final long LEN_MASK_CONST    = 0x8000000000000000L;
+    private static final long LEN_MASK_LOCAL    = 0x4000000000000000L;
+    private static final long LEN_MASK_TMP      = 0xC000000000000000L;
+
     private static class ConstData{
         StringBuilder build=new StringBuilder(CONST_DATA_SIGNATURE + "={");
         long off=0;
@@ -40,6 +45,12 @@ public class CompileToC {
             writeLine("// "+s);
         }
     }
+    private void comment(String prefix,String str) throws IOException{
+        String[] lines=str.split("[\n\r]");
+        for(String s:lines){
+            writeLine(prefix+"// "+s);
+        }
+    }
     private void include(String include)throws IOException {
         writeLine("#include <"+include+">");
     }
@@ -56,6 +67,11 @@ public class CompileToC {
         include("inttypes.h");
         out.newLine();
         writeLine("#define MAX_ARG_SIZE 0x"+Integer.toHexString(MAX_ARG_SIZE));
+        out.newLine();
+        writeLine("#define LEN_MASK_IN_PLACE 0x"+Long.toHexString(LEN_MASK_IN_PLACE));
+        writeLine("#define LEN_MASK_CONST    0x"+Long.toHexString(LEN_MASK_CONST));
+        writeLine("#define LEN_MASK_LOCAL    0x"+Long.toHexString(LEN_MASK_LOCAL));
+        writeLine("#define LEN_MASK_TMP      0x"+Long.toHexString(LEN_MASK_TMP));
         out.newLine();
         //Type enum
         writeLine("typedef enum{");//TODO better handling of types
@@ -167,13 +183,12 @@ public class CompileToC {
             writeNumber(out, v, constData, incOff);
         }else if(v.getType()== Type.NoRetString.STRING8){
             byte[] bytes=((Value.StringValue) v).utf8Bytes();
-            out.append("{.asU64=").append(bytes.length).append("}");
             if(inPlaceValues){
+                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|bytes.length)).append("}");
                 if(incOff){constData.off++;}
                 out.append(',');
             }else{
-                //TODO mark value to signal storage-location at runtime
-                out.append("{.asU64=").append(bytes.length).append("}");
+                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_CONST|bytes.length)).append("}");
                 if(incOff){constData.off++;}
                 if(incOff){constData.off++;}//increment before store
                 out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
@@ -196,13 +211,12 @@ public class CompileToC {
             }
         }else if(v.getType()== Type.NoRetString.STRING16){
             char[] chars=((Value.StringValue) v).chars();
-            out.append("{.asU64=").append(chars.length).append("}");
             if(inPlaceValues){
+                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|chars.length)).append("}");
                 if(incOff){constData.off++;}
                 out.append(',');
             }else{
-                //TODO mark value to signal storage-location at runtime
-                out.append("{.asU64=").append(chars.length).append("}");
+                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_CONST|chars.length)).append("}");
                 if(incOff){constData.off++;}
                 if(incOff){constData.off++;}//increment before store
                 out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
@@ -225,13 +239,12 @@ public class CompileToC {
             }
         }else if(v.getType()== Type.NoRetString.STRING32){
             int[] codePoints=((Value.StringValue) v).codePoints();
-            out.append("{.asU64=").append(codePoints.length).append("}");
             if(inPlaceValues){
+                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|codePoints.length)).append("}");
                 if(incOff){constData.off++;}
                 out.append(',');
             }else{
-                //TODO mark value to signal storage-location at runtime
-                out.append("{.asU64=").append(codePoints.length).append("}");
+                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_CONST|codePoints.length)).append("}");
                 if(incOff){constData.off++;}
                 if(incOff){constData.off++;}//increment before store
                 out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
@@ -254,15 +267,16 @@ public class CompileToC {
             }
         }else if(v instanceof Value.Array){
             boolean isAny=(((Type.Array)v.getType()).content== Type.Primitive.ANY);
-            //TODO mark value to signal storage-location at runtime
-            out.append("{.asU64=").append(((Value.Array) v).elements().length).append("}");
-            if(incOff){constData.off++;}
             if(inPlaceValues) {
+                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|((Value.Array) v).elements().length)).append("}");
+                if(incOff){constData.off++;}
                 //ensure constant block-size (1 for bool,float[N],[u]int[N],reference  2 for string, array, any, optional)
                 for (Value elt : ((Value.Array) v).elements()) {
                     writeConstValueAsUnion(out, elt, constData, false, false, incOff, isAny);
                 }
             }else{
+                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_CONST|((Value.Array) v).elements().length)).append("}");
+                if(incOff){constData.off++;}
                 if(incOff){constData.off++;}//increment before write
                 out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
                 for (Value elt : ((Value.Array) v).elements()) {
@@ -360,17 +374,16 @@ public class CompileToC {
         writeLine("  *((Value**)(init+off))=argData;");
         writeLine("  off+=sizeof(Value*);");
         if(hasArgs){
-            comment("prepare program Arguments");
+            comment("  ","prepare program Arguments");
             //this code only works if argv iss encoded with UTF-8
-            comment("!!! currently only UTF-8 encoding is supported !!!");//addLater support for other encodings of argv
+            comment("  ","!!! currently only UTF-8 encoding is supported !!!");//addLater support for other encodings of argv
             writeLine("  int l;");
             writeLine("  int k0=0;");
             writeLine("  for(int i=1;i<argc;i++){");//skip first argument
-            //addLater! mark storage location of arguments
             writeLine("    int l=strlen(argv[i]);");
-            writeLine("    *((Value*)(init+off))=(Value){.asU64=l};");//store lengths of arguments
+            writeLine("    *((Value*)(init+off))=(Value){.asU64=LEN_MASK_LOCAL|l};");//store lengths of arguments
             writeLine("    off+=sizeof(Value);");
-            writeLine("    *((Value*)(init+off))=(Value){.asPtr=argData};");//store pointer to data
+            writeLine("    *((Value*)(init+off))=(Value){.asPtr=argData+k0};");//store pointer to data
             writeLine("    off+=sizeof(Value);");
             writeLine("    for(int j=0,k=0;j+k<l;j++){");
             writeLine("      if(j==8){");
