@@ -4,6 +4,9 @@ import java.util.HashMap;
 import java.util.Scanner;
 
 public class Native {
+    //TODO replace print with top level operation:
+    // .out <expr>;
+    // .err <expr>;
     public static void addProcsTo(HashMap<String, Procedure> procNames) {
         //addLater better handling of native procedures
         procNames.put("print",new Procedure(

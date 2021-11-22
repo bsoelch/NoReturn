@@ -6,5 +6,4 @@ public enum OperatorType {
     //addLater? intPow
     //addLater? contains, isElement
     //addLater wait[Eq|Ne|Gt|Lt|Ge|Le]  (<int-ref> waitGt <int> freezes current thread while <int-ref> is greater that <int>
-    //addLater? make print/read native operators
 }

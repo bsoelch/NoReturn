@@ -12,11 +12,12 @@ import java.util.Map;
 
 public class CompileToC {
 
-    private static final String[] procedureArgs     ={"Value*", "size_t*"   };
-    private static final String[] procedureArgNames ={"args",   "argCount"  };
+    private static final String[] procedureArgs     ={"Value*", "size_t*",  "Value**"};
+    private static final String[] procedureArgNames ={"args",   "argCount", "argData"};
     private static final String procedureOut="void*";
 
     private static final String CONST_DATA_SIGNATURE = "Value constData []";
+    private static final int MAX_ARG_SIZE = 0x2000;
 
     private static class ConstData{
         StringBuilder build=new StringBuilder(CONST_DATA_SIGNATURE + "={");
@@ -54,9 +55,9 @@ public class CompileToC {
         include("stdio.h");
         include("inttypes.h");
         out.newLine();
-        writeLine("#define MAX_ARG_SIZE 1024;");
+        writeLine("#define MAX_ARG_SIZE 0x"+Integer.toHexString(MAX_ARG_SIZE));
         out.newLine();
-        //Type enum //TODO better storage structure
+        //Type enum
         writeLine("typedef enum{");//TODO better handling of types
         writeLine("  EMPTY=0,");
         writeLine("  BOOL,");
@@ -96,7 +97,9 @@ public class CompileToC {
         //  array   ->  len,        val_ptr/raw_data
         //  any     ->  typeID,     val_ptr/raw_data
         //  opt     ->  hasData,    data
-        writeLine("  char     raw[8];");
+        writeLine("  uint8_t  raw8[8];");
+        writeLine("  uint16_t raw16[4];");
+        writeLine("  uint32_t raw32[2];");
         writeLine("};");
         out.newLine();
         //Procedure Type
@@ -124,81 +127,88 @@ public class CompileToC {
         //TODO cache names
     }
 
+    private void writeNumber(StringBuilder out, Value v, ConstData constData, boolean incOff) {
+        Type.Numeric t=(Type.Numeric) v.getType();
+        if(t.isFloat){
+            out.append("{.asF").append(8 * (1 << t.level)).append("=").append(((Value.Primitive) v).getValue()).append("}");
+        }else{
+            out.append("{.as").append(t.signed ? "I" : "U").append(8 * (1 << t.level)).append("=")
+                    .append(((Value.Primitive) v).getValue()).append("}");
+        }
+        if(incOff){
+            constData.off++;}
+    }
+
     /**Writes a value as a array of union declarations*/
-    private void writeConstValueAsUnion(boolean isFirst,StringBuilder out,Value v, boolean inPlaceValues,boolean incOff,ConstData constData) throws IOException{
+    private void writeConstValueAsUnion(StringBuilder out, Value v, ConstData constData, boolean isFirst, boolean inPlaceValues,
+                                        boolean incOff, boolean wrapAny) throws IOException{
         if(!isFirst){
             out.append(',');
         }
-        if(v.getType() == Type.Primitive.BOOL){
+        if(wrapAny){
+            //TODO store Types
+            out.append("{.asType=0/*").append(v.getType()).append("*/}");
+            if(incOff){constData.off++;}
+            if(incOff){constData.off++;}//increment before store
+            if(v.getType()==Type.Primitive.BOOL){
+                out.append(",{.asBool=").append(((Value.Primitive) v).getValue()).append("}");
+                if(incOff){constData.off++;}
+            }else if(v.getType() instanceof Type.Numeric){
+                out.append(',');
+                writeNumber(out, v, constData, incOff);
+            }else{//addLater different handling for optional/reference
+                out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
+                writeConstValueAsUnion(constData.build, v, constData, constData.off==0, true, true, false);
+            }
+        }else if(v.getType() == Type.Primitive.BOOL){
             out.append("{.asBool=").append(((Value.Primitive) v).getValue()).append("}");
             if(incOff){constData.off++;}
         }else if(v.getType() instanceof Type.Numeric){
-            Type.Numeric t=(Type.Numeric) v.getType();
-            if(t.isFloat){
-                out.append("{.asF").append(8 * (1 << t.level)).append("=").append(((Value.Primitive) v).getValue()).append("}");
-                if(incOff){constData.off++;}
-            }else{
-                out.append("{.as").append(t.signed ? "I" : "U").append(8 * (1 << t.level)).append("=")
-                        .append(((Value.Primitive) v).getValue()).append("}");
-                if(incOff){constData.off++;}
-            }
+            writeNumber(out, v, constData, incOff);
         }else if(v.getType()== Type.Primitive.STRING){
             byte[] bytes=((Value.StringValue) v).utf8Bytes();
+            out.append("{.asU64=").append(bytes.length).append("}");
             if(inPlaceValues){
-                out.append("{.asU64=").append(bytes.length).append("}");
                 if(incOff){constData.off++;}
-                for(int i=0;i< bytes.length;i+=8){
-                    out.append(",{.asRaw={");
-                    for(int j=0;j<8;j++){
-                        if(j>0){
-                            out.append(',');
-                        }
-                        out.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "00");
-                    }
-                    out.append("}");
-                    if(incOff){constData.off++;}
-                }
+                out.append(',');
             }else{
                 //TODO mark value to signal storage-location at runtime
                 out.append("{.asU64=").append(bytes.length).append("}");
                 if(incOff){constData.off++;}
                 if(incOff){constData.off++;}//increment before store
                 out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
-                for(int i=0;i< bytes.length;i+=8){
-                    if(constData.off>0){
-                        constData.build.append(',');
-                    }
-                    constData.build.append("{.asRaw={");
-                    for(int j=0;j<8;j++){
-                        if(j>0){
-                            constData.build.append(',');
-                        }
-                        constData.build.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "00");
-                    }
-                    constData.build.append("}");
-                    constData.off++;
+                out= constData.build;
+                incOff=true;
+                if(constData.off>0){
+                    out.append(',');
                 }
+            }
+            for(int i=0;i< bytes.length;i+=8){
+                out.append("{.raw8={");
+                for(int j=0;j<8;j++){
+                    if(j>0){
+                        out.append(',');
+                    }
+                    out.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "00");
+                }
+                out.append("}}");
+                if(incOff){constData.off++;}
             }
         }else if(v instanceof Value.Array){
-            //TODO handle any[]
-            if(((Type.Array)v.getType()).content== Type.Primitive.ANY){
-                throw new UnsupportedOperationException("Type any is not supported");
-            }
+            boolean isAny=(((Type.Array)v.getType()).content== Type.Primitive.ANY);
+            //TODO mark value to signal storage-location at runtime
+            out.append("{.asU64=").append(((Value.Array) v).elements().length).append("}");
+            if(incOff){constData.off++;}
             if(inPlaceValues) {
-                out.append("{.asU64=").append(((Value.Array) v).elements().length).append("}");
-                if(incOff){constData.off++;}
                 //ensure constant block-size (1 for bool,float[N],[u]int[N],reference  2 for string, array, any, optional)
                 for (Value elt : ((Value.Array) v).elements()) {
-                    writeConstValueAsUnion(false,out,elt, false,incOff,constData);
+                    writeConstValueAsUnion(out, elt, constData, false, false, incOff, isAny);
                 }
             }else{
-                //TODO mark value to signal storage-location at runtime
-                out.append("{.asU64=").append(((Value.Array) v).elements().length).append("}");
-                if(incOff){constData.off++;}
                 if(incOff){constData.off++;}//increment before write
                 out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
                 for (Value elt : ((Value.Array) v).elements()) {
-                    writeConstValueAsUnion(constData.off==0,constData.build, elt, true,true,constData);
+                    writeConstValueAsUnion(constData.build, elt, constData, constData.off==0, true, true, isAny);
                 }
             }
         }else {
@@ -208,11 +218,11 @@ public class CompileToC {
 
     private void writeConstant(String name, Value value, ConstData constData) throws IOException {
         comment("const "+value.getType()+" : "+name+" = "+value.stringRepresentation());
-        out.write("Value const_");
+        out.write("const Value const_");
         out.write(asciify(name));
         out.write(" []={");
         StringBuilder tmp=new StringBuilder();
-        writeConstValueAsUnion(true,tmp,value,true,false,constData);
+        writeConstValueAsUnion(tmp, value, constData, true, true, false, false);
         writeLine(tmp.append("};").toString());
     }
 
@@ -250,40 +260,75 @@ public class CompileToC {
         writeLine(";");
     }
     /**writes an integrated interpreted that runs the NoRet C-Representation as a C-Program*/
-    private void writeMain() throws IOException {
+    private void writeMain(boolean hasArgs) throws IOException {
         writeRunSignature();writeLine("{");
         writeLine("    Procedure f=*((Procedure*)initState);");
         writeLine("    initState+=sizeof(Procedure);");
         writeLine("    size_t argCount=*((size_t*)initState);");
         writeLine("    initState+=sizeof(size_t);");
+        writeLine("    Value* argData=*((Value**)initState);");
+        writeLine("    initState+=sizeof(Value*);");
         writeLine("    Value* argCache=malloc(MAX_ARG_SIZE*sizeof(Value));");
-        writeLine("    if(argCache==NULL){");//TODO better error handling
-        writeLine("        return (void*)-1;");//addLater usefull handling of return codes
+        writeLine("    if(argCache==NULL){");
+        writeLine("        return (void*)-1;");//addLater useful handling of return codes
         writeLine("    }");
         writeLine("    //initArgs");
         writeLine("    memcpy(argCache,initState,argCount*sizeof(Value));");
         writeLine("    do{");
-        writeLine("        f=(Procedure)f(argCache,&argCount);");
+        writeLine("        f=(Procedure)f(argCache,&argCount,&argData);");
         writeLine("    }while(f!=NULL);");
         writeLine("    return (void*)0;");
         writeLine("}");
         out.newLine();
         comment("main method of the C representation: ");
         comment("  transforms the input arguments and starts the run function on this thread");
-        writeLine("int main(){");//TODO choose main depending on signature of start
-        writeLine("	void* init=malloc(sizeof(Procedure)+sizeof(size_t));");//addLater add size of argString
-        writeLine("	size_t off=0;");
-        writeLine("	*((Procedure*)init)=&proc_start;");
-        writeLine("	off+=sizeof(Procedure);");
-        writeLine("	*((size_t*)(init+off))=1;");
-        writeLine("	off+=sizeof(size_t);");
-        //addLater pass Arguments to procedure
-        writeLine("	run(init);");
-        writeLine("	return 0;");
+        if(hasArgs){
+            writeLine("int main(int argc,char** argv){");
+            //ignore first argument for consistency with interpreter
+            writeLine("  void* init=malloc(sizeof(Procedure)+sizeof(size_t)+sizeof(Value*)+((1+2*(argc-1))*sizeof(Value)));");
+        }else{
+            writeLine("int main(){");
+            writeLine("  void* init=malloc(sizeof(Procedure)+sizeof(size_t));");
+        }
+        writeLine("  size_t off=0;");
+        writeLine("  *((Procedure*)init)=&proc_start;");
+        writeLine("  off+=sizeof(Procedure);");
+        writeLine("  *((size_t*)(init+off))=1;");
+        writeLine("  off+=sizeof(size_t);");
+        writeLine("  Value* argData=malloc(MAX_ARG_SIZE*sizeof(Value));");//TODO handling of argData
+        writeLine("  if(argData==NULL){");
+        writeLine("    return -1;");//addLater useful handling of return codes
+        writeLine("  }");
+        writeLine("  *((Value**)(init+off))=argData;");
+        writeLine("  off+=sizeof(Value*);");
+        if(hasArgs){
+            comment("prepare program Arguments");
+            //this code only works if argv iss encoded with UTF-8
+            comment("!!! currently only UTF-8 encoding is supported !!!");//addLater support for other encodings of argv
+            writeLine("  int l;");
+            writeLine("  int k0=0;");
+            writeLine("  for(int i=1;i<argc;i++){");//skip first argument
+            //addLater! mark storage location of arguments
+            writeLine("    int l=strlen(argv[i]);");
+            writeLine("    *((Value*)(init+off))=(Value){.asU64=l};");//store lengths of arguments
+            writeLine("    off+=sizeof(Value);");
+            writeLine("    *((Value*)(init+off))=(Value){.asPtr=argData};");//store pointer to data
+            writeLine("    off+=sizeof(Value);");
+            writeLine("    for(int j=0,k=0;j+k<l;j++){");
+            writeLine("      if(j==8){");
+            writeLine("        j=0;");
+            writeLine("        k++;");
+            writeLine("        k0++;");
+            writeLine("      }");
+            writeLine("      argData[k0].raw8[j]=argv[i][j+k];");
+            writeLine("    }");
+            writeLine("    k0++;");
+            writeLine("  }");
+        }
+        writeLine("  run(init);");
+        writeLine("  return 0;");
         writeLine("}");
     }
-
-    //TODO compile code representation to C
 
     public void compile(Parser.ParserContext context) throws IOException {
         writeFileHeader();
@@ -315,9 +360,9 @@ public class CompileToC {
                     throw new SyntaxError("wrong signature of start, " +
                             "expected ()=>? or (string[])=>?");
                 }
-                //TODO main with args
+                writeMain(true);
             }else{
-                writeMain();
+                writeMain(false);
             }
         }
         out.flush();

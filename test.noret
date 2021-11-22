@@ -1,9 +1,9 @@
 const int8:constant=42;
 typedef int int32;
 const int[]:y={1234567890123456789,2,3.0};
-const any: hello ={"Hello","World"};
+const any: hello ={"Hello",1,{1,"World"}};
 
-start():()=>{
+start(string[]):(args)=>{
     any:x={1,-2,3U,constant};
     uint64:x_len=((int32[]:)x).length;
     ((int32[]:)x)[0]=123456789;

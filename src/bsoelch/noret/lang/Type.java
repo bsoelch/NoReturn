@@ -50,6 +50,7 @@ public class Type {
         public static final Primitive ANY       = new Primitive("any");
 
         public static final Primitive BOOL      = new Primitive("bool");
+        //TODO type string8,string16,string32 using UTF-8/16/32
         public static final Primitive STRING    = new Primitive("string") {
             @Override
             void initFields() {
