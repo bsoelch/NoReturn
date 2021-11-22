@@ -165,7 +165,7 @@ public class CompileToC {
             if(incOff){constData.off++;}
         }else if(v.getType() instanceof Type.Numeric){
             writeNumber(out, v, constData, incOff);
-        }else if(v.getType()== Type.Primitive.STRING){
+        }else if(v.getType()== Type.NoRetString.STRING8){
             byte[] bytes=((Value.StringValue) v).utf8Bytes();
             out.append("{.asU64=").append(bytes.length).append("}");
             if(inPlaceValues){
@@ -189,7 +189,65 @@ public class CompileToC {
                     if(j>0){
                         out.append(',');
                     }
-                    out.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "00");
+                    out.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "0");
+                }
+                out.append("}}");
+                if(incOff){constData.off++;}
+            }
+        }else if(v.getType()== Type.NoRetString.STRING16){
+            char[] chars=((Value.StringValue) v).chars();
+            out.append("{.asU64=").append(chars.length).append("}");
+            if(inPlaceValues){
+                if(incOff){constData.off++;}
+                out.append(',');
+            }else{
+                //TODO mark value to signal storage-location at runtime
+                out.append("{.asU64=").append(chars.length).append("}");
+                if(incOff){constData.off++;}
+                if(incOff){constData.off++;}//increment before store
+                out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
+                out= constData.build;
+                incOff=true;
+                if(constData.off>0){
+                    out.append(',');
+                }
+            }
+            for(int i=0;i< chars.length;i+=4){
+                out.append("{.raw16={");
+                for(int j=0;j<4;j++){
+                    if(j>0){
+                        out.append(',');
+                    }
+                    out.append("0x").append((i + j < chars.length) ? Integer.toHexString(chars[i + j] & 0xffff) : "0");
+                }
+                out.append("}}");
+                if(incOff){constData.off++;}
+            }
+        }else if(v.getType()== Type.NoRetString.STRING32){
+            int[] codePoints=((Value.StringValue) v).codePoints();
+            out.append("{.asU64=").append(codePoints.length).append("}");
+            if(inPlaceValues){
+                if(incOff){constData.off++;}
+                out.append(',');
+            }else{
+                //TODO mark value to signal storage-location at runtime
+                out.append("{.asU64=").append(codePoints.length).append("}");
+                if(incOff){constData.off++;}
+                if(incOff){constData.off++;}//increment before store
+                out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
+                out= constData.build;
+                incOff=true;
+                if(constData.off>0){
+                    out.append(',');
+                }
+            }
+            for(int i=0;i< codePoints.length;i+=2){
+                out.append("{.raw32={");
+                for(int j=0;j<2;j++){
+                    if(j>0){
+                        out.append(',');
+                    }
+                    out.append("0x").append((i + j < codePoints.length) ? Integer.toHexString(codePoints[i + j]) : "0");
                 }
                 out.append("}}");
                 if(incOff){constData.off++;}
@@ -356,7 +414,7 @@ public class CompileToC {
             Type[] startTypes= start.argTypes();
             if(startTypes.length>0){
                 if (startTypes.length != 1 || !(startTypes[0] instanceof Type.Array) ||
-                        ((Type.Array) startTypes[0]).content != Type.Primitive.STRING) {
+                        ((Type.Array) startTypes[0]).content != Type.NoRetString.STRING8) {
                     throw new SyntaxError("wrong signature of start, " +
                             "expected ()=>? or (string[])=>?");
                 }

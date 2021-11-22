@@ -50,13 +50,6 @@ public class Type {
         public static final Primitive ANY       = new Primitive("any");
 
         public static final Primitive BOOL      = new Primitive("bool");
-        //TODO type string8,string16,string32 using UTF-8/16/32
-        public static final Primitive STRING    = new Primitive("string") {
-            @Override
-            void initFields() {
-                fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
-            }
-        };
 
         private Primitive(String name){
             super(name);
@@ -66,6 +59,24 @@ public class Type {
             initFields();
         }
         void initFields(){}
+    }
+    public static class NoRetString extends Primitive{
+        //addLater? nativeString (string with native encoding) ? nonUnicodeStrings
+        /**UTF-8 string*/
+        public static final NoRetString STRING8=new NoRetString(8);
+        /**UTF-16 string*/
+        public static final NoRetString STRING16=new NoRetString(16);
+        /**UTF-32 string*/
+        public static final NoRetString STRING32=new NoRetString(32);
+
+        /**method for ensuring this class (with all NoRetString-Type constants) is loaded*/
+        static void ensureInitialized(){}
+
+        private NoRetString(int charSize) {
+            super("string"+charSize);
+            fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
+        }
+
     }
     public static class Numeric extends Primitive{
         public final int level;
@@ -95,6 +106,7 @@ public class Type {
     }
     public static void addPrimitives(Map<String,Type> typeNames) {
         Numeric.ensureInitialized();
+        NoRetString.ensureInitialized();
         typeNames.putAll(Primitive.primitives);
     }
 

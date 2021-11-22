@@ -14,10 +14,28 @@ public class GetIndex implements Expression{
         Type valType = value.expectedType();
         Type indType = index.expectedType();
         Type type;
-        if(valType == Type.Primitive.STRING){
+        if(valType == Type.NoRetString.STRING8){
             if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
                 type = Type.Numeric.UINT8;//utf8-byte
-            }else if(Type.canAssign(Type.Numeric.STRING, indType,null)){
+            }else if(Type.canAssign(Type.NoRetString.STRING8, indType,null)){
+                type = Type.Numeric.UINT64;//index of substring
+            }else{
+                throw new TypeError("Invalid type for string index:"+
+                        indType+ " string indices have to be unsigned integers or strings");
+            }
+        }else if(valType == Type.NoRetString.STRING16){
+            if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
+                type = Type.Numeric.UINT16;//utf16-char
+            }else if(Type.canAssign(Type.NoRetString.STRING16, indType,null)){
+                type = Type.Numeric.UINT64;//index of substring
+            }else{
+                throw new TypeError("Invalid type for string index:"+
+                        indType+ " string indices have to be unsigned integers or strings");
+            }
+        }else if(valType == Type.NoRetString.STRING32){
+            if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
+                type = Type.Numeric.UINT32;//utf32-codepoint
+            }else if(Type.canAssign(Type.NoRetString.STRING32, indType,null)){
                 type = Type.Numeric.UINT64;//index of substring
             }else{
                 throw new TypeError("Invalid type for string index:"+

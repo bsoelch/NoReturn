@@ -464,14 +464,20 @@ public class Parser {
                         if(c==stringStart){
                             if(c=='\''){//char literal
                                 if(buffer.codePoints().count()==1){
+                                    int codePoint = buffer.codePointAt(0);
                                     tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
-                                            Type.Numeric.UINT32,buffer.codePointAt(0)), false, currentPos()));
+                                            codePoint<0x80?Type.Numeric.UINT8:codePoint<0x10000?Type.Numeric.UINT16:
+                                                    Type.Numeric.UINT32, codePoint), false, currentPos()));
                                 }else{
                                     throw new SyntaxError("A char-literal must contain exactly one character");
                                 }
                             }else{
+                                //TODO fixed type string literals u8"..."  u16"..." u32"..."
+                                String value = buffer.toString();
+                                int maxCp=value.codePoints().max().orElse(0);
                                 tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
-                                        Type.Primitive.STRING,buffer.toString()), false, currentPos()));
+                                        maxCp<0x80?Type.NoRetString.STRING8:maxCp<0x10000?Type.NoRetString.STRING16:
+                                                Type.NoRetString.STRING32, value), false, currentPos()));
                             }
                             buffer.setLength(0);
                             state=WordState.ROOT;
@@ -1624,7 +1630,7 @@ public class Parser {
         Type[] startTypes= start.argTypes();
         if(startTypes.length>0){
             if (startTypes.length != 1 || !(startTypes[0] instanceof Type.Array) ||
-                    ((Type.Array) startTypes[0]).content != Type.Primitive.STRING) {
+                    ((Type.Array) startTypes[0]).content != Type.NoRetString.STRING8) {
                 throw new SyntaxError("wrong signature of start, " +
                         "expected ()=>? or (string[])=>?");
             }

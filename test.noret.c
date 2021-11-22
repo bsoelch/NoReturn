@@ -54,15 +54,15 @@ const Value const_constant []={{.asI8=42}};
 // const Type:int32[] : y = {2112454933,2,3}
 const Value const_y []={{.asU64=3},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
 // const Type:any[] : hello = {"Hello",1,{1,"World"}}
-const Value const_hello []={{.asU64=3},{.asType=0/*Type:string*/},{.asPtr=(constData+0)},{.asType=0/*Type:int32*/},{.asI32=1},{.asType=0/*Type:any[]*/},{.asPtr=(constData+2)}};
+const Value const_hello []={{.asU64=3},{.asType=0/*Type:string8*/},{.asPtr=(constData+0)},{.asType=0/*Type:int32*/},{.asI32=1},{.asType=0/*Type:any[]*/},{.asPtr=(constData+2)}};
 // data for values used in constants
-Value constData []={{.asU64=5},{.raw8={0x48,0x65,0x6c,0x6c,0x6f,0x00,0x00,0x00}},{.asU64=2},{.asType=0/*Type:int32*/},{.asI32=1},{.asType=0/*Type:string*/},{.asPtr=(constData+8)},{.asU64=5},{.raw8={0x57,0x6f,0x72,0x6c,0x64,0x00,0x00,0x00}}};
+Value constData []={{.asU64=5},{.raw8={0x48,0x65,0x6c,0x6c,0x6f,0x0,0x0,0x0}},{.asU64=2},{.asType=0/*Type:int32*/},{.asI32=1},{.asType=0/*Type:string8*/},{.asPtr=(constData+8)},{.asU64=5},{.raw8={0x57,0x6f,0x72,0x6c,0x64,0x0,0x0,0x0}}};
 
 // print(Type:any)
 void* proc_print(Value* args,size_t* argCount,Value** argData);
-// start(Type:string[])
+// start(Type:string8[])
 void* proc_start(Value* args,size_t* argCount,Value** argData);
-// readLine(Generic: $a, Type:(Type:string, Generic: $a)=>?)
+// readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
 void* proc_readLine(Value* args,size_t* argCount,Value** argData);
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* run(void* initState);
@@ -72,12 +72,12 @@ void* proc_print(Value* args,size_t* argCount,Value** argData){
 return NULL;
 }
 
-// start(Type:string[])
+// start(Type:string8[])
 void* proc_start(Value* args,size_t* argCount,Value** argData){
 return NULL;
 }
 
-// readLine(Generic: $a, Type:(Type:string, Generic: $a)=>?)
+// readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
 void* proc_readLine(Value* args,size_t* argCount,Value** argData){
 return NULL;
 }

@@ -144,8 +144,13 @@ public abstract class Value{
         if(type== Type.Primitive.ANY){
             throw new TypeError("Cannot create instances of Type \""+Type.Primitive.ANY+"\"");
         }
-        if(type== Type.Primitive.STRING){
-            return new StringValue((String)value);
+        if(type instanceof Type.NoRetString){
+            if(value instanceof String) {
+                return new StringValue((Type.NoRetString) type,(String) value);
+            }else{
+                //TODO addLater: string from byte[],char[],int[]
+                throw new UnsupportedOperationException("Unimplemented");
+            }
         }else if(type instanceof Type.Numeric){
             return new NumericValue((Type.Numeric) type,value);
         }else{
@@ -249,27 +254,35 @@ public abstract class Value{
     }
     public static class StringValue extends Value implements Comparable<StringValue>{
         final byte[] utf8Bytes;
-        private StringValue(String value) {
-            super(Type.Primitive.STRING);
+        final String utf16String;
+        final int[]  utf32Codepoints;
+        private StringValue(Type.NoRetString stringType,String value) {
+            super(stringType);
             this.utf8Bytes=value.getBytes(StandardCharsets.UTF_8);
-            getters.put(Type.FIELD_NAME_LENGTH,
-                    ()->createPrimitive(Type.Numeric.UINT64,value.length()));
+            this.utf16String=value;
+            this.utf32Codepoints=value.codePoints().toArray();
+            if(stringType== Type.NoRetString.STRING8){
+                getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.UINT64,utf8Bytes.length));
+            }else if(stringType== Type.NoRetString.STRING16){
+                getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.UINT64,utf16String.length()));
+            }else if(stringType== Type.NoRetString.STRING32){
+                getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.UINT64,utf32Codepoints.length));
+            }else{
+                assert false;//"Unreachable"
+            }
+
         }
 
         @Override
         public Value independentCopy(){
-            return createPrimitive(Type.Primitive.STRING, new String(utf8Bytes,StandardCharsets.UTF_8));
+            return createPrimitive((Type.NoRetString)type, new String(utf8Bytes,StandardCharsets.UTF_8));
         }
         @Override
         public Value castTo(Type t) {
-            if(t== Type.Primitive.STRING||t==Type.Primitive.ANY||t instanceof Type.Generic){
+            if(t== type||t==Type.Primitive.ANY||t instanceof Type.Generic){
                 return this;
-            }else if(t instanceof Type.Array&&
-                    Type.canCast(((Type.Array)t).content, Type.Numeric.UINT8,null)){
-                //TODO cast String to Array (uint8 -> UTF8, uint16 -> UTF16, uint32 -> UTF32)
-                throw new UnsupportedOperationException("Unimplemented");
-            }else{
-                throw new TypeError("Cannot cast "+Type.Primitive.STRING+" to "+t);
+            }else{//TODO casting between stringTypes, casting of string to array
+                throw new TypeError("Cannot cast "+type+" to "+t);
             }
         }
         @Override
@@ -277,15 +290,15 @@ public abstract class Value{
             if (this == o) return true;
             if (!(o instanceof StringValue)) return false;
             StringValue that = (StringValue) o;
-            return Arrays.equals(utf8Bytes, that.utf8Bytes);
+            return stringValue().equals(that.stringValue());
         }
         @Override
         public int hashCode() {
-            return Arrays.hashCode(utf8Bytes);
+            return utf16String.hashCode();
         }
 
         public String stringValue() {
-            return new String(utf8Bytes,StandardCharsets.UTF_8);
+            return utf16String;
         }
         @Override
         public String stringRepresentation() {
@@ -294,19 +307,31 @@ public abstract class Value{
 
         @Override
         public int compareTo(StringValue o) {
-            //TODO more effective Method?
-            return new String(utf8Bytes).compareTo(new String(o.utf8Bytes));
+            return utf16String.compareTo(o.utf16String);
         }
 
         @Override
         public Value getAtIndex(Value index) {
-            //TODO? getAtIndex -> Codepoints
-            // allow setting indices to non-unicode characters "Hello World"[1]='é'
             long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
-            if(lIndex<0||lIndex>= utf8Bytes.length){
-                throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
+            if(type== Type.NoRetString.STRING8){
+                if(lIndex<0||lIndex>= utf8Bytes.length){
+                    throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
+                }
+                return Value.createPrimitive(Type.Numeric.UINT8,utf8Bytes[(int)lIndex]);
+            }else if(type== Type.NoRetString.STRING16){
+                if(lIndex<0||lIndex>= utf16String.length()){
+                    throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
+                }
+                return Value.createPrimitive(Type.Numeric.UINT16,utf16String.charAt((int)lIndex));
+            }else if(type== Type.NoRetString.STRING32){
+                if(lIndex<0||lIndex>= utf32Codepoints.length){
+                    throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
+                }
+                return Value.createPrimitive(Type.Numeric.UINT32,utf32Codepoints[(int)lIndex]);
+            }else{
+                assert false;//"Unreachable"
+                throw new RuntimeException("Unreachable");
             }
-            return Value.createPrimitive(Type.Numeric.UINT8,utf8Bytes[(int)lIndex]);
         }
         @Override
         public Value setAtIndex(Value index, Value newValue) {
@@ -329,7 +354,13 @@ public abstract class Value{
         public boolean isMutable() {return true;}
 
         public byte[] utf8Bytes() {
-            return utf8Bytes;
+            return Arrays.copyOf(utf8Bytes,utf8Bytes.length);
+        }
+        public char[] chars() {
+            return utf16String.toCharArray();
+        }
+        public int[] codePoints() {
+            return Arrays.copyOf(utf32Codepoints,utf32Codepoints.length);
         }
     }
 

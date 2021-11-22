@@ -21,7 +21,7 @@ There are 14 atomic types:
 - uint8, uint16, uint32, uint64: unsigned integers
 - int8, int16, int32, int64: signed integers
 - float32, float64: floating point numbers
-- string: a string of characters
+- string8, string16, string32: strings in utf8/16/32 encoding
 - bool: a boolean value (true or false)
 - type: a Type
 - any: Wildcard Type that can contain any value
@@ -63,7 +63,7 @@ Type any.
 Example:
 
 ```
-($a,(string,$a)=>?)=>?
+($a,(string8,$a)=>?)=>?
 ```
 is the signature of a procedure that creates a string 
 and then passes it to another procedure, while 
@@ -175,21 +175,31 @@ int8:bin=(int8:)0b11001001;
 ##### Strings
 String literals start and end with `"`,
 `\ ` can be used for escaping.
+String literals automatically choose the "best" fitting encoding
+- utf8  if all codepoints are smaller that 0x80
+- utf16 if all codepoints are smaller that 0x10000
+- utf32 otherwise
+
 
 ```
-string:s1="Hello World!";
-string:escaped="\"Hello\" World!";
+string8:s1="Hello World!";
+string8:escaped="\"Hello\" World!";
 ```
 
 ##### Characters
 A character literal is a single unicode character
 surrounded by `'`, `\ ` can be used for escaping.
 Character literals evaluate to the unicode codepoint-id
-of their character (as uint32)
+of their character as
+- uint8  if the codepoints is smaller that 0x80
+- uint16 if the codepoints is smaller that 0x10000
+- uint32 otherwise
 
 ```
-uint32:c1='A';
-uint32:c2='\n';
+uint8:c1='A';
+uint8:c2='\n';
+uint16:c3='ä';
+uint32:c4='💻';
 ```
 
 ##### native Constants

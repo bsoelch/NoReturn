@@ -118,15 +118,15 @@ public class Operations {
             (l1,l2)->(s)->wrap(s,l1+l2),
             (f1,f2)->wrap(f1+f2),
             (d1,d2)->wrap(d1+d2),
-            (lVal,rVal)->{
-                if(lVal.type== Type.Primitive.STRING){
+            (lVal,rVal)->{//TODO support string16 and string32
+                if(lVal.type== Type.NoRetString.STRING8){
                     String s1=((Value.StringValue)lVal).stringValue();
-                    String s2=((Value.StringValue)rVal.castTo(Type.Primitive.STRING)).stringValue();
-                    return Value.createPrimitive(Type.Primitive.STRING,s1+s2);
-                }else if(rVal.type== Type.Primitive.STRING){
-                    String s1=((Value.StringValue)lVal.castTo(Type.Primitive.STRING)).stringValue();
-                    String s2=((Value.StringValue)rVal).stringValue();;
-                    return Value.createPrimitive(Type.Primitive.STRING,s1+s2);
+                    String s2=((Value.StringValue)rVal.castTo(Type.NoRetString.STRING8)).stringValue();
+                    return Value.createPrimitive(Type.NoRetString.STRING8,s1+s2);
+                }else if(rVal.type== Type.NoRetString.STRING8){
+                    String s1=((Value.StringValue)lVal.castTo(Type.NoRetString.STRING8)).stringValue();
+                    String s2=((Value.StringValue)rVal).stringValue();
+                    return Value.createPrimitive(Type.NoRetString.STRING8,s1+s2);
                 }else if(lVal.type instanceof Type.Array&&rVal.type instanceof Type.Array){
                     Value[] newArray=new Value[((Value.Array)lVal).elements.length+
                             ((Value.Array)rVal).elements.length];
@@ -315,9 +315,9 @@ public class Operations {
                     Long.compareUnsigned(l1,l2),
                 (f1,f2)->wrap(f1.compareTo(f2)),
                 (d1,d2)->wrap(d1.compareTo(d2)),
-                (x1,x2)-> {
-                    if(x1.type== Type.Primitive.STRING&&
-                        x2.type== Type.Primitive.STRING){
+                (x1,x2)-> {//TODO support string16 and string32
+                    if(x1.type== Type.NoRetString.STRING8&&
+                        x2.type== Type.NoRetString.STRING8){
                         return ((Value.StringValue)x1).compareTo(((Value.StringValue) x2));
                     }else{
                         return null;
@@ -432,9 +432,9 @@ public class Operations {
 
     public static Type typePlus(Type lType, Type rType) {
         //String + ... => String
-        if((lType== Type.Primitive.STRING&&Type.canCast(Type.Primitive.STRING,rType,null))||
-              (rType== Type.Primitive.STRING&&Type.canCast(Type.Primitive.STRING,lType,null))){
-            return Type.Primitive.STRING;
+        if((lType== Type.NoRetString.STRING8&&Type.canCast(Type.NoRetString.STRING8,rType,null))||
+              (rType== Type.NoRetString.STRING8&&Type.canCast(Type.NoRetString.STRING8,lType,null))){
+            return Type.NoRetString.STRING8;//TODO support different string types
         }else if(lType instanceof Type.Array&&rType instanceof Type.Array){
             return new Type.Array(Type.commonSupertype(((Type.Array) lType).content,
                     ((Type.Array) rType).content));
@@ -531,7 +531,7 @@ public class Operations {
         //addLater? more comparable types
         if(lType instanceof Type.Numeric &&rType instanceof Type.Numeric){
             return true;
-        }else return lType == Type.Primitive.STRING && rType == Type.Primitive.STRING;
+        }else return lType == Type.NoRetString.STRING8 && rType == Type.NoRetString.STRING8;//TODO support different string types
     }
 
 }

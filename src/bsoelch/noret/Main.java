@@ -27,7 +27,7 @@ public class Main {
         }else{
             progArgs=new Value[args.length-1];
             for(int i=1;i< args.length;i++){
-                progArgs[i-1]=Value.createPrimitive(Type.Primitive.STRING,args[i]);
+                progArgs[i-1]=Value.createPrimitive(Type.NoRetString.STRING8,args[i]);
             }
             progArgs=new Value[]{
                     new Value.Array(progArgs)
