@@ -147,7 +147,7 @@ public class BinOp implements Expression {
             case LE:
             case LT:
                 if(!Operations.typeCheckCompare(lType,rType)){
-                    throw new TypeError(lType+" and "+rType+" are not compareable");
+                    throw new TypeError(lType+" and "+rType+" are not comparable");
                 }
                 return Type.Primitive.BOOL;
             case IF:
@@ -156,6 +156,11 @@ public class BinOp implements Expression {
                 throw new SyntaxError(op+" is no binary operator");
         }
         return null;
+    }
+
+    @Override
+    public String toString() {
+        return "BinOp{" +left + " "+op + " "+ right +'}';
     }
 }
 

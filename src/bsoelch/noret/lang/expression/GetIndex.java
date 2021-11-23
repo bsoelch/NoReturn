@@ -102,4 +102,9 @@ public class GetIndex implements Expression{
     public Type expectedType() {
         return type;
     }
+
+    @Override
+    public String toString() {
+        return "GetIndex{"+value +"[" + index +"]}";
+    }
 }

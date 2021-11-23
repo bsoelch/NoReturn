@@ -29,6 +29,6 @@ public class ValueExpression implements Expression {
 
     @Override
     public String toString() {
-        return "ValueExpression:" +value;
+        return "ValueExpression{"+value+"}";
     }
 }

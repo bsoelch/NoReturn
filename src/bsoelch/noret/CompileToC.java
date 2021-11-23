@@ -1,8 +1,6 @@
 package bsoelch.noret;
 
-import bsoelch.noret.lang.Procedure;
-import bsoelch.noret.lang.Type;
-import bsoelch.noret.lang.Value;
+import bsoelch.noret.lang.*;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -318,8 +316,50 @@ public class CompileToC {
     private void writeProcImplementation(String name, Procedure proc) throws IOException{
         writeProcSignature(name, proc);
         writeLine("{");
-        //TODO procedure Body
-        writeLine("return NULL;");//addLater return next procedure
+        Type[] argTypes=proc.argTypes();
+        String[] argNames=new String[proc.maxValues];//names of the arg-variables
+        long off=0;
+        int valCount=0;
+        for(int i=0;i<argTypes.length;i++){
+            if(argTypes[i].blockCount==1){
+                argNames[i]="(*(args+"+(off++)+"))";
+            }else{
+                argNames[i]="(*((Value["+argTypes[i].blockCount+"])(args+"+(off)+")))";
+                off+=argTypes[i].blockCount;
+            }
+            valCount++;
+            comment("","var"+i+":"+argNames[i]);//tmp
+        }
+        if(!proc.isNative()){
+            for(Action a:proc.actions()){
+                if(a instanceof ValDef){
+                    argNames[valCount]="var"+valCount;
+                    if(((ValDef)a).getType().blockCount==1){
+                        comment("Value var"+valCount+";",
+                                "("+((ValDef) a).getType()+")");
+                    }else{
+                        comment("Value var"+valCount+" ["+((ValDef)a).getType().blockCount+"];",
+                                "("+((ValDef) a).getType()+")");
+                    }
+                    comment("{","initValue: "+((ValDef)a).getInitValue());
+                    //TODO initialize value
+                    writeLine("}");
+                    valCount++;
+                }else if(a instanceof Assignment){
+                    comment("{","assign: "+a);
+                    //TODO assign value
+                    writeLine("}");
+                }else{
+                    comment(a.toString());
+                }
+                //TODO compile action
+            }
+        }else{
+            comment("Native");
+            //TODO implementations of native procedures
+        }
+        //TODO return id of next procedure
+        writeLine("return NULL;");
         writeLine("}");
         out.newLine();
     }

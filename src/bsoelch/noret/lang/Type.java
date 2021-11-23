@@ -21,7 +21,7 @@ public class Type {
 
     private static final class TypeType extends Type{
         private TypeType() {
-            super("type");
+            super("type", 1);
             fields.put("isArray",     Primitive.BOOL);
             fields.put("isStruct",    Primitive.BOOL);
             fields.put("isOptional",  Primitive.BOOL);
@@ -38,19 +38,19 @@ public class Type {
     /**Type of NONE Value, assignable to any reference*/
     public static final Type TYPE = new TypeType();
     /**Type of NONE Value, assignable to any reference*/
-    public static final Type NONE_TYPE = new Type("\"none\"");
+    public static final Type NONE_TYPE = new Type("\"none\"", 1);
     /**Value type for empty Arrays, assignable to any other type*/
-    public static final Type EMPTY_TYPE  = new Type("\"empty\"");
+    public static final Type EMPTY_TYPE  = new Type("\"empty\"", 1);
 
     public static class Primitive extends Type{
         private static final HashMap<String,Type> primitives=new HashMap<>();
         //addLater move any to own class (any is no primitive)
-        public static final Primitive ANY       = new Primitive("any");
+        public static final Primitive ANY       = new Primitive("any",2);
 
-        public static final Primitive BOOL      = new Primitive("bool");
+        public static final Primitive BOOL      = new Primitive("bool",1);
 
-        private Primitive(String name){
-            super(name);
+        private Primitive(String name,int blockCount){
+            super(name, blockCount);
             if(primitives.put(name,this)!=null){
                 throw new RuntimeException("The primitive \""+name+"\" already exists");
             }
@@ -73,7 +73,7 @@ public class Type {
         static void ensureInitialized(){}
 
         private NoRetString(int charSize) {
-            super("string"+charSize);
+            super("string"+charSize,2);
             this.charSize=charSize;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
         }
@@ -102,7 +102,7 @@ public class Type {
         static void ensureInitialized(){}
 
         private Numeric(String name,int level,boolean signed,boolean isFloat) {
-            super(name);
+            super(name,1);
             this.level=level;
             this.signed=signed;
             this.isFloat=isFloat;
@@ -116,8 +116,12 @@ public class Type {
 
     final String name;
     final HashMap<String,Type> fields=new HashMap<>();
-    private Type(String name){
+    /**number of blocks needed (in compiled code) to store a value of this type*/
+    public final int blockCount;
+
+    private Type(String name, int blockCount){
         this.name=name;
+        this.blockCount = blockCount;
         synchronized (waitingForTypeType) {
             if(TYPE!=null){
                 fields.put(FIELD_NAME_TYPE,TYPE);
@@ -253,7 +257,7 @@ public class Type {
     }
 
     //FIXME ensure that no Value is assigned without castTo()
-    // castTo should only return this one this.type,any and gernerics
+    // castTo should only return this one this.type,any and generics
     public static boolean canAssign(Type to,Type from, HashMap<String, GenericBound> generics){
         return canAssign(to, from,false, generics);
     }
@@ -265,7 +269,7 @@ public class Type {
     public static class Optional extends Type{
         public final Type content;
         public Optional(Type content) {
-            super(content.wrappedName()+"?");
+            super(content.wrappedName()+"?", 2);
             this.content=content;
             fields.put(FIELD_NAME_HAS_VALUE,Primitive.BOOL);
             fields.put(FIELD_NAME_VALUE,content);
@@ -277,7 +281,7 @@ public class Type {
     public static class Reference extends Type{
         public final Type content;
         public Reference(Type content) {
-            super("@"+content.wrappedName());
+            super("@"+content.wrappedName(), 1);
             this.content=content;
             fields.put(FIELD_NAME_VALUE,content);
         }
@@ -289,7 +293,7 @@ public class Type {
     public static class Array extends Type{
         public final Type content;
         public Array(Type content) {
-            super(content.wrappedName()+"[]");
+            super(content.wrappedName()+"[]", 2);
             this.content=content;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
         }
@@ -314,8 +318,15 @@ public class Type {
             return ret.append('}').toString();
         }
 
+        private static int calculateBlockCount(Type[] types) {
+            int count=0;
+            for(Type t:types){
+                count+=t.blockCount;
+            }
+            return count;
+        }
         public Struct(Type[] types, String[] names) {
-            super(structName(types,names));
+            super(structName(types,names), calculateBlockCount(types));
             for(int i=0;i<names.length;i++){
                 if(fields.put(names[i],types[i])!=null){
                     throw new TypeError("duplicate or reserved field-name \""+names[i]+"\" in struct "+this);
@@ -323,6 +334,7 @@ public class Type {
                 fieldNames.add(names[i]);
             }
         }
+
     }
     public static class Proc extends Type{
         private final Type[] argTypes;
@@ -337,7 +349,7 @@ public class Type {
             return ret.append(")=>?").toString();
         }
         public Proc(Type[] argTypes) {
-            super(procName(argTypes));
+            super(procName(argTypes), 1);
             this.argTypes=argTypes;
             fields.put(FIELDS_PROC_TYPES,new Array(Primitive.TYPE));
         }
@@ -362,7 +374,7 @@ public class Type {
     public static class Generic extends Type{
         //addLater? restricted generics
         public Generic(String name) {
-            super("$"+name);
+            super("$"+name, 2);
         }
         @Override
         public String toString() {

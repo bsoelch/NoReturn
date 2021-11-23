@@ -55,4 +55,9 @@ public class IfExpr implements Expression {
     public Type expectedType() {
         return expectedOutput;
     }
+
+    @Override
+    public String toString() {
+        return "IfExpr{" +cond + "?" + ifVal +":" + elseVal + '}';
+    }
 }

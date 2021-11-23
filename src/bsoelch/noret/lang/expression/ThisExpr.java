@@ -23,4 +23,9 @@ public class ThisExpr implements Expression {
     public Type expectedType() {
         return type;
     }
+
+    @Override
+    public String toString() {
+        return "this";
+    }
 }

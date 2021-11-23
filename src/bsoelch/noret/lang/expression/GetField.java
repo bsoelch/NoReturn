@@ -65,4 +65,9 @@ public class GetField implements Expression{
     public Type expectedType() {
         return type;
     }
+
+    @Override
+    public String toString() {
+        return "GetField{"+value + "." + fieldName+"}" ;
+    }
 }

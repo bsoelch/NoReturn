@@ -55,4 +55,9 @@ public class TypeCast implements Expression{
     public Type expectedType() {
         return type;
     }
+
+    @Override
+    public String toString() {
+        return "TypeCast{" +type+ ":" + value +'}';
+    }
 }

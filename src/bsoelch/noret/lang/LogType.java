@@ -11,4 +11,9 @@ public class LogType {
         this.type = type;
         this.append = append;
     }
+
+    @Override
+    public String toString() {
+        return (append?"_":"")+type;
+    }
 }

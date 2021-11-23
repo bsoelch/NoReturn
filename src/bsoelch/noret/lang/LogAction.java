@@ -48,4 +48,9 @@ public class LogAction implements Action {
         Value value = expr.evaluate(parent, context).get();
         log(type, value.getType() instanceof Type.NoRetString?value.stringValue():value.stringRepresentation());
     }
+
+    @Override
+    public String toString() {
+        return "Log["+type+"]{" +expr +'}';
+    }
 }

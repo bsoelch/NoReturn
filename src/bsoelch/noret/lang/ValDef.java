@@ -22,4 +22,16 @@ public class ValDef implements Action {
         Value tmp = initValue.evaluate(parent, context).get().castTo(type);
         context.add(tmp);
     }
+
+    @Override
+    public String toString() {
+        return "ValDef["+type+"]{" + initValue +'}';
+    }
+
+    public Type getType() {
+        return type;
+    }
+    public Expression getInitValue() {
+        return initValue;
+    }
 }

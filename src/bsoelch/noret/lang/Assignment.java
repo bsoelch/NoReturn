@@ -19,4 +19,9 @@ public class Assignment implements Action {
         }
         target.evaluate(parent, context).set(tmp);
     }
+
+    @Override
+    public String toString() {
+        return "Assignment:{" + target +"=" + expr+"}";
+    }
 }

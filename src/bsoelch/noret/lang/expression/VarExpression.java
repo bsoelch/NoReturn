@@ -7,7 +7,7 @@ import java.util.ArrayList;
 
 public class VarExpression implements Expression {
     final Type varType;
-    final int id;
+    final int id;//TODO distinguish between arguments and other variables
     public VarExpression(Type varType,int id) {
         this.id=id;
         this.varType=varType;
@@ -47,4 +47,8 @@ public class VarExpression implements Expression {
         return varType;
     }
 
+    @Override
+    public String toString() {
+        return "VarExpression{" +id + '}';
+    }
 }

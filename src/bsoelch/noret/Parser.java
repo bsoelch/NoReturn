@@ -1395,6 +1395,9 @@ public class Parser {
                 .evaluate(null,new ArrayList<>()).get().castTo(constType));
     }
 
+    //TODO update types of values depending on maximum range of parameters
+    // i.e. dont use type any for values that are always an integer
+    //TODO detect variables with predictable valuecode
     private void readProcDef(String name,Tokenizer tokens,ParserContext context) throws IOException {
         ParserToken token;
         ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();

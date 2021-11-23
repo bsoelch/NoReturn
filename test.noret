@@ -3,9 +3,9 @@ typedef int int32;
 const int[]:y={1234567890123456789,2,3.0};
 const any: array_test ={{1,2,3},{4,5},{6}};
 
-loop_10(int8):(count)=>{
+loop(int8):(count)=>{
 log count;
-(int8)=>??:optional_proc=count<10?loop_10:none;
+(int8)=>??:optional_proc=count<5?loop:none;
 }=>[optional_proc(count+(int8:)1)]
 
 start(string8[]):(args)=>{
@@ -26,4 +26,4 @@ start(string8[]):(args)=>{
     int32?:optional=none;
     log optional;
     log optional?optional.value:"empty";
-}=>[loop_10((int8:)0)]
+}=>[loop((int8:)0)]

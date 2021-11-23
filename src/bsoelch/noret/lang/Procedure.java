@@ -1,7 +1,5 @@
 package bsoelch.noret.lang;
 
-import bsoelch.noret.TypeError;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -28,7 +26,7 @@ public class Procedure extends Value{
     final Action[] primitives;
     final ProcChild[] children;
     final Expression[][] childArgs;
-    final int maxValues;
+    public final int maxValues;
 
     public Procedure(Type.Proc type, Action[] primitives, ProcChild[] children,
                      Expression[][] childArgs, int maxValues) {
@@ -38,13 +36,13 @@ public class Procedure extends Value{
         this.childArgs = childArgs;
         this.maxValues = maxValues;
     }
-    /**NOP Procedure with given Type*/
-    Procedure(Type.Proc t) {
+    /**native procedure with given Type*/
+    protected Procedure(Type.Proc t,int maxValues) {
         super(t);
         primitives=null;
         children =null;
         childArgs =null;
-        maxValues =0;
+        this.maxValues =maxValues;
     }
     @Override
     public Value castTo(Type t) {
@@ -77,16 +75,20 @@ public class Procedure extends Value{
 
     @Override
     public String toString() {
-        return "Procedure:("+type+")";
+        return "Procedure:"+Arrays.toString(((Type.Proc)type).getArgTypes())+"";
     }
 
     public Type[] argTypes(){
         return ((Type.Proc)getType()).getArgTypes();
     }
 
+    public Iterable<Action> actions() {
+        return Arrays.asList(primitives);
+    }
+
     /**returns true if this procedure does not have any child procedures*/
-    public boolean isLeaf(){
-        return children.length==0;
+    public boolean isNative(){
+        return false;
     }
 
     public void run(CallQueue queue,Value[] params){

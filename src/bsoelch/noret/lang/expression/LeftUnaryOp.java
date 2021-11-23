@@ -128,5 +128,10 @@ public class LeftUnaryOp implements Expression {
         }
         throw new SyntaxError(op+" is no valid operator");
     }
+
+    @Override
+    public String toString() {
+        return "LeftUnaryOp{" + op + " " + expr +'}';
+    }
 }
 
