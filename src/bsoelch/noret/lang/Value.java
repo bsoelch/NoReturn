@@ -104,8 +104,15 @@ public abstract class Value{
     }
 
     public abstract Value castTo(Type t);
+    /**A String representation of this value (used by print)*/
     public abstract String stringRepresentation();
+    /**Converts this value to a String (used for casts to string)*/
     public String stringValue() {
+        return stringRepresentation();
+    }
+
+    @Override
+    public String toString() {
         return stringRepresentation();
     }
 

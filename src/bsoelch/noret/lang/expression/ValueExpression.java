@@ -26,4 +26,9 @@ public class ValueExpression implements Expression {
     public Type expectedType() {
         return value.getType();
     }
+
+    @Override
+    public String toString() {
+        return "ValueExpression:" +value;
+    }
 }

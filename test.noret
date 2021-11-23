@@ -5,9 +5,19 @@ const any: array_test ={{1,2,3},{4,5},{6}};
 
 start(string8[]):(args)=>{
     any:x={1,-2,3U,constant};
+    log x;
+    log x.type;
     uint64:x_len=((int32[]:)x).length;
+    log x_len;
     ((int32[]:)x)[0]=123456789;
     any:x_elt=((int32[]:)x)[1];
+    log x_elt;
     any:struct={.this=1,.is=636,.a="hello"+u8" "+"world",.struct={1,2,3,4}};
-}=>[print(x),print(x.type),print(x_len),print(x_elt),print(none.type),print(NOP.type),print({}.type),
-    print(struct),print(struct.type)]
+    log struct.type;
+    _log ":";
+    _log struct;
+    log none.type;
+    log NOP.type;
+    log {}.type;
+    log.err "error";
+}=>[]

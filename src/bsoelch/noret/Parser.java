@@ -7,6 +7,7 @@ import bsoelch.noret.lang.expression.*;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Reader;
+import java.io.UnsupportedEncodingException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -871,7 +872,7 @@ public class Parser {
         ROOT,BRACKET, ARRAY,STRUCT_NAME,STRUCT_VALUE,INDEX,RANGE
     }
     enum ActionParserState{
-        ROOT,ASSIGN_EXPR,DEF_EXPR
+        ROOT,ASSIGN_EXPR,DEF_EXPR,LOG
     }
 
     ParserContext context;
@@ -892,24 +893,24 @@ public class Parser {
         Native.addProcsTo(context.procNames);
         parse(in);
     }
-    private void updateBracketStack(ParserToken nextTokens, ArrayDeque<ParserTokenType> bracketStack) {
-        if(nextTokens.tokenType ==ParserTokenType.OPEN_BRACKET){
+    private void updateBracketStack(ParserToken nextToken, ArrayDeque<ParserTokenType> bracketStack) {
+        if(nextToken.tokenType ==ParserTokenType.OPEN_BRACKET){
             bracketStack.addLast(ParserTokenType.OPEN_BRACKET);
-        }else if(nextTokens.tokenType ==ParserTokenType.OPEN_SQ_BRACKET){
+        }else if(nextToken.tokenType ==ParserTokenType.OPEN_SQ_BRACKET){
             bracketStack.addLast(ParserTokenType.OPEN_SQ_BRACKET);
-        }else if(nextTokens.tokenType ==ParserTokenType.OPEN_CR_BRACKET){
+        }else if(nextToken.tokenType ==ParserTokenType.OPEN_CR_BRACKET){
             bracketStack.addLast(ParserTokenType.OPEN_CR_BRACKET);
-        }else if(nextTokens.tokenType ==ParserTokenType.CLOSE_BRACKET){
+        }else if(nextToken.tokenType ==ParserTokenType.CLOSE_BRACKET){
             if(bracketStack.isEmpty()||
                     bracketStack.removeLast()!=ParserTokenType.OPEN_BRACKET){
                 throw new SyntaxError("unexpected closing bracket");
             }
-        }else if(nextTokens.tokenType ==ParserTokenType.CLOSE_SQ_BRACKET){
+        }else if(nextToken.tokenType ==ParserTokenType.CLOSE_SQ_BRACKET){
             if(bracketStack.isEmpty()||
                     bracketStack.removeLast()!=ParserTokenType.OPEN_SQ_BRACKET){
                 throw new SyntaxError("unexpected end of struct");
             }
-        }else if(nextTokens.tokenType ==ParserTokenType.CLOSE_CR_BRACKET){
+        }else if(nextToken.tokenType ==ParserTokenType.CLOSE_CR_BRACKET){
             if(bracketStack.isEmpty()||
                     bracketStack.removeLast()!=ParserTokenType.OPEN_CR_BRACKET){
                 throw new SyntaxError("unexpected end of struct");
@@ -1478,6 +1479,7 @@ public class Parser {
         String defName=null;
         Expression assignTarget=null;
         bracketStack.clear();
+        LogType logType=null;
         while((token=tokens.getNextToken())!=null&&
                 (bracketStack.size()>0||token.tokenType !=ParserTokenType.CLOSE_CR_BRACKET)){
             updateBracketStack(token,bracketStack);
@@ -1508,7 +1510,45 @@ public class Parser {
                         assignTarget=expressionFromTokens(name,procType,context,tokenBuffer);
                                                 tokenBuffer.clear();
                         state=ActionParserState.ASSIGN_EXPR;
-                    }else{
+                    }else if(tokenBuffer.isEmpty()&&bracketStack.isEmpty()&&
+                            token.tokenType==ParserTokenType.WORD&&
+                            (((NamedToken)token).value.equals("log")||((NamedToken)token).value.equals("_log"))){
+                        boolean append=((NamedToken)token).value.startsWith("_");
+                        token= tokens.getNextToken();
+                        if(token==null){
+                            throw new SyntaxError("unexpected end of file");
+                        }
+                        if(token.tokenType==ParserTokenType.DOT){
+                            token=tokens.getNextToken();
+                            if(token==null){
+                                throw new SyntaxError("unexpected end of file");
+                            }else if(token.tokenType!=ParserTokenType.WORD){
+                                throw new SyntaxError("invalid log-type:"+token);
+                            }
+                            switch (((NamedToken)token).value){
+                                case "err"://log.err    ->  (stderr) errors
+                                    logType=new LogType(append,LogType.Type.ERR);
+                                    break;
+                                case "debug"://log.debug  ->  debug statements
+                                    logType=new LogType(append,LogType.Type.DEBUG);
+                                    break;
+                                case "info"://log.info   ->  info statements
+                                    logType=new LogType(append,LogType.Type.INFO);
+                                    break;
+                                default:
+                                    throw new SyntaxError("invalid log-type:"+((NamedToken)token).value);
+                            }
+                        }else{
+                            updateBracketStack(token,bracketStack);
+                            tokenBuffer.add(token);
+                            logType=new LogType(append,LogType.Type.DEFAULT);
+                            //mode -> log
+                        }
+                        state=ActionParserState.LOG;
+                    }else if(tokenBuffer.isEmpty()&&bracketStack.isEmpty()&&token.tokenType==ParserTokenType.WORD&&
+                            ((NamedToken)token).value.equals("assert")){
+                        throw new UnsupportedEncodingException("assert-statements are currently not supported");
+                    }else{//addLater exit, if-else, switch-case
                         tokenBuffer.add(token);
                     }
                     break;
@@ -1530,6 +1570,16 @@ public class Parser {
                         Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
                         actions.add(new ValDef(defType,expr));
                         context.declareVariable(defName,defType);
+                        tokenBuffer.clear();
+                        state=ActionParserState.ROOT;
+                    }else{
+                        tokenBuffer.add(token);
+                    }
+                    break;
+                case LOG:
+                    if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
+                        Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
+                        actions.add(new LogAction(logType,expr));
                         tokenBuffer.clear();
                         state=ActionParserState.ROOT;
                     }else{
