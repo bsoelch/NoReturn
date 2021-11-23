@@ -344,6 +344,8 @@ public class Operations {
     public static boolean asBool(Value value) {
         if(value.type== Type.Primitive.BOOL){
             return (Boolean)((Value.Primitive)value).value;
+        }else if(value.type instanceof Type.Optional){
+            return ((Value.Optional)value).content!=Value.NONE;
         }
         throw new UnsupportedOperationException("Unimplemented");
     }

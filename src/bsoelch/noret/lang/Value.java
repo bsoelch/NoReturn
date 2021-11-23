@@ -25,10 +25,9 @@ public abstract class Value{
             if(t==Type.NONE_TYPE||t== Type.Primitive.ANY||t instanceof Type.Generic){
                 return this;
             }else if(t instanceof Type.Optional){
-                //TODO OptionalValue
-                throw new UnsupportedOperationException("Unimplemented");
+                return new Optional((Type.Optional) t,this);
             }else{
-                throw new TypeError("Cannot cast none to \""+t+"\"");
+                return super.castTo(t);
             }
         }
         @Override
@@ -38,32 +37,7 @@ public abstract class Value{
         @Override
         public boolean isMutable() {return false;}
     };
-    public static final Value NOP= new Value(Type.NOP_TYPE) {
-        @Override
-        public boolean equals(Object o) {
-            return o==this;
-        }
-        @Override
-        public int hashCode() {
-            return System.identityHashCode(this);
-        }
-        @Override
-        public Value castTo(Type t) {
-            if(t==Type.NOP_TYPE||t== Type.Primitive.ANY||t instanceof Type.Generic){
-                return this;
-            }else if(t instanceof Type.Proc){
-                return new Procedure((Type.Proc) t);
-            }else{
-                throw new TypeError("Cannot cast NOP to\""+t+"\"");
-            }
-        }
-        @Override
-        public String stringRepresentation() {
-            return "NOP";
-        }
-        @Override
-        public boolean isMutable() {return false;}
-    };
+
     public static final Value TRUE = createPrimitive(Type.Primitive.BOOL,true) ;
     public static final Value FALSE = createPrimitive(Type.Primitive.BOOL,false) ;
 
@@ -103,7 +77,13 @@ public abstract class Value{
         return this;
     }
 
-    public abstract Value castTo(Type t);
+    public Value castTo(Type t) {
+        if(t instanceof Type.Optional&&Type.canCast(((Type.Optional) t).content,type,null)){
+            return new Optional((Type.Optional)t,castTo(((Type.Optional) t).content));
+        }
+        throw new TypeError("Cannot cast none to \""+t+"\"");
+    }
+
     /**A String representation of this value (used by print)*/
     public abstract String stringRepresentation();
     /**Converts this value to a String (used for casts to string)*/
@@ -180,11 +160,11 @@ public abstract class Value{
         }
 
         @Override
-        public Primitive castTo(Type t) {
+        public Value castTo(Type t) {
             if(t==type||t==Type.Primitive.ANY||t instanceof Type.Generic){
                 return this;
             }else{
-                throw new TypeError("Cannot cast "+type+" to "+t);
+                return super.castTo(t);
             }
         }
         @Override
@@ -212,7 +192,7 @@ public abstract class Value{
         }
 
         @Override
-        public NumericValue castTo(Type t) {
+        public Value castTo(Type t) {
             if(t==type||t==Type.Primitive.ANY||t instanceof Type.Generic){
                 return this;
             }
@@ -220,10 +200,10 @@ public abstract class Value{
                 if(((Type.Numeric) t).isFloat){
                     switch (((Type.Numeric) t).level){
                         case 2:
-                            return (NumericValue) createPrimitive((Type.Numeric)t,
+                            return createPrimitive((Type.Numeric)t,
                                     ((Number)value).floatValue());
                         case 3:
-                            return (NumericValue) createPrimitive((Type.Numeric)t,
+                            return createPrimitive((Type.Numeric)t,
                                     ((Number)value).doubleValue());
                         default:
                             throw new SyntaxError("exceeded maximum number capacity");
@@ -231,23 +211,23 @@ public abstract class Value{
                 }else{
                     switch (((Type.Numeric) t).level){
                         case 0:
-                            return (NumericValue) createPrimitive((Type.Numeric)t,
+                            return createPrimitive((Type.Numeric)t,
                                     ((Number)value).byteValue());
                         case 1:
-                            return (NumericValue) createPrimitive((Type.Numeric)t,
+                            return createPrimitive((Type.Numeric)t,
                                     ((Number)value).shortValue());
                         case 2:
-                            return (NumericValue) createPrimitive((Type.Numeric)t,
+                            return createPrimitive((Type.Numeric)t,
                                     ((Number)value).intValue());
                         case 3:
-                            return (NumericValue) createPrimitive((Type.Numeric)t,
+                            return createPrimitive((Type.Numeric)t,
                                     ((Number)value).longValue());
                         default:
                             throw new SyntaxError("exceeded maximum number capacity");
                     }
                 }
             }else {
-                throw new TypeError("Cannot cast "+type+" to "+t);
+                return super.castTo(t);
             }
         }
         @Override
@@ -293,7 +273,7 @@ public abstract class Value{
             if(t== type||t==Type.Primitive.ANY||t instanceof Type.Generic){
                 return this;
             }else{//TODO casting between stringTypes, casting of string to array
-                throw new TypeError("Cannot cast "+type+" to "+t);
+                return super.castTo(t);
             }
         }
         @Override
@@ -375,8 +355,68 @@ public abstract class Value{
         }
     }
 
-    //addLater? primitiveArrays
+    public static class Optional extends Value{
+        public final Value content;
 
+        public Optional(Type.Optional type,Value content) {
+            super(type);
+            if(content==NONE){
+                this.content=NONE;
+            }else if(Type.canAssign(type.content,content.type,null)){
+                this.content=content.castTo(type.content);
+            }else{
+                throw new IllegalArgumentException("Cannot assign "+content.type+" to "+type);
+            }
+            getters.put("value",()->{
+                if(content==NONE){
+                    throw new SyntaxError("cannot unpack empty optional");
+                }
+                return content;
+            });
+        }
+
+        @Override
+        public boolean isMutable() {
+            return true;
+        }
+
+        @Override
+        public Value castTo(Type t) {
+            if(t== type||t==Type.Primitive.ANY||t instanceof Type.Generic){
+                return this;
+            }else if(t==Type.Primitive.BOOL){
+                return createPrimitive(Type.Primitive.BOOL,content!=NONE);
+            }else if (t instanceof Type.Optional&&
+                    Type.canCast((((Type.Optional)t).content),(((Type.Optional)type).content),null)){
+                return new Optional((Type.Optional) t,content.castTo(((Type.Optional)t).content));
+            }else{
+                return super.castTo(t);
+            }
+        }
+
+        @Override
+        public String stringRepresentation() {
+            return "Optional:{"+(content==NONE?"":content.stringRepresentation())+"}";
+        }
+        @Override
+        public String stringValue() {
+            return content.stringValue();
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Optional optional = (Optional) o;
+            return Objects.equals(content, optional.content);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(content);
+        }
+    }
+
+    //addLater? primitiveArrays
     public static class Array extends Value{
         final Value[] elements;
 
@@ -407,7 +447,7 @@ public abstract class Value{
         }
 
         @Override
-        public Array castTo(Type t) {
+        public Value castTo(Type t) {
             if(t==Type.Primitive.ANY||t instanceof Type.Generic){
                 return this;
             }else if(t instanceof Type.Array){
@@ -425,7 +465,7 @@ public abstract class Value{
                 }
             }
             //addLater? Array -> String (utf8,utf16,utf32)
-            throw new TypeError("Cannot cast "+type+" to "+t);
+            return super.castTo(t);
         }
         @Override
         public boolean equals(Object o) {
@@ -540,7 +580,7 @@ public abstract class Value{
         }
 
         @Override
-        public Struct castTo(Type t) {
+        public Value castTo(Type t) {
             if(t==Type.Primitive.ANY||t instanceof Type.Generic){
                 return this;
             }else if(t instanceof Type.Struct){
@@ -554,8 +594,9 @@ public abstract class Value{
                 }else{
                     throw new TypeError("Cannot cast type:"+type+ " to "+t);
                 }
+            }else{
+                return super.castTo(t);
             }
-            throw new UnsupportedOperationException("Unimplemented");
         }
         @Override
         public boolean equals(Object o) {
@@ -618,7 +659,7 @@ public abstract class Value{
             if(t==Type.TYPE||t==Type.Primitive.ANY){
                 return this;
             }else{
-                throw new IllegalArgumentException("Cannot cast "+type+" to "+t);
+                return super.castTo(t);
             }
         }
 

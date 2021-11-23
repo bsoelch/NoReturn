@@ -664,9 +664,6 @@ public class Parser {
                 case "none":
                     tokens.addLast(new ExprToken(Value.NONE, false, currentPos()));
                     break;
-                case "NOP":
-                    tokens.addLast(new ExprToken(Value.NOP, false, currentPos()));
-                    break;
                 case "true":
                     tokens.addLast(new ExprToken(Value.TRUE, false, currentPos()));
                     break;
@@ -963,7 +960,9 @@ public class Parser {
                 case BRACKET:
                     if(bracketStack.isEmpty()||(bracketStack.size()==1
                             &&tokens.get(i).tokenType ==ParserTokenType.COMMA)){
-                        typeBuffer.add(typeFromTokens(context, tokenBuffer));
+                        if(bracketStack.size()>0||tokenBuffer.size()>0){
+                            typeBuffer.add(typeFromTokens(context, tokenBuffer));
+                        }
                         tokenBuffer.clear();
                         if(bracketStack.isEmpty()){
                             if(i+2<tokens.size()&&tokens.get(i+1).tokenType ==ParserTokenType.MAPS_TO
@@ -1623,12 +1622,16 @@ public class Parser {
             if(proc==null){
                 int id=context.getVarId(procName);
                 if(id>=0&&context.getVarType(id) instanceof Type.Proc){
-                   targets.add(new Procedure.DynamicProcChild(id));
+                   targets.add(new Procedure.DynamicProcChild(id, false));
                    outTypes=((Type.Proc)context.getVarType(id)).getArgTypes();
+                }else if(id>=0&&context.getVarType(id) instanceof Type.Optional&&
+                        ((Type.Optional) context.getVarType(id)).content instanceof Type.Proc){
+                    targets.add(new Procedure.DynamicProcChild(id, true));
+                    outTypes=((Type.Proc)((Type.Optional)context.getVarType(id)).content).getArgTypes();
                 }else if(procName.equals(name)){
                     targets.add(Procedure.RECURSIVE_CALL);
                     outTypes=argTypes.toArray(new Type[0]);
-                }else{
+                }else{//addLater allow names of procedures that are declared later in the file
                     throw new SyntaxError("procedure \"" + ((NamedToken) token).value + "\" is not defined");
                 }
             }else{
@@ -1646,7 +1649,9 @@ public class Parser {
             while((token=tokens.getNextToken())!=null){
                 updateBracketStack(token,bracketStack);
                 if(bracketStack.size()==0||(bracketStack.size()==1&&(token.tokenType==ParserTokenType.COMMA))){
-                    argBuffer.add(expressionFromTokens(name,procType,context,tokenBuffer));
+                    if(bracketStack.size()>0||tokenBuffer.size()>0) {
+                        argBuffer.add(expressionFromTokens(name, procType, context, tokenBuffer));
+                    }
                     tokenBuffer.clear();
                     if(bracketStack.size()==0){
                         break;

@@ -39,8 +39,6 @@ public class Type {
     public static final Type TYPE = new TypeType();
     /**Type of NONE Value, assignable to any reference*/
     public static final Type NONE_TYPE = new Type("\"none\"");
-    /**Type of NOP Value, assignable to any procedure*/
-    public static final Type NOP_TYPE  = new Type("\"NOP\"");
     /**Value type for empty Arrays, assignable to any other type*/
     public static final Type EMPTY_TYPE  = new Type("\"empty\"");
 
@@ -145,11 +143,22 @@ public class Type {
             return t1;
         }else if(canAssign(t2,t1,null)){
             return t2;
+        }else if(t1 == NONE_TYPE){//none+optional -> optional
+            if(t2 instanceof Optional){
+                return t2;
+            }else{
+                return new Optional(t2);
+            }
+        }else if(t2==NONE_TYPE){
+            if(t1 instanceof Optional){
+                return t1;
+            }else{
+                return new Optional(t1);
+            }
         }
         //addLater better calculation for common supertype
         return Primitive.ANY;
     }
-
 
     private static boolean canAssign(Type to, Type from, boolean allowCast, HashMap<String, GenericBound> generics){
         if(to==from)
@@ -177,8 +186,6 @@ public class Type {
                 return true;
             }else if(to instanceof Optional){
                 return canAssign(((Optional) to).content,((Optional) from).content,allowCast, generics);
-            }else if(allowCast){
-                return canAssign(to,((Optional) from).content,true,generics );
             }
         }else if(to instanceof Optional){
             //A -> B? iff A->B
@@ -208,18 +215,14 @@ public class Type {
             return true;
         }
         //(A0,...,AN)=>? -> (B0,...,BN)=>? iff A_i -> B_i for all i
-        if(to instanceof Proc){
-            if(from instanceof Proc){
-                if(((Proc) to).argTypes.length!=((Proc) from).argTypes.length)
+        if(to instanceof Proc&&from instanceof Proc){
+            if(((Proc) to).argTypes.length!=((Proc) from).argTypes.length)
+                return false;
+            for(int i=0;i<((Proc) from).argTypes.length;i++){
+                if(!canAssign(((Proc) from).argTypes[i],((Proc) to).argTypes[i],allowCast,generics))
                     return false;
-                for(int i=0;i<((Proc) from).argTypes.length;i++){
-                    if(!canAssign(((Proc) from).argTypes[i],((Proc) to).argTypes[i],allowCast,generics))
-                        return false;
-                }
-                return true;
-            }else{
-                return from == NOP_TYPE;
             }
+            return true;
         }
         if(to instanceof Generic){
             if(from instanceof Generic){
@@ -249,6 +252,8 @@ public class Type {
         return false;
     }
 
+    //FIXME ensure that no Value is assigned without castTo()
+    // castTo should only return this one this.type,any and gernerics
     public static boolean canAssign(Type to,Type from, HashMap<String, GenericBound> generics){
         return canAssign(to, from,false, generics);
     }

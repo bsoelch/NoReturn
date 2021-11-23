@@ -3,6 +3,11 @@ typedef int int32;
 const int[]:y={1234567890123456789,2,3.0};
 const any: array_test ={{1,2,3},{4,5},{6}};
 
+loop_10(int8):(count)=>{
+log count;
+(int8)=>??:optional_proc=count<10?loop_10:none;
+}=>[optional_proc(count+(int8:)1)]
+
 start(string8[]):(args)=>{
     any:x={1,-2,3U,constant};
     log x;
@@ -17,7 +22,8 @@ start(string8[]):(args)=>{
     _log ":";
     _log struct;
     log none.type;
-    log NOP.type;
     log {}.type;
-    log.err "error";
-}=>[]
+    int32?:optional=none;
+    log optional;
+    log optional?optional.value:"empty";
+}=>[loop_10((int8:)0)]

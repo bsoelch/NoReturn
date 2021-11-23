@@ -63,12 +63,19 @@ const Value const_y []={{.asU64=0x3},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
 // data for values used in constants
 Value constData []={{.asI32=1},{.asI32=2},{.asI32=3},{.asI32=4},{.asI32=5},{.asI32=6}};
 
+// loop_10(Type:int8)
+void* proc_loop__10(Value* args,size_t* argCount,Value** argData);
 // start(Type:string8[])
 void* proc_start(Value* args,size_t* argCount,Value** argData);
 // readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
 void* proc_readLine(Value* args,size_t* argCount,Value** argData);
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* run(void* initState);
+
+// loop_10(Type:int8)
+void* proc_loop__10(Value* args,size_t* argCount,Value** argData){
+return NULL;
+}
 
 // start(Type:string8[])
 void* proc_start(Value* args,size_t* argCount,Value** argData){

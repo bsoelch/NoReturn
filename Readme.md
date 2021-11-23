@@ -15,76 +15,6 @@ this = code; ## line comment
 that #_block comment_# = code;
 ```
 
-### Types
-#### Atomic Types
-There are 14 atomic types:
-- uint8, uint16, uint32, uint64: unsigned integers
-- int8, int16, int32, int64: signed integers
-- float32, float64: floating point numbers
-- string8, string16, string32: strings in utf8/16/32 encoding
-- bool: a boolean value (true or false)
-- type: a Type
-- any: Wildcard Type that can contain any value
-#### Containers
-- arrays: (syntax: `<Type>'[]'`) contain a sequence of values of 
-Type < Type > indexed with an uint64 
-elements of an array are accessible though the [] operator
-- optionals: (syntax: `<Type>'?'`) contains a value of Type < Type >
-or none
-- reference: (syntax `'@'<Type>`) contains a reference to a value 
-of Type < Type >, can be used to share values 
-between different procedures
-- Struct: (syntax: `'{'<Type>':'<Name>
-(','<Type>':'<Name )*'}'`) can be used to group
-data, fields of a Struct can be accessed with .
-
-Examples:
-```
-uint64[]
-int32?
-@float64
-{int64:numerator,uint64:denominator}
-
-{int32:arg1,@(int32?):arg2}[][]
-```
-
-!!! the handling of values in container types 
-is currently only partially implement !!!
-
-#### Procedures
-Procedures are treated as normal values, 
-types of procedures are defined though the syntax:
-`'('<Type>(','<Type>)')=>?'`
-#### Generics
-A generic type is declared though $ followed by an 
-identifier, generic allow declaration of dependent types 
-in procedure signatures. At runtime generics are treated as
-Type any.
-Example:
-
-```
-($a,(string8,$a)=>?)=>?
-```
-is the signature of a procedure that creates a string 
-and then passes it to another procedure, while 
-allowing the caller to pass an arbitrary addition argument
-to that procedure
-
-#### Typedef
-With the keyword "typedef", it is possible to define 
-name aliases for types. 
-A typedef statement is typedef, followed by a type-name 
-and ends with ;
-Example:
-```C
-typedef int32 int;
-typedef int64 long;
-typedef float32 float;
-typedef float64 double;
-```
-create type aliases for the primitive java types
-int, long, float and double
-
 ### Constants
 The "const" keyword can be used to define global constants.
 Constant definitions have the syntax:
@@ -116,9 +46,81 @@ that will be used in its body
 terminated by semicolons
 - `<Calls>`: zero or more calls to child procedures
 each call has the form `<ProcName>'('<Expr>(','<Expr>)*')'`
-with `<ProcName>` being the name of called procedure
+with `<ProcName>` being the name of the called procedure
 (local or global) variable and `<Expr>` being an 
 [expression](https://github.com/bsoelch/NoReturn#Expressions)
+The if the Value at `<ProcName>` is an optional procedure, 
+the Procedure will be executed if the optional is not none
+
+### Types
+#### Atomic Types
+There are 14 atomic types:
+- uint8, uint16, uint32, uint64: unsigned integers
+- int8, int16, int32, int64: signed integers
+- float32, float64: floating point numbers
+- string8, string16, string32: strings in utf8/16/32 encoding
+- bool: a boolean value (true or false)
+- type: a Type
+- any: Wildcard Type that can contain any value
+#### Containers
+- arrays: (syntax: `<Type>'[]'`) contain a sequence of values of
+  Type < Type > indexed with an uint64
+  elements of an array are accessible though the [] operator
+- optionals: (syntax: `<Type>'?'`) contains a value of Type < Type >
+  or none
+- reference: (syntax `'@'<Type>`) contains a reference to a value
+  of Type < Type >, can be used to share values
+  between different procedures
+- Struct: (syntax: `'{'<Type>':'<Name>
+  (','<Type>':'<Name )*'}'`) can be used to group
+  data, fields of a Struct can be accessed with .
+
+Examples:
+```
+uint64[]
+int32?
+@float64
+{int64:numerator,uint64:denominator}
+
+{int32:arg1,@(int32?):arg2}[][]
+```
+
+!!! the handling of values in container types
+is currently only partially implement !!!
+
+#### Procedures
+Procedures are treated as normal values,
+types of procedures are defined though the syntax:
+`'('<Type>(','<Type>)')=>?'`
+#### Generics
+A generic type is declared though $ followed by an
+identifier, generic allow declaration of dependent types
+in procedure signatures. At runtime generics are treated as
+Type any.
+Example:
+
+```
+($a,(string8,$a)=>?)=>?
+```
+is the signature of a procedure that creates a string
+and then passes it to another procedure, while
+allowing the caller to pass an arbitrary addition argument
+to that procedure
+
+#### Typedef
+With the keyword "typedef", it is possible to define
+name aliases for types.
+A typedef statement is typedef, followed by a type-name
+and ends with ;
+Example:
+```C
+typedef int32 int;
+typedef int64 long;
+typedef float32 float;
+typedef float64 double;
+```
+create type aliases for the primitive java types
+int, long, float and double
 
 ### Actions
 Currently, there are two types of actions:
@@ -148,6 +150,47 @@ x=3;
 array[0]={1,2,3};
 (({int32:val}[]:)y)[0].val=17;
 ```
+#### Printing
+Lines starting with `log` are printed to standard-out,
+an underscore before log signal continues the previous line
+if it had the same log-type.
+
+There are 4 log-types: 
+- `log` prints the value to the standard output stream
+- `log.debug` prints the value preceded with `Debug:` 
+to the standard output stream(it will be possible to deactivate debug logs can be
+at compile time)
+- `log.info` prints the value content preceded with `Info:`
+  to the standard output stream (it will be possible to deactivate info logs can be
+  at compile time)
+- `log.err` prints the value the input to the standard error stream
+
+Example:
+```
+log 1;
+log.debug "This is a debug info";
+log.info "This is an info log";
+log.err "This is an Error";
+_log "more test";
+_log " continue the previous text";
+log.debug "More debug";
+_log.debug " continue debug";
+_log "more log";
+```
+prints
+```
+1
+Debug: This is a debug info
+Info: This is an info log
+more test continue the prevois text
+Debug: More debug contiune debug
+more log
+```
+to stdout and 
+```
+This is an Error
+```
+to stderr
 
 ### Expressions
 #### Values
@@ -207,7 +250,6 @@ The following Names are reserved for native constants:
 - true: true boolean
 - false: false boolean
 - none: empty optional (can be cast to any optional type)
-- NOP: no-op procedure (can be cast to any procedure type)
 ##### Arrays
 Arrays are declared as a list of elements surround by
 {}

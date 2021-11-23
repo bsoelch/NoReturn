@@ -17,8 +17,10 @@ public class Procedure extends Value{
     }
     public static class DynamicProcChild implements ProcChild {
         final int varId;
-        public DynamicProcChild(int varId) {
+        final boolean isOptional;
+        public DynamicProcChild(int varId, boolean isOptional) {
             this.varId = varId;
+            this.isOptional=isOptional;
         }
     }
     public static final ProcChild RECURSIVE_CALL=new ProcChild() {};
@@ -45,11 +47,15 @@ public class Procedure extends Value{
         maxValues =0;
     }
     @Override
-    public Procedure castTo(Type t) {
+    public Value castTo(Type t) {
         if(Type.canAssign(t,type,new HashMap<>())){
-            return this;
+            if(t instanceof Type.Optional){
+                return new Optional((Type.Optional) t,castTo(((Type.Optional)t).content));
+            }else{
+                return this;
+            }
         }else{
-            throw new TypeError("cannot cast:"+type+" to "+t);
+            return super.castTo(t);
         }
     }
     @Override
@@ -67,6 +73,11 @@ public class Procedure extends Value{
     @Override
     public String stringRepresentation() {
         return "[procedure]";
+    }
+
+    @Override
+    public String toString() {
+        return "Procedure:("+type+")";
     }
 
     public Type[] argTypes(){
@@ -93,12 +104,16 @@ public class Procedure extends Value{
                 }else if(children[i] instanceof StaticProcChild){
                     proc=((StaticProcChild) children[i]).value;
                 }else{
-                    Value tmp=values.get(
-                            ((DynamicProcChild)children[i]).varId);
-                    if(tmp==Value.NOP){
-                        continue;//skip NOPs
+                    Value tmp=values.get(((DynamicProcChild)children[i]).varId);
+                    if(((DynamicProcChild)children[i]).isOptional){
+                        if(((Optional)tmp).content==Value.NONE){
+                            continue;//skip none
+                        }else{
+                            proc=(Procedure)((Optional)tmp).content;
+                        }
+                    }else{
+                        proc=(Procedure) tmp;
                     }
-                    proc=(Procedure) tmp;
                 }
                 Value[] args=new Value[childArgs[i].length];
                 for(int j=0;j<childArgs[i].length;j++){

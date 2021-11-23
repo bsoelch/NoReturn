@@ -13,7 +13,7 @@ public class IfExpr implements Expression {
     final Type expectedOutput;
 
     public static Expression create(Expression cond, Expression ifVal, Expression elseVal){
-        if(!Type.canCast(cond.expectedType(),Type.Primitive.BOOL,null)){
+        if(!Type.canCast(Type.Primitive.BOOL,cond.expectedType(),null)){
             throw new TypeError("cannot assign \""+cond.expectedType()+"\" to "+Type.Primitive.BOOL);
         }
         if(cond instanceof ValueExpression){//constant folding
