@@ -11,6 +11,45 @@ import java.util.function.Supplier;
 
 public abstract class Value{
 
+    public static class AnyValue extends Value{
+        public final Value content;
+        public AnyValue(Value content) {
+            super(Type.Primitive.ANY);
+            this.content=content;
+        }
+
+        @Override
+        public boolean isMutable() {
+            return true;
+        }
+
+        @Override
+        public String stringRepresentation() {
+            return content.stringRepresentation();
+        }
+
+        @Override
+        public Value castTo(Type t) {
+            if(Type.canCast(t,content.type,null)){
+                return content.castTo(t);
+            }else{
+                return super.castTo(t);
+            }
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            AnyValue anyValue = (AnyValue) o;
+            return Objects.equals(content, anyValue.content);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(content);
+        }
+    }
+
     public static final Value NONE= new Value(Type.NONE_TYPE) {
         @Override
         public boolean equals(Object o) {
@@ -20,16 +59,16 @@ public abstract class Value{
         public int hashCode() {
             return System.identityHashCode(this);
         }
+
         @Override
         public Value castTo(Type t) {
-            if(t==Type.NONE_TYPE||t== Type.Primitive.ANY||t instanceof Type.Generic){
-                return this;
-            }else if(t instanceof Type.Optional){
+            if(t instanceof Type.Optional){
                 return new Optional((Type.Optional) t,this);
             }else{
                 return super.castTo(t);
             }
         }
+
         @Override
         public String stringRepresentation() {
             return "none";
@@ -78,10 +117,17 @@ public abstract class Value{
     }
 
     public Value castTo(Type t) {
-        if(t instanceof Type.Optional&&Type.canCast(((Type.Optional) t).content,type,null)){
+        if(t==type){
+            return this;
+        }else if(t== Type.Primitive.ANY||t instanceof Type.Generic){
+            return type==Type.Primitive.ANY?this:new AnyValue(this);
+        }else if(t instanceof Type.Optional&&Type.canCast(((Type.Optional) t).content,type,null)){
             return new Optional((Type.Optional)t,castTo(((Type.Optional) t).content));
+        }else if(t instanceof Type.NoRetString){
+            //TODO cast to string..
+            throw  new UnsupportedOperationException("unimplemented");
         }
-        throw new TypeError("Cannot cast none to \""+t+"\"");
+        throw new TypeError("Cannot cast \""+type+"\" to \""+t+"\"");
     }
 
     /**A String representation of this value (used by print)*/
@@ -160,14 +206,6 @@ public abstract class Value{
         }
 
         @Override
-        public Value castTo(Type t) {
-            if(t==type||t==Type.Primitive.ANY||t instanceof Type.Generic){
-                return this;
-            }else{
-                return super.castTo(t);
-            }
-        }
-        @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (!(o instanceof Primitive)) return false;
@@ -193,9 +231,6 @@ public abstract class Value{
 
         @Override
         public Value castTo(Type t) {
-            if(t==type||t==Type.Primitive.ANY||t instanceof Type.Generic){
-                return this;
-            }
             if(t instanceof Type.Numeric){
                 if(((Type.Numeric) t).isFloat){
                     switch (((Type.Numeric) t).level){
@@ -270,11 +305,8 @@ public abstract class Value{
         }
         @Override
         public Value castTo(Type t) {
-            if(t== type||t==Type.Primitive.ANY||t instanceof Type.Generic){
-                return this;
-            }else{//TODO casting between stringTypes, casting of string to array
-                return super.castTo(t);
-            }
+            //TODO casting between stringTypes, casting of string to array
+            return super.castTo(t);
         }
         @Override
         public boolean equals(Object o) {
@@ -382,9 +414,7 @@ public abstract class Value{
 
         @Override
         public Value castTo(Type t) {
-            if(t== type||t==Type.Primitive.ANY||t instanceof Type.Generic){
-                return this;
-            }else if(t==Type.Primitive.BOOL){
+            if(t==Type.Primitive.BOOL){
                 return createPrimitive(Type.Primitive.BOOL,content!=NONE);
             }else if (t instanceof Type.Optional&&
                     Type.canCast((((Type.Optional)t).content),(((Type.Optional)type).content),null)){
@@ -448,9 +478,7 @@ public abstract class Value{
 
         @Override
         public Value castTo(Type t) {
-            if(t==Type.Primitive.ANY||t instanceof Type.Generic){
-                return this;
-            }else if(t instanceof Type.Array){
+            if(t instanceof Type.Array){
                 if(Type.canCast(((Type.Array) t).content,
                     ((Type.Array)type).content,null)){
                     //addLater in-place calculation if possible
@@ -581,9 +609,7 @@ public abstract class Value{
 
         @Override
         public Value castTo(Type t) {
-            if(t==Type.Primitive.ANY||t instanceof Type.Generic){
-                return this;
-            }else if(t instanceof Type.Struct){
+            if(t instanceof Type.Struct){
                 if(Type.canCast(t,type,null)){
                     //addLater in-place calculation if possible
                     HashMap<String,Value> newElements=new HashMap<>(elements.size());
@@ -652,15 +678,6 @@ public abstract class Value{
         @Override
         public boolean isMutable() {
             return false;
-        }
-
-        @Override
-        public Value castTo(Type t) {
-            if(t==Type.TYPE||t==Type.Primitive.ANY){
-                return this;
-            }else{
-                return super.castTo(t);
-            }
         }
 
         @Override

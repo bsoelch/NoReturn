@@ -9,6 +9,7 @@ log count;
 }=>[optional_proc(count+(int8:)1)]
 
 start(string8[]):(args)=>{
+    int:two=1+(int:)(args.length);
     any:x={1,-2,3U,constant};
     log x;
     log x.type;

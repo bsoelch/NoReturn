@@ -8,9 +8,9 @@ import java.util.ArrayList;
 import java.util.function.Supplier;
 
 public class BinOp implements Expression {
-    final Expression left;
-    final OperatorType op;
-    final Expression right;
+    public final Expression left;
+    public final OperatorType op;
+    public final Expression right;
 
     final Type expectedOutput;
 

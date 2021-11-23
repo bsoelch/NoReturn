@@ -1,6 +1,8 @@
 package bsoelch.noret;
 
 import bsoelch.noret.lang.*;
+import bsoelch.noret.lang.expression.BinOp;
+import bsoelch.noret.lang.expression.ValueExpression;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
@@ -155,24 +157,25 @@ public class CompileToC {
 
     /**Writes a value as a array of union declarations*/
     private void writeConstValueAsUnion(StringBuilder out, Value v, ConstData constData, boolean isFirst, boolean inPlaceValues,
-                                        boolean incOff, boolean wrapAny) throws IOException{
+                                        boolean incOff) throws IOException{
         if(!isFirst){
             out.append(',');
         }
-        if(wrapAny){
+        if(v.getType()== Type.Primitive.ANY){
             //TODO store Types
-            out.append("{.asType=0/*").append(v.getType()).append("*/}");
+            Type contentType = ((Value.AnyValue) v).content.getType();
+            out.append("{.asType=0/*").append(contentType).append("*/}");
             if(incOff){constData.off++;}
             if(incOff){constData.off++;}//increment before store
-            if(v.getType()==Type.Primitive.BOOL){
-                out.append(",{.asBool=").append(((Value.Primitive) v).getValue()).append("}");
+            if(contentType==Type.Primitive.BOOL){
+                out.append(",{.asBool=").append(((Value.Primitive)((Value.AnyValue) v).content).getValue()).append("}");
                 if(incOff){constData.off++;}
-            }else if(v.getType() instanceof Type.Numeric){
+            }else if(contentType instanceof Type.Numeric){
                 out.append(',');
-                writeNumber(out, v, constData, incOff);
+                writeNumber(out, ((Value.AnyValue) v).content, constData, incOff);
             }else{//addLater different handling for optional/reference
                 out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
-                writeConstValueAsUnion(constData.build, v, constData, constData.off==0, true, true, false);
+                writeConstValueAsUnion(constData.build, ((Value.AnyValue) v).content, constData, constData.off==0, true, true);
             }
         }else if(v.getType() == Type.Primitive.BOOL){
             out.append("{.asBool=").append(((Value.Primitive) v).getValue()).append("}");
@@ -264,13 +267,12 @@ public class CompileToC {
                 if(incOff){constData.off++;}
             }
         }else if(v instanceof Value.Array){
-            boolean isAny=(((Type.Array)v.getType()).content== Type.Primitive.ANY);
             if(inPlaceValues) {
                 out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|((Value.Array) v).elements().length)).append("}");
                 if(incOff){constData.off++;}
                 //ensure constant block-size (1 for bool,float[N],[u]int[N],reference  2 for string, array, any, optional)
                 for (Value elt : ((Value.Array) v).elements()) {
-                    writeConstValueAsUnion(out, elt, constData, false, false, incOff, isAny);
+                    writeConstValueAsUnion(out, elt, constData, false, false, incOff);
                 }
             }else{
                 out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_CONST|((Value.Array) v).elements().length)).append("}");
@@ -278,7 +280,7 @@ public class CompileToC {
                 if(incOff){constData.off++;}//increment before write
                 out.append(",{.asPtr=(constData+").append(constData.off).append(")}");
                 for (Value elt : ((Value.Array) v).elements()) {
-                    writeConstValueAsUnion(constData.build, elt, constData, constData.off==0, true, true, isAny);
+                    writeConstValueAsUnion(constData.build,elt, constData, constData.off==0, true, true);
                 }
             }
         }else {
@@ -292,7 +294,7 @@ public class CompileToC {
         out.write(asciify(name));
         out.write(" []={");
         StringBuilder tmp=new StringBuilder();
-        writeConstValueAsUnion(tmp, value, constData, true, true, false, false);
+        writeConstValueAsUnion(tmp, value, constData, true, true, false);
         writeLine(tmp.append("};").toString());
     }
 
@@ -328,41 +330,62 @@ public class CompileToC {
                 off+=argTypes[i].blockCount;
             }
             valCount++;
-            comment("","var"+i+":"+argNames[i]);//tmp
+            comment("  ","var"+i+":"+argNames[i]);//tmp
         }
         if(!proc.isNative()){
             for(Action a:proc.actions()){
                 if(a instanceof ValDef){
                     argNames[valCount]="var"+valCount;
                     if(((ValDef)a).getType().blockCount==1){
-                        comment("Value var"+valCount+";",
+                        comment("  Value var"+valCount+";",
                                 "("+((ValDef) a).getType()+")");
                     }else{
-                        comment("Value var"+valCount+" ["+((ValDef)a).getType().blockCount+"];",
+                        comment("  Value var"+valCount+" ["+((ValDef)a).getType().blockCount+"];",
                                 "("+((ValDef) a).getType()+")");
                     }
-                    comment("{","initValue: "+((ValDef)a).getInitValue());
-                    //TODO initialize value
-                    writeLine("}");
+                    writeExpression("  ",((ValDef) a).getInitValue(),"var"+valCount,0);
                     valCount++;
                 }else if(a instanceof Assignment){
-                    comment("{","assign: "+a);
-                    //TODO assign value
-                    writeLine("}");
+                    comment("  {","assign: "+a);
+                    //TODO prepare target
+                    //TODO preform assignment
+                    writeLine("  }");
                 }else{
-                    comment(a.toString());
+                    comment("  ",a.toString());
                 }
                 //TODO compile action
             }
         }else{
-            comment("Native");
+            comment("  Native");
             //TODO implementations of native procedures
         }
         //TODO return id of next procedure
-        writeLine("return NULL;");
+        writeLine("  return NULL;");
         writeLine("}");
         out.newLine();
     }
+    private void writeExpression(String prefix,Expression expr,String target,int tmpCount) throws IOException {
+        comment(prefix+"{",""+expr);
+        if(expr instanceof ValueExpression){
+            out.write(prefix+"  "+target+"=");
+            //TODO modify writeConstValueAsUnion to also allow writing non-constant values
+            out.newLine();
+        }else if(expr instanceof BinOp){
+            writeLine(prefix+"  tmp"+tmpCount+";");
+            writeExpression(prefix+"  ",((BinOp)expr).left,"tmp"+tmpCount,++tmpCount);
+            writeLine(prefix+"  tmp"+tmpCount+";");
+            writeExpression(prefix+"  ",((BinOp)expr).right,"tmp"+tmpCount,++tmpCount);
+            out.write(prefix+"  "+target+"=");
+            out.newLine();
+            //TODO perform operation
+        }else {
+            //TODO other expressions value
+            comment(prefix,expr.getClass().getSimpleName()+" is currently not supported");
+        }
+        writeLine(prefix+"}");
+    }
+
+
     private void writeRunSignature() throws IOException {
         comment(" main procedure handling function (written in a way that allows easy usage in pthreads)");
         out.write("void* run(void* initState)");
