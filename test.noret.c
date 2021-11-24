@@ -130,7 +130,70 @@ void logValue(LogType logType,bool append,Type type,Value* value){
       log=log_INFO;
       break;
   }
-  //  TODO log value
+  switch(type&TYPE_SIG_MASK){
+    case TYPE_SIG_EMPTY:
+      fputs("unexpected Value-Type in log: \"EMPTY\"",log_ERR);
+      exit(-1);
+      break;
+    case TYPE_SIG_BOOL:
+      fputs(value->asBool?"true":"false",log);
+      break;
+    case TYPE_SIG_I8:
+      fprintf(log,"%"PRIi8,value->asI8);
+      break;
+    case TYPE_SIG_U8:
+      fprintf(log,"%"PRIu8,value->asI8);
+      break;
+    case TYPE_SIG_I16:
+      fprintf(log,"%"PRIi16,value->asI16);
+      break;
+    case TYPE_SIG_U16:
+      fprintf(log,"%"PRIu16,value->asI16);
+      break;
+    case TYPE_SIG_I32:
+      fprintf(log,"%"PRIi32,value->asI32);
+      break;
+    case TYPE_SIG_U32:
+      fprintf(log,"%"PRIu32,value->asI32);
+      break;
+    case TYPE_SIG_I64:
+      fprintf(log,"%"PRIi64,value->asI64);
+      break;
+    case TYPE_SIG_U64:
+      fprintf(log,"%"PRIu64,value->asI64);
+      break;
+    case TYPE_SIG_F32:
+      fprintf(log,"%f",value->asF32);
+      break;
+    case TYPE_SIG_F64:
+      fprintf(log,"%f",value->asF64);
+      break;
+    case TYPE_SIG_NONE:
+      fputs("\"none\"",log);
+      break;
+    case TYPE_SIG_STRING8:
+    case TYPE_SIG_STRING16:
+    case TYPE_SIG_STRING32:
+      assert false&&"unimplemented";
+      break;
+    case TYPE_SIG_TYPE:
+      assert false&&"unimplemented";
+      break;
+    case TYPE_SIG_ANY:
+       prevType=logType;
+       logValue(logType,true,*value/*type*/,value+1/*content*/)
+       break;
+    case TYPE_SIG_OPTIONAL:
+    case TYPE_SIG_REFERENCE:
+    case TYPE_SIG_ARRAY:
+    case TYPE_SIG_PROC:
+    case TYPE_SIG_STRUCT:
+      assert false&&"unimplemented";
+      break;
+    default:
+      assert false&&"unreachable";
+      break;
+  }
   prevType=logType;
 }
 
@@ -210,7 +273,7 @@ void* proc_start(Value* args,size_t* argCount,Value** argData){
   }
   Value var4;// (Type:int32)
   {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    // GetField is currently not supported
+    // TODO GetField is currently not supported
     var4=(Value){.asI32=((Value){.asI32=1}).asI32+/*TODO typeCast:Type:int32*/.asI32};
   }
   Value var5 [2];// (Type:int32[])
@@ -226,7 +289,7 @@ void* proc_start(Value* args,size_t* argCount,Value** argData){
     logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),var5);
   }
   {// Log: Log[DEFAULT]{GetField{VarExpression{5}.type}}
-    // GetField is currently not supported
+    // TODO GetField is currently not supported
     logValue(DEFAULT,false,TYPE_SIG_TYPE,);
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
@@ -234,19 +297,19 @@ void* proc_start(Value* args,size_t* argCount,Value** argData){
   }
   Value var6;// (Type:uint64)
   {// Initialize: GetField{VarExpression{5}.length}
-    // GetField is currently not supported
+    // TODO GetField is currently not supported
     var6=;
   }
   {// Log: Log[DEFAULT]{VarExpression{6}}
     logValue(DEFAULT,false,TYPE_SIG_U64,var6);
   }
   {// Assign: Assignment:{GetIndex{VarExpression{5}[ValueExpression{0}]}=ValueExpression{123456789}}
-    // GetIndex is currently not supported
+    // TODO GetIndex is currently not supported
      = ((Value){.asI32=123456789});
   }
   Value var7 [2];// (Type:any)
   {// Initialize: TypeCast{Type:any:GetIndex{VarExpression{5}[ValueExpression{1}]}}
-    // GetIndex is currently not supported
+    // TODO GetIndex is currently not supported
     var7=/*TODO typeCast:Type:any*/;
   }
   {// Log: Log[DEFAULT]{VarExpression{7}}
@@ -269,7 +332,7 @@ void* proc_start(Value* args,size_t* argCount,Value** argData){
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var8);
   }
   {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{8}}?TypeCast{Type:any:GetField{VarExpression{8}.value}}:TypeCast{Type:any:ValueExpression{"empty"}}}}
-    // GetField is currently not supported
+    // TODO GetField is currently not supported
     Value tmp0 [2];
     {
       if(/*TODO typeCast:Type:bool*/var8){

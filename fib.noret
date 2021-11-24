@@ -1,13 +1,14 @@
 
-typedef ret1 (int64,int64,int64)=>?;
+typedef ret1 (int64,int64,int64)=>??;
 
 printFib(int64,int64,int64):(aN_1,aN,k)=>{
-    ret1:next=k>0?printFib:NOP;
+    ret1:next=k>0?printFib:none;
     k=k-1;
     int64:aN1=aN_1+aN;
-}=>[print(aN_1),next(aN,aN1,k)]
+    log aN_1;
+}=>[next(aN,aN1,k)]
 
-main(string[]):(args)=>{
+start():()=>{
   int64:a0=0;
   int64:a1=1;
   int64:k=75;

@@ -157,6 +157,7 @@ public class CompileToC {
         include("string.h");
         include("stdio.h");
         include("inttypes.h");
+        include("assert.h");
         out.newLine();
         writeLine("#define MAX_ARG_SIZE 0x"+Integer.toHexString(MAX_ARG_SIZE));
         out.newLine();
@@ -168,7 +169,7 @@ public class CompileToC {
         //Type enum
         comment("Type Definitions");
         writeLine("typedef uint64_t Type;");
-        writeLine("#define TYPE_SIG_MASK       0xff");
+        writeLine("#define TYPE_SIG_MASK       0xff");//TODO mark var-size Types
         writeLine("#define TYPE_SIG_EMPTY      0x0");
         writeLine("#define TYPE_SIG_BOOL       0x1");
         writeLine("#define TYPE_SIG_I8         0x2");
@@ -197,8 +198,8 @@ public class CompileToC {
         writeLine("#define TYPE_COUNT_SHIFT    40");
         writeLine("#define TYPE_COUNT_MASK     0xffff");
         comment("Type data for all contained Types");
-        writeLine("Type[] typeData;");
-        typeDataDeclarations=new StringBuilder("Type[] typeData={");
+        writeLine("Type typeData [];");
+        typeDataDeclarations=new StringBuilder("Type typeData []={");
         //Type* typeCache
         out.newLine();
         //Value struct
@@ -276,10 +277,61 @@ public class CompileToC {
         for(LogType.Type t:LogType.Type.values()){
             writeLine("    case "+t+":");
             writeLine("      log=log_"+t+";");
+            //TODO type specific prefixes
             writeLine("      break;");
         }
         writeLine("  }");
-        comment("  "," TODO log value");//TODO log
+        writeLine("  switch(type&TYPE_SIG_MASK){");
+        writeLine("    case TYPE_SIG_EMPTY:");
+        writeLine("      fputs(\"unexpected Value-Type in log: \\\"EMPTY\\\"\",log_"+LogType.Type.ERR+");");
+        writeLine("      exit(-1);");//addLater error code-handling
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_BOOL:");
+        writeLine("      fputs(value->asBool?\"true\":\"false\",log);");
+        writeLine("      break;");
+        for(int n=8;n<100;n*=2){
+            writeLine("    case TYPE_SIG_I"+n+":");
+            writeLine("      fprintf(log,\"%\"PRIi"+n+",value->asI"+n+");");
+            writeLine("      break;");
+            writeLine("    case TYPE_SIG_U"+n+":");
+            writeLine("      fprintf(log,\"%\"PRIu"+n+",value->asI"+n+");");
+            writeLine("      break;");
+        }
+        writeLine("    case TYPE_SIG_F32:");
+        writeLine("      fprintf(log,\"%f\",value->asF32);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_F64:");
+        writeLine("      fprintf(log,\"%f\",value->asF64);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_NONE:");
+        writeLine("      fputs(\"\\\"none\\\"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_STRING8:");
+        writeLine("    case TYPE_SIG_STRING16:");
+        writeLine("    case TYPE_SIG_STRING32:");
+        //TODO print strings
+        writeLine("      assert(false&&\"unimplemented\");");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_TYPE:");
+        //TODO print Type-Name
+        writeLine("      assert(false&&\"unimplemented\");");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_ANY:");
+        writeLine("       prevType=logType;");
+        writeLine("       logValue(logType,true,value->asType,value+1/*content*/);");//TODO dereference content if pointer
+        writeLine("       break;");
+        writeLine("    case TYPE_SIG_OPTIONAL:");
+        writeLine("    case TYPE_SIG_REFERENCE:");
+        writeLine("    case TYPE_SIG_ARRAY:");
+        writeLine("    case TYPE_SIG_PROC:");
+        writeLine("    case TYPE_SIG_STRUCT:");
+        //TODO Print Containers
+        writeLine("      assert(false&&\"unimplemented\");");
+        writeLine("      break;");
+        writeLine("    default:");
+        writeLine("      assert(false&&\"unreachable\");");
+        writeLine("      break;");
+        writeLine("  }");
         writeLine("  prevType=logType;");
         writeLine("}");
         out.newLine();
@@ -512,6 +564,8 @@ public class CompileToC {
         writeLine(tmp.append("};").toString());
     }
 
+    //FIXME = does not work for multi-block values
+    // replace with function of form assingN(target,source,count)
     private void writeProcSignature(String name, Procedure proc) throws IOException{
         String tmp=Arrays.toString(proc.argTypes());
         comment(name+"("+tmp.substring(1,tmp.length()-1)+")");
@@ -574,7 +628,7 @@ public class CompileToC {
                     comment("  {","Assign: "+a);
                     line.setLength(0);
                     line.append("    ");
-                    //prepare target TODO ensure that all expressions are inlined and keep mutability
+                    //prepare target TODO ensure that all expressions in target are inlined and keep mutability
                     writeExpression("    ",initLines,line,((Assignment) a).target,0, name, argNames);
                     line.append(" = ");
                     //preform assignment
@@ -590,7 +644,7 @@ public class CompileToC {
                     line.setLength(0);
                     line.append("    logValue(").append(((LogAction) a).type.type).append(",")
                             .append(((LogAction) a).type.append).append(',')
-                            .append(typeSignature(((LogAction) a).expr.expectedType())).append(",");
+                            .append(typeSignature(((LogAction) a).expr.expectedType())).append(",&");
                     writeExpression("    ",initLines,line,((LogAction) a).expr,0, name, argNames);
                     for(String l:initLines){
                         writeLine(l);
@@ -599,9 +653,8 @@ public class CompileToC {
                     writeLine(line.append(");").toString());
                     writeLine("  }");
                 }else{
-                    comment("  ",a.toString());
+                    throw new UnsupportedOperationException("Unsupported ActionType: "+a.getClass().getSimpleName());
                 }
-                //TODO compile action
             }
         }else{
             comment("  ","Native");
@@ -625,7 +678,7 @@ public class CompileToC {
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
-            case MINUS:
+            case MINUS://TODO? cast arguments
                 if(inType instanceof Type.Numeric){
                     if(((Type.Numeric)outType).isFloat){
                         parts[0]=CAST_BLOCK+"{.asF"+8 * (1 << ((Type.Numeric)outType).level)+"=-";
@@ -635,12 +688,22 @@ public class CompileToC {
                     if(((Type.Numeric)inType).isFloat){
                         parts[1]=".asF"+8 * (1 << ((Type.Numeric)inType).level)+"}";
                     }else{
-                        parts[1]=".as"+(((Type.Numeric)inType).signed?"I":"U")+8 * (1 << ((Type.Numeric)outType).level)+"}";
+                        parts[1]=".as"+(((Type.Numeric)inType).signed?"I":"U")+8 * (1 << ((Type.Numeric)inType).level)+"}";
                     }
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
+            case FLIP:
+                if(inType instanceof Type.Numeric&&!((Type.Numeric)outType).isFloat){
+                    parts[0]=CAST_BLOCK+"{.as"+(((Type.Numeric)outType).signed?"I":"U")+8 * (1 << ((Type.Numeric)outType).level)+"=~";
+                    parts[1]=".as"+(((Type.Numeric)inType).signed?"I":"U")+8 * (1 << ((Type.Numeric)inType).level)+"}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case NOT:
+                throw new UnsupportedOperationException("unimplemented");
             case DIV:
             case INT_DIV:
             case MULT:
@@ -649,10 +712,8 @@ public class CompileToC {
             case AND:
             case OR:
             case XOR:
-            case NOT:
             case FAST_AND:
             case FAST_OR:
-            case FLIP:
             case GT:
             case GE:
             case NE:
@@ -662,7 +723,7 @@ public class CompileToC {
             case IF:
             case LSHIFT:
             case RSHIFT:
-                throw new UnsupportedOperationException("unimplemented");
+                throw new SyntaxError(op.op+" is not a Unary Operation");
         }
         throw new RuntimeException("Unreachable");
     }
@@ -806,7 +867,7 @@ public class CompileToC {
             initLines.add(indent+"{");
             StringBuilder tmp=new StringBuilder(indent+"  if(");
             tmpCount=writeExpression(indent+"    ",initLines,tmp,((IfExpr)expr).cond,tmpCount, procName, varNames);
-            initLines.add(tmp.append("){").toString());
+            initLines.add(tmp.append(".asBool){").toString());
             tmp=new StringBuilder(indent+"    tmp"+prevTmp+"=");
             tmpCount=writeExpression(indent,initLines,tmp,((IfExpr)expr).ifVal,tmpCount, procName, varNames);
             initLines.add(tmp.append(";").toString());
@@ -820,7 +881,7 @@ public class CompileToC {
             return prevTmp;
         }else {
             //TODO other expressions value
-            comment(indent,expr.getClass().getSimpleName()+" is currently not supported");
+            comment(indent,"TODO "+expr.getClass().getSimpleName()+" is currently not supported");
             return tmpCount;
         }
     }

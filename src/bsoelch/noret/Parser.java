@@ -1446,6 +1446,9 @@ public class Parser {
                     throw new SyntaxError(" syntax for ArgNames: Expected <Name>(','<Name>)* ");
                }else{
                     argNames.add(((NamedToken)token).value);
+                    if(argNames.size()>argTypes.size()){
+                        throw new SyntaxError(" too much arguments for procedure expected: "+argTypes.size());
+                    }
                     Type type = argTypes.get(argNames.size() - 1);
                     context.declareVariable(((NamedToken)token).value,type);
                     wasWord=true;
