@@ -8,14 +8,14 @@ import java.util.ArrayList;
 
 public class LeftUnaryOp implements Expression {
     final OperatorType op;
-    final Expression expr;
+    public final Expression expr;
 
     final Type expectedOutput;
 
     public static Expression create(OperatorType op, Expression expr){
         Type expectedOut=typeCheck(op,expr.expectedType());
         if(expr instanceof ValueExpression){//constant folding
-            return new ValueExpression(evaluate(op,((ValueExpression) expr).value), false);
+            return ValueExpression.create(evaluate(op,((ValueExpression) expr).value), null);
         }
         return new LeftUnaryOp(op, expr,expectedOut);
     }

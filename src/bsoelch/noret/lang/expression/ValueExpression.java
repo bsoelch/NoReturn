@@ -6,16 +6,21 @@ import java.util.ArrayList;
 
 public class ValueExpression implements Expression {
     final Value value;
-    final boolean isConst;
+    public final String constId;
 
-    public ValueExpression(Value value, boolean isConst) {
+    public static Expression create(Value value,String constId){
+        //TODO own class for constants with dataValues
+        return new ValueExpression(value,constId);
+    }
+
+    public ValueExpression(Value value, String constId) {
         this.value = value;
-        this.isConst = isConst;
+        this.constId = constId;
     }
 
     @Override
     public boolean isBound() {
-        return isConst&&value.isMutable();
+        return (constId!=null)&&value.isMutable();
     }
 
     @Override
@@ -30,5 +35,9 @@ public class ValueExpression implements Expression {
     @Override
     public String toString() {
         return "ValueExpression{"+value+"}";
+    }
+
+    public Value getValue() {
+        return value;
     }
 }

@@ -87,8 +87,8 @@ public class Parser {
     }
     static class ExprToken extends ParserToken{
         final Expression expr;
-        ExprToken(Value value, boolean isConst, TokenPosition pos) {
-            this(false,new ValueExpression(value, isConst), pos);
+        ExprToken(Value value, String constId, TokenPosition pos) {
+            this(false,ValueExpression.create(value, constId), pos);
         }
         ExprToken(Expression expr, TokenPosition pos) {
             this(false,expr, pos);
@@ -489,7 +489,7 @@ public class Parser {
                                     int codePoint = buffer.codePointAt(0);
                                     tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
                                             codePoint<0x80?Type.Numeric.UINT8:codePoint<0x10000?Type.Numeric.UINT16:
-                                                    Type.Numeric.UINT32, codePoint), false, currentPos()));
+                                                    Type.Numeric.UINT32, codePoint), null, currentPos()));
                                 }else{
                                     throw new SyntaxError("A char-literal must contain exactly one character");
                                 }
@@ -516,8 +516,7 @@ public class Parser {
                                     default:
                                         throw new RuntimeException("unreachable");
                                 }
-                                tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
-                                        sType, value), false, currentPos()));
+                                tokenBuffer.addLast(new ExprToken(Value.createPrimitive( sType, value), null, currentPos()));
                             }
                             buffer.setLength(0);
                             state=WordState.ROOT;
@@ -600,24 +599,21 @@ public class Parser {
                             //dez-Float
                             double d = Double.parseDouble(str);
                             tokens.addLast(new ExprToken(
-                                    Value.createPrimitive(Type.Numeric.FLOAT64, d),
-                                    false, currentPos()));
+                                    Value.createPrimitive(Type.Numeric.FLOAT64, d),null, currentPos()));
                         }else if(floatBin.matcher(str).matches()){
                             //bin-Float
                             double d=parseBinFloat(
                                     str.replaceAll(BIN_PREFIX,"")//remove header
                             );
                             tokens.addLast(new ExprToken(
-                                    Value.createPrimitive(Type.Numeric.FLOAT64, d),
-                                    false, currentPos()));
+                                    Value.createPrimitive(Type.Numeric.FLOAT64, d), null, currentPos()));
                         }else if(floatHex.matcher(str).matches()){
                             //hex-Float
                             double d=parseHexFloat(
                                     str.replaceAll(HEX_PREFIX,"")//remove header
                             );
                             tokens.addLast(new ExprToken(
-                                    Value.createPrimitive(Type.Numeric.FLOAT64, d),
-                                    false, currentPos()));
+                                    Value.createPrimitive(Type.Numeric.FLOAT64, d),null, currentPos()));
                         }else {
                             {//split string at . , + -
                                 int i = str.indexOf('.');
@@ -662,13 +658,13 @@ public class Parser {
         private void addWord(ArrayDeque<ParserToken> tokens, String str) {
             switch(str){
                 case "none":
-                    tokens.addLast(new ExprToken(Value.NONE, false, currentPos()));
+                    tokens.addLast(new ExprToken(Value.NONE, null, currentPos()));
                     break;
                 case "true":
-                    tokens.addLast(new ExprToken(Value.TRUE, false, currentPos()));
+                    tokens.addLast(new ExprToken(Value.TRUE, null, currentPos()));
                     break;
                 case "false":
-                    tokens.addLast(new ExprToken(Value.FALSE, false, currentPos()));
+                    tokens.addLast(new ExprToken(Value.FALSE, null, currentPos()));
                     break;
                 default:
                     tokens.addLast(new NamedToken(ParserTokenType.WORD, str, currentPos()));
@@ -680,13 +676,11 @@ public class Parser {
                 str=str.substring(0,str.length()-1);
                 try {
                     int i = Integer.parseUnsignedInt(str, base);
-                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT32, i),
-                            false, currentPos()));
+                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT32, i), null, currentPos()));
                 } catch (NumberFormatException nfeI) {
                     try {
                         long l = Long.parseUnsignedLong(str, base);
-                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT64, l),
-                                false, currentPos()));
+                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.UINT64, l),null, currentPos()));
                     } catch (NumberFormatException nfeL) {
                         throw new SyntaxError("Number out of Range:"+str);
                     }
@@ -694,13 +688,11 @@ public class Parser {
             }else{
                 try {
                     int i = Integer.parseInt(str, base);
-                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT32, i),
-                            false, currentPos()));
+                    tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT32, i),null, currentPos()));
                 } catch (NumberFormatException nfeI) {
                     try {
                         long l = Long.parseLong(str, base);
-                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT64, l),
-                                false, currentPos()));
+                        tokens.addLast(new ExprToken(Value.createPrimitive(Type.Numeric.INT64, l), null, currentPos()));
                     } catch (NumberFormatException nfeL) {
                         throw new SyntaxError("Number out of Range:"+str);
                     }
@@ -1201,7 +1193,7 @@ public class Parser {
                                 expressionFromTokens(procName,procType,context,tokenBuffer);
                         tokenBuffer.clear();
                         tokens.set(i,new ExprToken(//placeholder
-                                Value.createPrimitive(Type.Numeric.INT32,0), false, tokens.get(i).pos));
+                                Value.createPrimitive(Type.Numeric.INT32,0), null, tokens.get(i).pos));
                         //TODO create Range access operator from right and exprBuffer
                         state=ExpressionParserState.ROOT;
                     }else if(bracketStack.size()==1&&tokens.get(i).tokenType==ParserTokenType.SEPARATOR){
@@ -1230,7 +1222,7 @@ public class Parser {
                             v=context.getProc(name);
                         }//no else
                         if(v!=null){
-                            tokens.set(i,new ExprToken(v, true, tokens.get(i).pos));
+                            tokens.set(i,new ExprToken(v, name, tokens.get(i).pos));
                         }else{
                             throw new SyntaxError("Unknown Identifier: \""+name+"\" at "+tokens.get(i).pos);
                         }
@@ -1263,7 +1255,7 @@ public class Parser {
                 tokens.get(i).tokenType==ParserTokenType.EXPRESSION){//typecast
                 tokens.set(i-1,new ExprToken(TypeCast.create(
                         ((TypeToken)tokens.get(i-1)).type,
-                        ((ExprToken)tokens.get(i)).expr),tokens.get(i-1).pos));
+                        ((ExprToken)tokens.get(i)).expr, true),tokens.get(i-1).pos));
                 tokens.remove(i--);
             }
         }

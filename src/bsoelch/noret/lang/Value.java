@@ -418,7 +418,7 @@ public abstract class Value{
                 return createPrimitive(Type.Primitive.BOOL,content!=NONE);
             }else if (t instanceof Type.Optional&&
                     Type.canCast((((Type.Optional)t).content),(((Type.Optional)type).content),null)){
-                return new Optional((Type.Optional) t,content.castTo(((Type.Optional)t).content));
+                return new Optional((Type.Optional) t,content==NONE?NONE:content.castTo(((Type.Optional)t).content));
             }else{
                 return super.castTo(t);
             }

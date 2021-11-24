@@ -19,7 +19,7 @@ public class GetField implements Expression{
         }
         if(value instanceof ValueExpression){//constant folding
             //set field is not supported for constants
-            return new ValueExpression(((ValueExpression) value).value.getField(fieldName), false);
+            return ValueExpression.create(((ValueExpression) value).value.getField(fieldName), null);
         }
         return new GetField(value,fieldName,type);
     }

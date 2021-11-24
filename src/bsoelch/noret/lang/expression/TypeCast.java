@@ -6,17 +6,25 @@ import bsoelch.noret.lang.*;
 import java.util.ArrayList;
 
 public class TypeCast implements Expression{
-    final Expression value;
-    final Type type;
+    public final Expression value;
+    public final Type type;
 
-    public static Expression create(Type castType, Expression value){
+    /**
+     * @param evalConstants if false evaluation of constants is disabled (for ensuring the value in valDefs
+     *                      and assignments is cast to the correct type)
+     * */
+    public static Expression create(Type castType, Expression value, boolean evalConstants){
         if(!Type.canCast(castType,value.expectedType(),null)){
             throw new TypeError("Values of type "+value.expectedType()+ " cannot be cast to "+castType);
         }
-        if(value instanceof ValueExpression){
-            return new ValueExpression(((ValueExpression) value).value.castTo(castType), false);
+        if(value instanceof ValueExpression&&evalConstants){
+            return ValueExpression.create(((ValueExpression) value).value.castTo(castType), null);
         }
-        return new TypeCast(castType,value);
+        if(value.expectedType().equals(castType)){
+            return value;
+        }else{
+            return new TypeCast(castType,value);
+        }
     }
     private TypeCast(Type castType, Expression value) {
         this.value = value;

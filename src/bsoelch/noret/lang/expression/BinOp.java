@@ -17,7 +17,7 @@ public class BinOp implements Expression {
     public static Expression create(Expression left, OperatorType op, Expression right){
         Type type=typeCheck(left, op, right);
         if(left instanceof ValueExpression&&right instanceof ValueExpression){//fold constants
-            return new ValueExpression(evaluate(((ValueExpression) left).value,op,()->((ValueExpression) right).value), false);
+            return ValueExpression.create(evaluate(((ValueExpression) left).value,op,()->((ValueExpression) right).value), null);
         }
         return new BinOp(left, op, right,type);
     }

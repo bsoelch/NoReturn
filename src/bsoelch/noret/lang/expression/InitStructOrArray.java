@@ -11,13 +11,18 @@ public class InitStructOrArray implements Expression {
         Value[] values=new Value[expressions.size()];
         for(int i=0;i< expressions.size();i++){
             if(expressions.get(i) instanceof ValueExpression){
-                values[i]=((ValueExpression) expressions.get(i)).value;
+                if(((ValueExpression) expressions.get(i)).constId!=null&&
+                    expressions.get(i).expectedType().varSize){
+                    isConstant=false;
+                }else{
+                    values[i]=((ValueExpression) expressions.get(i)).value;
+                }
             }else{
                 isConstant=false;
             }
         }
         if(isConstant){
-            return new ValueExpression(new Value.Array(values), false);
+            return ValueExpression.create(new Value.Array(values), null);
         }
         throw new UnsupportedOperationException("unimplemented");
     }
@@ -26,13 +31,18 @@ public class InitStructOrArray implements Expression {
         Value[] values=new Value[expressions.size()];
         for(int i=0;i< expressions.size();i++){
             if(expressions.get(i) instanceof ValueExpression){
-                values[i]=((ValueExpression) expressions.get(i)).value;
+                if(((ValueExpression) expressions.get(i)).constId!=null&&
+                        expressions.get(i).expectedType().varSize){
+                    isConstant=false;
+                }else{
+                    values[i]=((ValueExpression) expressions.get(i)).value;
+                }
             }else{
                 isConstant=false;
             }
         }
         if(isConstant){
-            return new ValueExpression(new Value.Struct(values,labels.toArray(new String[0])), false);
+            return ValueExpression.create(new Value.Struct(values,labels.toArray(new String[0])), null);
         }
         throw new UnsupportedOperationException("unimplemented");
     }

@@ -1,21 +1,18 @@
 package bsoelch.noret.lang.expression;
 
-import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
 
 public class IfExpr implements Expression {
-    final Expression cond;
-    final Expression ifVal;
-    final Expression elseVal;
+    public final Expression cond;
+    public final Expression ifVal;
+    public final Expression elseVal;
 
     final Type expectedOutput;
 
     public static Expression create(Expression cond, Expression ifVal, Expression elseVal){
-        if(!Type.canCast(Type.Primitive.BOOL,cond.expectedType(),null)){
-            throw new TypeError("cannot assign \""+cond.expectedType()+"\" to "+Type.Primitive.BOOL);
-        }
+        cond=TypeCast.create(Type.Primitive.BOOL,cond,true);
         if(cond instanceof ValueExpression){//constant folding
             return ((Boolean)((Value.Primitive)((ValueExpression) cond).value.castTo(Type.Primitive.BOOL)).getValue())?
                     ifVal:elseVal;
@@ -25,10 +22,10 @@ public class IfExpr implements Expression {
 
     private IfExpr(Expression cond, Expression ifVal, Expression elseVal) {
         this.cond = cond;
-        this.ifVal = ifVal;
-        this.elseVal = elseVal;
         expectedOutput=Type.commonSupertype(ifVal.expectedType(),
                 elseVal.expectedType());
+        this.ifVal = TypeCast.create(expectedOutput,ifVal,true);
+        this.elseVal = TypeCast.create(expectedOutput,elseVal,false);
     }
 
     @Override

@@ -1,6 +1,7 @@
 package bsoelch.noret.lang;
 
 import bsoelch.noret.TypeError;
+import bsoelch.noret.lang.expression.TypeCast;
 
 import java.util.ArrayList;
 
@@ -11,7 +12,8 @@ public class ValDef implements Action {
     public ValDef(Type type, Expression initValue) {
         if(Type.canAssign(type,initValue.expectedType(),null)){
             this.type = type;
-            this.initValue = initValue;
+            //ensure values are cast to the correct type
+            this.initValue =TypeCast.create(type,initValue, false);
         }else{
             throw new TypeError("Cannot assign "+initValue.expectedType()+" to "+type);
         }

@@ -1,14 +1,17 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.lang.expression.TypeCast;
+
 import java.util.ArrayList;
 
 public class Assignment implements Action {
-    final Expression target;
-    final Expression expr;
+    public final Expression target;
+    public final Expression expr;
 
     public Assignment(Expression target, Expression expr) {
         this.target = target;
-        this.expr = expr;
+        //ensure values are cast to the correct type
+        this.expr = TypeCast.create(target.expectedType(),expr, false);
     }
 
     @Override

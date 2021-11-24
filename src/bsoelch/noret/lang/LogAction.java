@@ -5,8 +5,8 @@ import java.util.ArrayList;
 public class LogAction implements Action {
     private static LogType prevType =null;
 
-    final LogType type;
-    final Expression expr;
+    public final LogType type;
+    public final Expression expr;
     public LogAction(LogType logType, Expression expr) {
         assert  logType!=null;
         this.type=logType;

@@ -2,10 +2,7 @@ package bsoelch.noret.lang;
 
 import bsoelch.noret.TypeError;
 
-import java.util.ArrayDeque;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.Map;
+import java.util.*;
 
 public class Type {
     /*queue for storing all Types that are declared before TYPE is defined,
@@ -21,7 +18,7 @@ public class Type {
 
     private static final class TypeType extends Type{
         private TypeType() {
-            super("type", 1);
+            super("type", 1, false);
             fields.put("isArray",     Primitive.BOOL);
             fields.put("isStruct",    Primitive.BOOL);
             fields.put("isOptional",  Primitive.BOOL);
@@ -38,19 +35,19 @@ public class Type {
     /**Type of NONE Value, assignable to any reference*/
     public static final Type TYPE = new TypeType();
     /**Type of NONE Value, assignable to any reference*/
-    public static final Type NONE_TYPE = new Type("\"none\"", 1);
+    public static final Type NONE_TYPE = new Type("\"none\"", 1, false);
     /**Value type for empty Arrays, assignable to any other type*/
-    public static final Type EMPTY_TYPE  = new Type("\"empty\"", 1);
+    public static final Type EMPTY_TYPE  = new Type("\"empty\"", 1, false);
 
     public static class Primitive extends Type{
         private static final HashMap<String,Type> primitives=new HashMap<>();
         //addLater move any to own class (any is no primitive)
-        public static final Primitive ANY       = new Primitive("any",2);
+        public static final Primitive ANY       = new Primitive("any",2,true);
 
-        public static final Primitive BOOL      = new Primitive("bool",1);
+        public static final Primitive BOOL      = new Primitive("bool",1,false);
 
-        private Primitive(String name,int blockCount){
-            super(name, blockCount);
+        private Primitive(String name,int blockCount,boolean varSize){
+            super(name, blockCount, varSize);
             if(primitives.put(name,this)!=null){
                 throw new RuntimeException("The primitive \""+name+"\" already exists");
             }
@@ -73,7 +70,7 @@ public class Type {
         static void ensureInitialized(){}
 
         private NoRetString(int charSize) {
-            super("string"+charSize,2);
+            super("string"+charSize,2,true);
             this.charSize=charSize;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
         }
@@ -102,7 +99,7 @@ public class Type {
         static void ensureInitialized(){}
 
         private Numeric(String name,int level,boolean signed,boolean isFloat) {
-            super(name,1);
+            super(name,1,false);
             this.level=level;
             this.signed=signed;
             this.isFloat=isFloat;
@@ -118,10 +115,13 @@ public class Type {
     final HashMap<String,Type> fields=new HashMap<>();
     /**number of blocks needed (in compiled code) to store a value of this type*/
     public final int blockCount;
+    /**true if values of this type have a variable encoding size*/
+    public final boolean varSize;
 
-    private Type(String name, int blockCount){
+    private Type(String name, int blockCount, boolean varSize){
         this.name=name;
         this.blockCount = blockCount;
+        this.varSize = varSize;
         synchronized (waitingForTypeType) {
             if(TYPE!=null){
                 fields.put(FIELD_NAME_TYPE,TYPE);
@@ -269,7 +269,7 @@ public class Type {
     public static class Optional extends Type{
         public final Type content;
         public Optional(Type content) {
-            super(content.wrappedName()+"?", 2);
+            super(content.wrappedName()+"?", 2, content.varSize);
             this.content=content;
             fields.put(FIELD_NAME_HAS_VALUE,Primitive.BOOL);
             fields.put(FIELD_NAME_VALUE,content);
@@ -277,32 +277,67 @@ public class Type {
         String wrappedName(){
             return "("+name+")";
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Optional optional = (Optional) o;
+            return Objects.equals(content, optional.content);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(content);
+        }
     }
     public static class Reference extends Type{
         public final Type content;
         public Reference(Type content) {
-            super("@"+content.wrappedName(), 1);
+            super("@"+content.wrappedName(), 1, false);
             this.content=content;
             fields.put(FIELD_NAME_VALUE,content);
         }
         String wrappedName(){
             return "("+name+")";
         }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Reference reference = (Reference) o;
+            return Objects.equals(content, reference.content);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(content);
+        }
     }
 
     public static class Array extends Type{
         public final Type content;
         public Array(Type content) {
-            super(content.wrappedName()+"[]", 2);
+            super(content.wrappedName()+"[]", 2, true);
             this.content=content;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
         }
         String wrappedName(){
             return "("+name+")";
         }
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Array array = (Array) o;
+            return Objects.equals(content, array.content);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(content);
+        }
     }
 
-    public static class Struct extends Type{
+    public static class Struct extends Type{//TODO save order of fields
         private final HashSet<String> fieldNames=new HashSet<>();
         private static String structName(Type[] types,String[] names) {
             if(types.length!=names.length){
@@ -325,8 +360,16 @@ public class Type {
             }
             return count;
         }
+        private static boolean isVarSize(Type[] types) {
+            for(Type t:types){
+                if(t.varSize)
+                    return true;
+            }
+            return false;
+        }
+
         public Struct(Type[] types, String[] names) {
-            super(structName(types,names), calculateBlockCount(types));
+            super(structName(types,names), calculateBlockCount(types), isVarSize(types));
             for(int i=0;i<names.length;i++){
                 if(fields.put(names[i],types[i])!=null){
                     throw new TypeError("duplicate or reserved field-name \""+names[i]+"\" in struct "+this);
@@ -335,6 +378,17 @@ public class Type {
             }
         }
 
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Struct struct = (Struct) o;
+            return Objects.equals(fields, struct.fields);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(fields);
+        }
     }
     public static class Proc extends Type{
         private final Type[] argTypes;
@@ -349,7 +403,7 @@ public class Type {
             return ret.append(")=>?").toString();
         }
         public Proc(Type[] argTypes) {
-            super(procName(argTypes), 1);
+            super(procName(argTypes), 1, false);
             this.argTypes=argTypes;
             fields.put(FIELDS_PROC_TYPES,new Array(Primitive.TYPE));
         }
@@ -362,19 +416,27 @@ public class Type {
             return argTypes;
         }
 
-    }
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Proc proc = (Proc) o;
+            return Arrays.equals(argTypes, proc.argTypes);
+        }
 
-    //addLater: OneOf(Type[])
-    // syntax: <Type>|<Type>
+        @Override
+        public int hashCode() {
+            return Arrays.hashCode(argTypes);
+        }
+    }
 
     /**Generics types in NoRet are designed to allow value read operations
      * without losing the function context, the intended use is syntax like the following
      * read($a,($a,string)=>?)
      * */
-    public static class Generic extends Type{
-        //addLater? restricted generics
+    public static class Generic extends Type{//TODO replace generics with any after type checking / merge generic and Any
         public Generic(String name) {
-            super("$"+name, 2);
+            super("$"+name, 2, true);
         }
         @Override
         public String toString() {

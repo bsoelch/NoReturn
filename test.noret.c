@@ -57,11 +57,13 @@ Value constData [];
 // const Type:int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
 // const Type:any : array_test = {{1,2,3},{4,5},{6}}
-const Value const_array__test []={{.asType=0/*Type:(int32[])[]*/},{.asPtr=(constData+0)}};
+const Value const_array__test []={{.asType=0/*Type:(int32[])[]*/},{.asPtr=(constData+0)},};
+// const Type:string8[] : str_test = {"str1","str2"}
+const Value const_str__test []={{.asU64=0x2},{.asU64=0x8000000000000004},{.asPtr=(constData+13)},{.asU64=0x8000000000000004},{.asPtr=(constData+14)}};
 // const Type:int32[] : y = {2112454933,2,3}
 const Value const_y []={{.asU64=0x3},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
 // data for values used in constants
-Value constData []={{.asU64=0x3},{.asU64=0x8000000000000003},{.asPtr=(constData+3)},{.asI32=1},{.asI32=2},{.asI32=3},{.asU64=0x8000000000000002},{.asPtr=(constData+8)},{.asI32=4},{.asI32=5},{.asU64=0x8000000000000001},{.asPtr=(constData+12)},{.asI32=6}};
+Value constData []={{.asU64=0x3},{.asU64=0x8000000000000003},{.asPtr=(constData+3)},{.asI32=1},{.asI32=2},{.asI32=3},{.asU64=0x8000000000000002},{.asPtr=(constData+8)},{.asI32=4},{.asI32=5},{.asU64=0x8000000000000001},{.asPtr=(constData+12)},{.asI32=6},{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}},{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}}};
 
 // loop(Type:int8)
 void* proc_loop(Value* args,size_t* argCount,Value** argData);
@@ -75,10 +77,44 @@ void* run(void* initState);
 // loop(Type:int8)
 void* proc_loop(Value* args,size_t* argCount,Value** argData){
   // var0:(*(args+0))
-  // Log[DEFAULT]{VarExpression{0}}
+  {// Log: Log[DEFAULT]{VarExpression{0}}
+    Value logTo;
+    {// VarExpression{0}
+      logTo=(*(args+0));
+    }
+  }
   Value var1 [2];// (Type:((Type:int8)=>?)?)
-  {// IfExpr{BinOp{VarExpression{0} LT ValueExpression{5}}?this:ValueExpression{none}}
-  // IfExpr is currently not supported
+  {// IfExpr{BinOp{VarExpression{0} LT ValueExpression{5}}?TypeCast{Type:((Type:int8)=>?)?:this}:TypeCast{Type:((Type:int8)=>?)?:ValueExpression{none}}}
+    Value tmp0;
+    {// BinOp{VarExpression{0} LT ValueExpression{5}}
+      Value tmp1;
+      {// VarExpression{0}
+        tmp1=(*(args+0));
+      }
+      Value tmp2;
+      {// ValueExpression{5}
+        tmp2={.asI32=5};
+        // data={};
+      }
+    }
+    if(tmp0.asBool){
+      Value tmp0 [2];
+      {// TypeCast{Type:((Type:int8)=>?)?:this}
+        Value tmp1;
+        {// this
+          tmp1=&proc_loop;
+        }
+      }
+    }else{
+      Value tmp1 [2];
+      {// TypeCast{Type:((Type:int8)=>?)?:ValueExpression{none}}
+        Value tmp2;
+        {// ValueExpression{none}
+          tmp2=(Value){.asBool=false/*none*/};
+          // data={};
+        }
+      }
+    }
   }
   return NULL;
 }
@@ -86,51 +122,125 @@ void* proc_loop(Value* args,size_t* argCount,Value** argData){
 // start(Type:string8[])
 void* proc_start(Value* args,size_t* argCount,Value** argData){
   // var0:(*((Value[2])(args+0)))
-  Value var1;// (Type:int32)
+  Value var1 [2];// (Type:string8)
+  {// ValueExpression{"UTF8-String"}
+    var1={(Value){.asU64=0xc00000000000000b},(Value){.asPtr=(tmp+0)}};
+    // data={(Value){.raw8={0x55,0x54,0x46,0x38,0x2d,0x53,0x74,0x72}},(Value){.raw8={0x69,0x6e,0x67,0x0,0x0,0x0,0x0,0x0}}};
+  }
+  Value var2 [2];// (Type:string16)
+  {// ValueExpression{"UTF16-String"}
+    var2={(Value){.asU64=0xc00000000000000c},(Value){.asPtr=(tmp+0)}};
+    // data={(Value){.raw16={0x55,0x54,0x46,0x31}},(Value){.raw16={0x36,0x2d,0x53,0x74}},(Value){.raw16={0x72,0x69,0x6e,0x67}}};
+  }
+  Value var3 [2];// (Type:string32)
+  {// ValueExpression{"UTF32-String"}
+    var3={(Value){.asU64=0xc00000000000000c},(Value){.asPtr=(tmp+0)}};
+    // data={(Value){.raw32={0x55,0x54}},(Value){.raw32={0x46,0x33}},(Value){.raw32={0x32,0x2d}},(Value){.raw32={0x53,0x74}},(Value){.raw32={0x72,0x69}},(Value){.raw32={0x6e,0x67}}};
+  }
+  Value var4;// (Type:int32)
   {// BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    tmp0;
+    Value tmp0;
     {// ValueExpression{1}
-      tmp0=
+      tmp0={.asI32=1};
+      // data={};
     }
-    tmp1;
+    Value tmp1;
     {// TypeCast{Type:int32:GetField{VarExpression{0}.length}}
-    // TypeCast is currently not supported
+      Value tmp2;
+      {// GetField{VarExpression{0}.length}
+        // GetField is currently not supported
+      }
     }
-    var1=
   }
-  Value var2 [2];// (Type:any)
-  {// ValueExpression{{1,-2,3,42}}
-    var2=
-  }
-  // Log[DEFAULT]{VarExpression{2}}
-  // Log[DEFAULT]{GetField{VarExpression{2}.type}}
-  Value var3;// (Type:uint64)
-  {// GetField{TypeCast{Type:int32[]:VarExpression{2}}.length}
-  // GetField is currently not supported
-  }
-  // Log[DEFAULT]{VarExpression{3}}
-  {// assign: Assignment:{GetIndex{TypeCast{Type:int32[]:VarExpression{2}}[ValueExpression{0}]}=ValueExpression{123456789}}
-  }
-  Value var4 [2];// (Type:any)
-  {// GetIndex{TypeCast{Type:int32[]:VarExpression{2}}[ValueExpression{1}]}
-  // GetIndex is currently not supported
-  }
-  // Log[DEFAULT]{VarExpression{4}}
   Value var5 [2];// (Type:any)
-  {// ValueExpression{{.this=1,.struct={1,2,3,4},.a="hello world",.is=636}}
-    var5=
+  {// TypeCast{Type:any:ValueExpression{{1,-2,3,42}}}
+    Value tmp0 [2];
+    {// ValueExpression{{1,-2,3,42}}
+      tmp0={(Value){.asU64=0xc000000000000004},(Value){.asPtr=(tmp+0)}};
+      // data={{.asI32=1},{.asI32=-2},{.asU32=3},{.asI8=42}};
+    }
   }
-  // Log[DEFAULT]{GetField{VarExpression{5}.type}}
-  // Log[_DEFAULT]{ValueExpression{":"}}
-  // Log[_DEFAULT]{VarExpression{5}}
-  // Log[DEFAULT]{ValueExpression{Type:"none"}}
-  // Log[DEFAULT]{ValueExpression{Type:"empty"[]}}
-  Value var6 [2];// (Type:int32?)
-  {// ValueExpression{none}
-    var6=
+  {// Log: Log[DEFAULT]{VarExpression{5}}
+    Value logTo [2];
+    {// VarExpression{5}
+      logTo=var5;
+    }
   }
-  // Log[DEFAULT]{VarExpression{6}}
-  // Log[DEFAULT]{IfExpr{VarExpression{6}?GetField{VarExpression{6}.value}:ValueExpression{"empty"}}}
+  Value var6;// (Type:uint64)
+  {// GetField{TypeCast{Type:int32[]:VarExpression{5}}.length}
+    // GetField is currently not supported
+  }
+  {// Log: Log[DEFAULT]{VarExpression{6}}
+    Value logTo;
+    {// VarExpression{6}
+      logTo=var6;
+    }
+  }
+  {// assign: Assignment:{GetIndex{TypeCast{Type:int32[]:VarExpression{5}}[ValueExpression{0}]}=ValueExpression{123456789}}
+  }
+  Value var7 [2];// (Type:any)
+  {// TypeCast{Type:any:GetIndex{TypeCast{Type:int32[]:VarExpression{5}}[ValueExpression{1}]}}
+    Value tmp0;
+    {// GetIndex{TypeCast{Type:int32[]:VarExpression{5}}[ValueExpression{1}]}
+      // GetIndex is currently not supported
+    }
+  }
+  {// Log: Log[DEFAULT]{VarExpression{7}}
+    Value logTo [2];
+    {// VarExpression{7}
+      logTo=var7;
+    }
+  }
+  {// Log: Log[DEFAULT]{ValueExpression{{2112454933,2,3}}}
+    Value logTo [2];
+    {// ValueExpression{{2112454933,2,3}}
+      logTo=const_y;
+    }
+  }
+  Value var8 [2];// (Type:int32?)
+  {// TypeCast{Type:int32?:ValueExpression{none}}
+    Value tmp0;
+    {// ValueExpression{none}
+      tmp0=(Value){.asBool=false/*none*/};
+      // data={};
+    }
+  }
+  {// Log: Log[DEFAULT]{VarExpression{8}}
+    Value logTo [2];
+    {// VarExpression{8}
+      logTo=var8;
+    }
+  }
+  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{8}}?TypeCast{Type:any:GetField{VarExpression{8}.value}}:TypeCast{Type:any:ValueExpression{"empty"}}}}
+    Value logTo [2];
+    {// IfExpr{TypeCast{Type:bool:VarExpression{8}}?TypeCast{Type:any:GetField{VarExpression{8}.value}}:TypeCast{Type:any:ValueExpression{"empty"}}}
+      Value tmp0;
+      {// TypeCast{Type:bool:VarExpression{8}}
+        Value tmp1 [2];
+        {// VarExpression{8}
+          tmp1=var8;
+        }
+      }
+      if(tmp0.asBool){
+        Value tmp0 [2];
+        {// TypeCast{Type:any:GetField{VarExpression{8}.value}}
+          Value tmp1;
+          {// GetField{VarExpression{8}.value}
+            // GetField is currently not supported
+          }
+        }
+      }else{
+        Value tmp1 [2];
+        {// TypeCast{Type:any:ValueExpression{"empty"}}
+          Value tmp2 [2];
+          {// ValueExpression{"empty"}
+            tmp2={(Value){.asU64=0xc000000000000005},(Value){.asPtr=(tmp+0)}};
+            // data={(Value){.raw8={0x65,0x6d,0x70,0x74,0x79,0x0,0x0,0x0}}};
+          }
+        }
+      }
+    }
+  }
   return NULL;
 }
 
@@ -138,7 +248,7 @@ void* proc_start(Value* args,size_t* argCount,Value** argData){
 void* proc_readLine(Value* args,size_t* argCount,Value** argData){
   // var0:(*((Value[2])(args+0)))
   // var1:(*(args+2))
-//   Native
+  // Native
   return NULL;
 }
 

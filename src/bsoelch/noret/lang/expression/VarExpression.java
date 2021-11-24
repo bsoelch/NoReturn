@@ -7,9 +7,9 @@ import java.util.ArrayList;
 
 public class VarExpression implements Expression {
     final Type varType;
-    final int id;//TODO distinguish between arguments and other variables
-    public VarExpression(Type varType,int id) {
-        this.id=id;
+    public final int varId;
+    public VarExpression(Type varType,int varId) {
+        this.varId = varId;
         this.varType=varType;
     }
 
@@ -23,7 +23,7 @@ public class VarExpression implements Expression {
         return new ValueView() {
             @Override
             public Value get() {
-                return context.get(id);
+                return context.get(varId);
             }
 
             @Override
@@ -32,7 +32,7 @@ public class VarExpression implements Expression {
                     throw new TypeError("cannot assign " +newValue.getType()+" to "+varType);
                 }
                 newValue=newValue.castTo(varType);
-                context.set(id,newValue);
+                context.set(varId,newValue);
             }
 
         };
@@ -49,6 +49,6 @@ public class VarExpression implements Expression {
 
     @Override
     public String toString() {
-        return "VarExpression{" +id + '}';
+        return "VarExpression{" + varId + '}';
     }
 }
