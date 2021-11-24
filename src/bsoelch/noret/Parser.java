@@ -1070,6 +1070,8 @@ public class Parser {
         context.defType(name,typeFromTokens(context,typeTokens));
     }
 
+    //addLater convert all type-names to type-values
+    // allows expressions like a.type==int32?
     private Expression expressionFromTokens(String procName,Type.Proc procType,ParserContext context, ArrayList<ParserToken> tokens){
         //1. read brackets
         // (<Expr>)
@@ -1541,8 +1543,29 @@ public class Parser {
                         state=ActionParserState.LOG;
                     }else if(tokenBuffer.isEmpty()&&bracketStack.isEmpty()&&token.tokenType==ParserTokenType.WORD&&
                             ((NamedToken)token).value.equals("assert")){
+                        //addLater assert
                         throw new UnsupportedEncodingException("assert-statements are currently not supported");
                     }else{//addLater exit, if-else, switch-case
+                        /*
+                            if <expr> :
+                            <if-body>
+                            elif <expr> :
+                            <elif-body>
+                            else:
+                            <else-body>
+                            end
+
+                            match <expr>:
+                            <const>:
+                            <case-body>
+                            break
+                            <const>:
+                            <case-body>
+                            break
+                            default:
+                            <case-body>
+                            end
+                        * */
                         tokenBuffer.add(token);
                     }
                     break;
