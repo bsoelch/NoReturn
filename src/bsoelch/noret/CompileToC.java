@@ -8,6 +8,7 @@ import java.io.IOException;
 import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.HashMap;
 import java.util.Map;
 
 public class CompileToC {
@@ -43,6 +44,10 @@ public class CompileToC {
     }
 
     private final BufferedWriter out;
+    private long typeDataOff=0;
+    private final HashMap<Type,Long> typeOffsets=new HashMap<>();
+    private StringBuilder typeDataDeclarations;
+
     public CompileToC(BufferedWriter out) {
         this.out = out;
     }
@@ -68,6 +73,80 @@ public class CompileToC {
         writeLine("#include <"+include+">");
     }
 
+    private Long typeOffset(Type t) {
+        Long off = typeOffsets.get(t);
+        if (off == null) {
+            typeOffsets.put(t, typeDataOff);
+            if(typeDataOff>0){
+                typeDataDeclarations.append(',');
+            }
+            typeDataOff++;
+            typeDataDeclarations.append(typeSignature(t));
+        }
+        return off;
+    }
+
+    private String typeSignature(Type t){
+        if(t==Type.EMPTY_TYPE){
+            return "TYPE_SIG_EMPTY";
+        }else if(t==Type.Primitive.BOOL){
+            return "TYPE_SIG_BOOL";
+        }else if(t==Type.Numeric.INT8){
+            return "TYPE_SIG_I8";
+        }else if(t==Type.Numeric.UINT8){
+            return "TYPE_SIG_U8";
+        }else if(t==Type.Numeric.INT16){
+            return "TYPE_SIG_I16";
+        }else if(t==Type.Numeric.UINT16){
+            return "TYPE_SIG_U16";
+        }else if(t==Type.Numeric.INT32){
+            return "TYPE_SIG_I32";
+        }else if(t==Type.Numeric.UINT32){
+            return "TYPE_SIG_U32";
+        }else if(t==Type.Numeric.INT64){
+            return "TYPE_SIG_I64";
+        }else if(t==Type.Numeric.UINT64){
+            return "TYPE_SIG_U64";
+        }else if(t==Type.Numeric.FLOAT32){
+            return "TYPE_SIG_F32";
+        }else if(t==Type.Numeric.FLOAT64){
+            return "TYPE_SIG_F64";
+        }else if(t==Type.NoRetString.STRING8){
+            return "TYPE_SIG_STRING8";
+        }else if(t==Type.NoRetString.STRING16){
+            return "TYPE_SIG_STRING16";
+        }else if(t==Type.NoRetString.STRING32){
+            return "TYPE_SIG_STRING32";
+        }else if(t==Type.TYPE){
+            return "TYPE_SIG_TYPE";
+        }else if(t==Type.Primitive.NONE_TYPE){
+            return "TYPE_SIG_NONE";
+        }else if(t==Type.Primitive.ANY){
+            return "TYPE_SIG_ANY";
+        }else if(t instanceof Type.Optional){
+            typeSignature(((Type.Optional) t).content);//ensure contentSignature exists
+            Long off = typeOffset(((Type.Optional) t).content);
+            return "TYPE_SIG_OPTIONAL|("+off+"<<TYPE_CONTENT_SHIFT)";
+        }else if(t instanceof Type.Reference){
+            typeSignature(((Type.Reference) t).content);//ensure contentSignature exists
+            Long off = typeOffset(((Type.Reference) t).content);
+            return "TYPE_SIG_REFERENCE|("+off+"<<TYPE_CONTENT_SHIFT)";
+        }else if(t instanceof Type.Array){
+            typeSignature(((Type.Array) t).content);//ensure contentSignature exists
+            Long off = typeOffset(((Type.Array) t).content);
+            return "TYPE_SIG_ARRAY|("+off+"<<TYPE_CONTENT_SHIFT)";
+        }else if(t instanceof Type.Proc){
+            //TODO block-type signatures
+            throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
+           // return "TYPE_SIG_PROC|("+off+"<<TYPE_CONTENT_SHIFT)";
+        }else if(t instanceof Type.Struct){
+            throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
+          //  return "TYPE_SIG_STRUCT|("+off+"<<TYPE_CONTENT_SHIFT)";
+        }
+        throw new UnsupportedOperationException("unsupported Type :"+t);
+    }
+
+
     private void writeFileHeader() throws IOException {
         comment("Auto generated code from NoRet compiler");
         //addLater print information about compiled code
@@ -87,25 +166,43 @@ public class CompileToC {
         writeLine("#define LEN_MASK_TMP      0x"+Long.toHexString(LEN_MASK_TMP));
         out.newLine();
         //Type enum
-        writeLine("typedef enum{");//TODO better handling of types
-        writeLine("  EMPTY=0,");
-        writeLine("  BOOL,");
-        writeLine("  I8,");
-        writeLine("  U8,");
-        writeLine("  I16,");
-        writeLine("  U16,");
-        writeLine("  I32,");
-        writeLine("  U32,");
-        writeLine("  I64,");
-        writeLine("  U64,");
-        writeLine("  F32,");
-        writeLine("  F64,");
-        writeLine("  STRING,");
-        writeLine("  TYPE,");
-        writeLine("  ANY=0xf,");
-        writeLine("}Type;");
+        comment("Type Definitions");
+        writeLine("typedef uint64_t Type;");
+        writeLine("#define TYPE_SIG_MASK       0xff");
+        writeLine("#define TYPE_SIG_EMPTY      0x0");
+        writeLine("#define TYPE_SIG_BOOL       0x1");
+        writeLine("#define TYPE_SIG_I8         0x2");
+        writeLine("#define TYPE_SIG_U8         0x3");
+        writeLine("#define TYPE_SIG_I16        0x4");
+        writeLine("#define TYPE_SIG_U16        0x5");
+        writeLine("#define TYPE_SIG_I32        0x6");
+        writeLine("#define TYPE_SIG_U32        0x7");
+        writeLine("#define TYPE_SIG_I64        0x8");
+        writeLine("#define TYPE_SIG_U64        0x9");
+        writeLine("#define TYPE_SIG_F32        0xa");
+        writeLine("#define TYPE_SIG_F64        0xb");
+        writeLine("#define TYPE_SIG_STRING8    0xc");
+        writeLine("#define TYPE_SIG_STRING16   0xd");
+        writeLine("#define TYPE_SIG_STRING32   0xe");
+        writeLine("#define TYPE_SIG_TYPE       0xf");
+        writeLine("#define TYPE_SIG_NONE       0x10");
+        writeLine("#define TYPE_SIG_ANY        0x11");
+        writeLine("#define TYPE_SIG_OPTIONAL   0x12");//content[u32-off][u16-size]
+        writeLine("#define TYPE_SIG_REFERENCE  0x13");//content[u32-off][u16-size]
+        writeLine("#define TYPE_SIG_ARRAY      0x14");//content[u32-off][u16-size]
+        writeLine("#define TYPE_SIG_PROC       0x15");//signature[u32-off][u16-size]
+        writeLine("#define TYPE_SIG_STRUCT     0x16");//contents[u32-off][u16-size]
+        writeLine("#define TYPE_CONTENT_SHIFT  8");
+        writeLine("#define TYPE_CONTENT_MASK   0xffffffff");
+        writeLine("#define TYPE_COUNT_SHIFT    40");
+        writeLine("#define TYPE_COUNT_MASK     0xffff");
+        comment("Type data for all contained Types");
+        writeLine("Type[] typeData;");
+        typeDataDeclarations=new StringBuilder("Type[] typeData={");
+        //Type* typeCache
         out.newLine();
         //Value struct
+        comment("Value-Block Definition");
         writeLine("typedef union " + VALUE_BLOCK_NAME + "Impl "+VALUE_BLOCK_NAME+";");
         writeLine("union " + VALUE_BLOCK_NAME + "Impl{");
         writeLine("  bool     asBool;");
@@ -117,7 +214,7 @@ public class CompileToC {
         writeLine("  uint32_t asU32;");
         writeLine("  int64_t  asI64;");
         writeLine("  uint64_t asU64;");
-        writeLine("  float    asF32;");//TODO ensure correct size
+        writeLine("  float    asF32;");//addLater ensure correct size
         writeLine("  double   asF64;");
         writeLine("  Type     asType;");
         writeLine("  " + VALUE_BLOCK_NAME + "*   asPtr;");//reference
@@ -132,11 +229,59 @@ public class CompileToC {
         writeLine("};");
         out.newLine();
         //Procedure Type
+        comment("Procedure Type");
         out.write("typedef "+procedureOut+"(*Procedure)(");
         for(int i=0;i<procedureArgs.length;i++){
             out.write((i>0?",":"")+procedureArgs[i]);
         }
         writeLine(");");
+        comment("definitions and functions for log");
+        writeLine("typedef enum{");
+        comment("  null,","blank type for initial value");
+        for(LogType.Type t:LogType.Type.values()){
+            writeLine("  "+t+",");
+        }
+        writeLine("}LogType;");
+        comment("previously used logType");
+        writeLine("static LogType prevType = null;");
+        comment("definition of NEW_LINE character");//addLater choose system line separator
+        writeLine("#define NEW_LINE \"\\n\"");
+        for(LogType.Type t:LogType.Type.values()){
+            writeLine("FILE* log_"+t+";");
+        }
+        comment("sets log-streams to their initial value");
+        writeLine("void initLogStreams(){");
+        for(LogType.Type t:LogType.Type.values()){
+            writeLine("log_"+t+" = "+(t== LogType.Type.ERR?"stderr":"stdout")+";");
+        }
+        writeLine("}");
+        comment("log-Method");
+        writeLine("void logValue(LogType logType,bool append,Type type,"+VALUE_BLOCK_NAME+"* value){");
+        writeLine("  if(prevType!=null){");
+        writeLine("    if((logType!=prevType)||(!append)){");
+        writeLine("      switch(prevType){");
+        writeLine("        case null:");
+        writeLine("          break;");
+        for(LogType.Type t:LogType.Type.values()){
+            writeLine("        case "+t+":");
+            writeLine("          fputs(NEW_LINE,log_"+t+");");
+            writeLine("          break;");
+        }
+        writeLine("      }");
+        writeLine("    }");
+        writeLine("  }");
+        writeLine("  FILE* log;");
+        writeLine("  switch(logType){");
+        writeLine("    case null:");
+        for(LogType.Type t:LogType.Type.values()){
+            writeLine("    case "+t+":");
+            writeLine("      log=log_"+t+";");
+            writeLine("      break;");
+        }
+        writeLine("  }");
+        comment("  "," TODO log value");//TODO log
+        writeLine("  prevType=logType;");
+        writeLine("}");
         out.newLine();
     }
 
@@ -156,8 +301,11 @@ public class CompileToC {
         //TODO cache names
     }
 
-    private void writeNumber(StringBuilder out, Value v, DataOut dataOut, boolean incOff) {
+    private void writeNumber(StringBuilder out, Value v, DataOut dataOut, boolean incOff, boolean prefix) {
         Type.Numeric t=(Type.Numeric) v.getType();
+        if(prefix){
+            out.append(CAST_BLOCK);
+        }
         if(t.isFloat){
             out.append("{.asF").append(8 * (1 << t.level)).append("=").append(((Value.Primitive) v).getValue()).append("}");
         }else{
@@ -175,10 +323,9 @@ public class CompileToC {
             out.append(',');
         }
         if(v.getType()== Type.Primitive.ANY){
-            //TODO store Types
             Type contentType = ((Value.AnyValue) v).content.getType();
             if(prefix){out.append(CAST_BLOCK); }
-            out.append("{.asType=0/*").append(contentType).append("*/}");
+            out.append("{.asType=").append(typeSignature(contentType)).append("}");
             if(incOff){
                 dataOut.off++;}
             if(incOff){
@@ -199,8 +346,13 @@ public class CompileToC {
             out.append("{.asBool=").append(((Value.Primitive) v).getValue()).append("}");
             if(incOff){
                 dataOut.off++;}
+        }else if(v.getType() == Type.TYPE){
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.asType=").append(typeSignature(((Value.TypeValue)v).value)).append("}");
+            if(incOff){
+                dataOut.off++;}
         }else if(v.getType() instanceof Type.Numeric){
-            writeNumber(out, v, dataOut, incOff);
+            writeNumber(out, v, dataOut, incOff,prefix);
         }else if(v.getType()== Type.NoRetString.STRING8){
             byte[] bytes=((Value.StringValue) v).utf8Bytes();
             if(inPlaceValues){
@@ -339,7 +491,6 @@ public class CompileToC {
                 }
             }
         }else if(v instanceof Value.Struct){
-            //TODO detect if in any (then the element-types are necessary)
             throw new UnsupportedEncodingException("structs are currently not supported");
             //write fields one by one
             //write fields preceded with types if in any
@@ -421,14 +572,25 @@ public class CompileToC {
                     valCount++;
                 }else if(a instanceof Assignment){
                     comment("  {","Assign: "+a);
-                    //TODO prepare target
-                    //TODO preform assignment
+                    line.setLength(0);
+                    line.append("    ");
+                    //prepare target TODO ensure that all expressions are inlined and keep mutability
+                    writeExpression("    ",initLines,line,((Assignment) a).target,0, name, argNames);
+                    line.append(" = ");
+                    //preform assignment
+                    writeExpression("    ",initLines,line,((Assignment) a).expr,0, name, argNames);
+                    for(String l:initLines){
+                        writeLine(l);
+                    }
+                    initLines.clear();
+                    writeLine(line.append(';').toString());
                     writeLine("  }");
                 }else if(a instanceof LogAction){
                     comment("  {","Log: "+a);
-                    int blocks=((LogAction) a).expr.expectedType().blockCount;
                     line.setLength(0);
-                    line.append("    log_").append(((LogAction) a).type).append("(");//TODO log Method(s)
+                    line.append("    logValue(").append(((LogAction) a).type.type).append(",")
+                            .append(((LogAction) a).type.append).append(',')
+                            .append(typeSignature(((LogAction) a).expr.expectedType())).append(",");
                     writeExpression("    ",initLines,line,((LogAction) a).expr,0, name, argNames);
                     for(String l:initLines){
                         writeLine(l);
@@ -588,7 +750,7 @@ public class CompileToC {
             if(((ValueExpression) expr).constId!=null){
                 line.append(CONST_PREFIX).append(asciify(((ValueExpression) expr).constId));
                 return tmpCount;
-            }else{//TODO inline values without vardata
+            }else if(expr.expectedType().varSize){
                 int blockCount=expr.expectedType().blockCount;
                 DataOut data=new DataOut("data={",0,"tmp",LEN_MASK_TMP);//TODO handle dataOut
                 if(blockCount>1){
@@ -610,6 +772,12 @@ public class CompileToC {
                 initLines.add(indent+"}");
                 line.append("tmp").append(tmpCount);
                 return tmpCount+1;
+            }else{
+                boolean multiBlock=expr.expectedType().blockCount>1;
+                line.append(multiBlock?'{':'(');
+                writeConstValueAsUnion(line,((ValueExpression)expr).getValue(),null,true,false,false,true);
+                line.append(multiBlock?'}':')');
+                return tmpCount;
             }
         }else if(expr instanceof BinOp){
             String[] parts=binOpParts(((BinOp) expr));
@@ -631,15 +799,25 @@ public class CompileToC {
             //TODO perform typecasts
             return tmpCount;
         }else if(expr instanceof IfExpr){
-            //TODO? use if instead of ?: to prevent unnecessary execution of code sections
-            line.append('(');
-            tmpCount=writeExpression(indent,initLines,line,((IfExpr)expr).cond,tmpCount, procName, varNames);
-            line.append(".asBool?");
-            tmpCount=writeExpression(indent,initLines,line,((IfExpr)expr).ifVal,tmpCount, procName, varNames);
-            line.append(':');
-            tmpCount=writeExpression(indent,initLines,line,((IfExpr)expr).elseVal,tmpCount, procName, varNames);
-            line.append(')');
-            return tmpCount;
+            //addLater use ?: if both arguments can be inlined
+            int blockCount = expr.expectedType().blockCount;
+            initLines.add(indent+"Value tmp"+tmpCount+(blockCount >1?" ["+blockCount+"];":";"));
+            int prevTmp=tmpCount++;
+            initLines.add(indent+"{");
+            StringBuilder tmp=new StringBuilder(indent+"  if(");
+            tmpCount=writeExpression(indent+"    ",initLines,tmp,((IfExpr)expr).cond,tmpCount, procName, varNames);
+            initLines.add(tmp.append("){").toString());
+            tmp=new StringBuilder(indent+"    tmp"+prevTmp+"=");
+            tmpCount=writeExpression(indent,initLines,tmp,((IfExpr)expr).ifVal,tmpCount, procName, varNames);
+            initLines.add(tmp.append(";").toString());
+            initLines.add(indent+"  }else{");
+            tmp=new StringBuilder(indent+"    tmp"+prevTmp+"=");
+            writeExpression(indent+"    ",initLines,tmp,((IfExpr)expr).elseVal,tmpCount, procName, varNames);
+            initLines.add(tmp.append(";").toString());
+            initLines.add(indent+"  }");
+            initLines.add(indent+"}");
+            line.append("tmp").append(prevTmp);
+            return prevTmp;
         }else {
             //TODO other expressions value
             comment(indent,expr.getClass().getSimpleName()+" is currently not supported");
@@ -747,6 +925,8 @@ public class CompileToC {
         for(Map.Entry<String, Procedure> e:context.procNames.entrySet()){
             writeProcImplementation(asciify(e.getKey()),e.getValue());
         }
+        comment("declarations of all used type Signatures");
+        writeLine(typeDataDeclarations.append("};").toString());//declare type signatures after all NoRet code-sections are compiled
         if(start!=null){
             Type[] startTypes= start.argTypes();
             if(startTypes.length>0){

@@ -94,8 +94,8 @@ public class GetIndex implements Expression{
         };
     }
     @Override
-    public boolean canSet() {
-        return value.canSet();
+    public boolean isMutable() {
+        return value.isMutable();
     }
 
     @Override

@@ -3,6 +3,7 @@ typedef int int32;
 const int[]:y={1234567890123456789,2,3.0};
 const any: array_test ={{1,2,3},{4,5},{6}};
 const string8[]:str_test={"str1","str2"};
+const int32[][]?[]:type_sig_test={};
 
 loop(int8):(count)=>{
 log count;
@@ -14,17 +15,18 @@ start(string8[]):(args)=>{
     string16:utf16=u16"UTF16-String";
     string32:utf32=u32"UTF32-String";
     int:two=1+(int:)(args.length);
-    any:x={1,-2,3U,constant};
+    int32[]:x={1,-2,3,constant};
     log x;
-    ##log x.type;
+    log x.type;
+    log type_sig_test.type;
     uint64:x_len=((int32[]:)x).length;
     log x_len;
-    ((int32[]:)x)[0]=123456789;
+    x[0]=123456789;
     any:x_elt=((int32[]:)x)[1];
     log x_elt;
     log y;
-    ##log none.type;
-    ##log {}.type;
+    log none.type;
+    log {}.type;
     int32?:optional=none;
     log optional;
     log optional?optional.value:"empty";

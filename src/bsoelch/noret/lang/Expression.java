@@ -7,7 +7,7 @@ public interface Expression {
     boolean isBound();
     ValueView evaluate(Procedure parent, ArrayList<Value> context);
     Type expectedType();
-    default boolean canSet() {
+    default boolean isMutable() {
         return false;
     }
 }

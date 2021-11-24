@@ -1028,6 +1028,7 @@ public class Parser {
                 tokens.remove(i+1);
                 //addLater? caching of Types
                 tokens.set(i,new TypeToken(new Type.Optional(tmp),tokens.get(i).pos));
+                i--;
             }else if(tokens.get(i).tokenType ==ParserTokenType.TYPE&&
                     tokens.get(i+1).tokenType ==ParserTokenType.OPEN_SQ_BRACKET){
                 tmp=((TypeToken)tokens.get(i)).type;
@@ -1035,6 +1036,7 @@ public class Parser {
                 if(i+1<tokens.size()&&tokens.get(i+1).tokenType ==ParserTokenType.CLOSE_SQ_BRACKET){//Array
                     tokens.remove(i+1);
                     tokens.set(i,new TypeToken(new Type.Array(tmp),tokens.get(i).pos));
+                    i--;
                 }else{
                     throw new SyntaxError("Illegal Syntax for Array: expected " +
                             "<Type>'[]'or <Type>'['<Type>']'");
@@ -1045,9 +1047,9 @@ public class Parser {
         // '@'<Type>
         for(int i=tokens.size()-1;i>0;i--){
             if(tokens.get(i).tokenType ==ParserTokenType.TYPE&&
-                    tokens.get(i-1).tokenType !=ParserTokenType.AT){
-                tmp=((TypeToken)tokens.remove(i)).type;
-                tokens.set(i-1,new TypeToken(new Type.Reference(tmp),tokens.get(i).pos));
+                    tokens.get(i-1).tokenType ==ParserTokenType.AT){
+                TypeToken tmpToken=((TypeToken)tokens.remove(i));
+                tokens.set(i-1,new TypeToken(new Type.Reference(tmpToken.type),tmpToken.pos));
             }
         }
         if(tokens.size()!=1||tokens.get(0).tokenType !=ParserTokenType.TYPE){
@@ -1373,11 +1375,11 @@ public class Parser {
         //addLater restrict usage of generics in constants (only in proc-arguments)
         tokenBuffer.clear();
         if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.WORD){
-            throw new SyntaxError("invalid syntax for const definition, expected const <Name>=<Expr>;");
+            throw new SyntaxError("invalid syntax for const definition, expected const <Type>:<Name>=<Expr>;");
         }
         String constName=((NamedToken)token).value;
         if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.ASSIGN){
-            throw new SyntaxError("invalid syntax for const definition, expected const <Name>=<Expr>;");
+            throw new SyntaxError("invalid syntax for const definition, expected const <Type>:<Name>=<Expr>;");
         }
         while((token=tokens.getNextToken())!=null&&token.tokenType!=ParserTokenType.END){
             tokenBuffer.add(token);
@@ -1574,6 +1576,8 @@ public class Parser {
                         Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
                         if(!Type.canAssign(assignTarget.expectedType(),expr.expectedType(),null)){
                             throw new TypeError("cannot assign " +expr.expectedType()+ " to "+assignTarget.expectedType());
+                        }else if(!assignTarget.isMutable()){
+                            throw new TypeError("cannot assign values to immutable value"+assignTarget);
                         }
                         actions.add(new Assignment(assignTarget,expr));
                         tokenBuffer.clear();

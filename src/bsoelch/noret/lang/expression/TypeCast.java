@@ -40,23 +40,12 @@ public class TypeCast implements Expression{
     @Override
     public ValueView evaluate(Procedure parent, ArrayList<Value> context) {
         ValueView source=value.evaluate(parent, context);
-        return new ValueView() {
-            @Override
-            public Value get() {
-                return source.get().castTo(type);
-            }
-
-            @Override
-            public void set(Value newValue) {
-                //FIXME type handling
-                source.set(newValue);
-            }
-        };
+        return ValueView.wrap(source.get().castTo(type));
     }
 
     @Override
-    public boolean canSet() {
-        return value.canSet();
+    public boolean isMutable() {
+        return false;
     }
 
     @Override

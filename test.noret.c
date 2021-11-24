@@ -13,24 +13,40 @@
 #define LEN_MASK_LOCAL    0x4000000000000000
 #define LEN_MASK_TMP      0xc000000000000000
 
-typedef enum{
-  EMPTY=0,
-  BOOL,
-  I8,
-  U8,
-  I16,
-  U16,
-  I32,
-  U32,
-  I64,
-  U64,
-  F32,
-  F64,
-  STRING,
-  TYPE,
-  ANY=0xf,
-}Type;
+// Type Definitions
+typedef uint64_t Type;
+#define TYPE_SIG_MASK       0xff
+#define TYPE_SIG_EMPTY      0x0
+#define TYPE_SIG_BOOL       0x1
+#define TYPE_SIG_I8         0x2
+#define TYPE_SIG_U8         0x3
+#define TYPE_SIG_I16        0x4
+#define TYPE_SIG_U16        0x5
+#define TYPE_SIG_I32        0x6
+#define TYPE_SIG_U32        0x7
+#define TYPE_SIG_I64        0x8
+#define TYPE_SIG_U64        0x9
+#define TYPE_SIG_F32        0xa
+#define TYPE_SIG_F64        0xb
+#define TYPE_SIG_STRING8    0xc
+#define TYPE_SIG_STRING16   0xd
+#define TYPE_SIG_STRING32   0xe
+#define TYPE_SIG_TYPE       0xf
+#define TYPE_SIG_NONE       0x10
+#define TYPE_SIG_ANY        0x11
+#define TYPE_SIG_OPTIONAL   0x12
+#define TYPE_SIG_REFERENCE  0x13
+#define TYPE_SIG_ARRAY      0x14
+#define TYPE_SIG_PROC       0x15
+#define TYPE_SIG_STRUCT     0x16
+#define TYPE_CONTENT_SHIFT  8
+#define TYPE_CONTENT_MASK   0xffffffff
+#define TYPE_COUNT_SHIFT    40
+#define TYPE_COUNT_MASK     0xffff
+// Type data for all contained Types
+Type[] typeData;
 
+// Value-Block Definition
 typedef union ValueImpl Value;
 union ValueImpl{
   bool     asBool;
@@ -51,17 +67,84 @@ union ValueImpl{
   uint32_t raw32[2];
 };
 
+// Procedure Type
 typedef void*(*Procedure)(Value*,size_t*,Value**);
+// definitions and functions for log
+typedef enum{
+  null,// blank type for initial value
+  DEFAULT,
+  ERR,
+  DEBUG,
+  INFO,
+}LogType;
+// previously used logType
+static LogType prevType = null;
+// definition of NEW_LINE character
+#define NEW_LINE "\n"
+FILE* log_DEFAULT;
+FILE* log_ERR;
+FILE* log_DEBUG;
+FILE* log_INFO;
+// sets log-streams to their initial value
+void initLogStreams(){
+log_DEFAULT = stdout;
+log_ERR = stderr;
+log_DEBUG = stdout;
+log_INFO = stdout;
+}
+// log-Method
+void logValue(LogType logType,bool append,Type type,Value* value){
+  if(prevType!=null){
+    if((logType!=prevType)||(!append)){
+      switch(prevType){
+        case null:
+          break;
+        case DEFAULT:
+          fputs(NEW_LINE,log_DEFAULT);
+          break;
+        case ERR:
+          fputs(NEW_LINE,log_ERR);
+          break;
+        case DEBUG:
+          fputs(NEW_LINE,log_DEBUG);
+          break;
+        case INFO:
+          fputs(NEW_LINE,log_INFO);
+          break;
+      }
+    }
+  }
+  FILE* log;
+  switch(logType){
+    case null:
+    case DEFAULT:
+      log=log_DEFAULT;
+      break;
+    case ERR:
+      log=log_ERR;
+      break;
+    case DEBUG:
+      log=log_DEBUG;
+      break;
+    case INFO:
+      log=log_INFO;
+      break;
+  }
+  //  TODO log value
+  prevType=logType;
+}
 
 Value constData [];
 // const Type:int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
 // const Type:any : array_test = {{1,2,3},{4,5},{6}}
-const Value const_array__test []={{.asType=0/*Type:(int32[])[]*/},{.asPtr=(constData+0)},};
+const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(null<<TYPE_CONTENT_SHIFT)},{.asPtr=(constData+0)},};
 // const Type:string8[] : str_test = {"str1","str2"}
 const Value const_str__test []={{.asU64=0x2},{.asU64=0x8000000000000004},{.asPtr=(constData+13)},{.asU64=0x8000000000000004},{.asPtr=(constData+14)}};
 // const Type:int32[] : y = {2112454933,2,3}
 const Value const_y []={{.asU64=0x3},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
+// const Type:(((int32[])[])?)[] : type_sig_test = {}
+const Value const_type__sig__test []={{.asU64=0x0}};
 // data for values used in constants
 Value constData []={{.asU64=0x3},{.asU64=0x8000000000000003},{.asPtr=(constData+3)},{.asI32=1},{.asI32=2},{.asI32=3},{.asU64=0x8000000000000002},{.asPtr=(constData+8)},{.asI32=4},{.asI32=5},{.asU64=0x8000000000000001},{.asPtr=(constData+12)},{.asI32=6},{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}},{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}}};
 
@@ -78,21 +161,19 @@ void* run(void* initState);
 void* proc_loop(Value* args,size_t* argCount,Value** argData){
   // var0:(*(args+0))
   {// Log: Log[DEFAULT]{VarExpression{0}}
-    log_DEFAULT((*(args+0)));
+    logValue(DEFAULT,false,TYPE_SIG_I8,(*(args+0)));
   }
   Value var1 [2];// (Type:((Type:int8)=>?)?)
   {// Initialize: IfExpr{BinOp{VarExpression{0} LT ValueExpression{5}}?TypeCast{Type:((Type:int8)=>?)?:this}:TypeCast{Type:((Type:int8)=>?)?:ValueExpression{none}}}
-    Value tmp0;
+    Value tmp0 [2];
     {
-      tmp0={.asI32=5}
-      // data={}
+      if((Value){.asBool=(*(args+0)).asI8<((Value){.asI32=5}).asI32}){
+        tmp0=/*TODO typeCast:Type:((Type:int8)=>?)?*/(&proc_loop);
+      }else{
+        tmp0=/*TODO typeCast:Type:((Type:int8)=>?)?*/((Value){.asBool=false/*none*/});
+      }
     }
-    Value tmp1;
-    {
-      tmp1=(Value){.asBool=false/*none*/}
-      // data={}
-    }
-    var1=((Value){.asBool=(*(args+0)).asI8<tmp0.asI32}.asBool?/*TODO typeCast:Type:((Type:int8)=>?)?*/(&proc_loop):/*TODO typeCast:Type:((Type:int8)=>?)?*/tmp1);
+    var1=tmp0;
   }
   return NULL;
 }
@@ -130,66 +211,79 @@ void* proc_start(Value* args,size_t* argCount,Value** argData){
   Value var4;// (Type:int32)
   {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
     // GetField is currently not supported
-    Value tmp0;
-    {
-      tmp0={.asI32=1}
-      // data={}
-    }
-    var4=(Value){.asI32=tmp0.asI32+/*TODO typeCast:Type:int32*/.asI32};
+    var4=(Value){.asI32=((Value){.asI32=1}).asI32+/*TODO typeCast:Type:int32*/.asI32};
   }
-  Value var5 [2];// (Type:any)
-  {// Initialize: TypeCast{Type:any:ValueExpression{{1,-2,3,42}}}
+  Value var5 [2];// (Type:int32[])
+  {// Initialize: ValueExpression{{1,-2,3,42}}
     Value tmp0 [2];
     {
       tmp0={(Value){.asU64=0xc000000000000004},(Value){.asPtr=(tmp+0)}}
-      // data={{.asI32=1},{.asI32=-2},{.asU32=3},{.asI8=42}}
+      // data={(Value){.asI32=1},(Value){.asI32=-2},(Value){.asI32=3},(Value){.asI8=42}}
     }
-    var5=/*TODO typeCast:Type:any*/tmp0;
+    var5=tmp0;
   }
   {// Log: Log[DEFAULT]{VarExpression{5}}
-    log_DEFAULT(var5);
+    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),var5);
+  }
+  {// Log: Log[DEFAULT]{GetField{VarExpression{5}.type}}
+    // GetField is currently not supported
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,);
+  }
+  {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value){.asType=TYPE_SIG_ARRAY|(null<<TYPE_CONTENT_SHIFT)}));
   }
   Value var6;// (Type:uint64)
-  {// Initialize: GetField{TypeCast{Type:int32[]:VarExpression{5}}.length}
+  {// Initialize: GetField{VarExpression{5}.length}
     // GetField is currently not supported
     var6=;
   }
   {// Log: Log[DEFAULT]{VarExpression{6}}
-    log_DEFAULT(var6);
+    logValue(DEFAULT,false,TYPE_SIG_U64,var6);
   }
-  {// Assign: Assignment:{GetIndex{TypeCast{Type:int32[]:VarExpression{5}}[ValueExpression{0}]}=ValueExpression{123456789}}
+  {// Assign: Assignment:{GetIndex{VarExpression{5}[ValueExpression{0}]}=ValueExpression{123456789}}
+    // GetIndex is currently not supported
+     = ((Value){.asI32=123456789});
   }
   Value var7 [2];// (Type:any)
-  {// Initialize: TypeCast{Type:any:GetIndex{TypeCast{Type:int32[]:VarExpression{5}}[ValueExpression{1}]}}
+  {// Initialize: TypeCast{Type:any:GetIndex{VarExpression{5}[ValueExpression{1}]}}
     // GetIndex is currently not supported
     var7=/*TODO typeCast:Type:any*/;
   }
   {// Log: Log[DEFAULT]{VarExpression{7}}
-    log_DEFAULT(var7);
+    logValue(DEFAULT,false,TYPE_SIG_ANY,var7);
   }
   {// Log: Log[DEFAULT]{ValueExpression{{2112454933,2,3}}}
-    log_DEFAULT(const_y);
+    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),const_y);
+  }
+  {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value){.asType=TYPE_SIG_NONE}));
+  }
+  {// Log: Log[DEFAULT]{ValueExpression{Type:"empty"[]}}
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value){.asType=TYPE_SIG_ARRAY|(null<<TYPE_CONTENT_SHIFT)}));
   }
   Value var8 [2];// (Type:int32?)
   {// Initialize: TypeCast{Type:int32?:ValueExpression{none}}
-    Value tmp0;
-    {
-      tmp0=(Value){.asBool=false/*none*/}
-      // data={}
-    }
-    var8=/*TODO typeCast:Type:int32?*/tmp0;
+    var8=/*TODO typeCast:Type:int32?*/((Value){.asBool=false/*none*/});
   }
   {// Log: Log[DEFAULT]{VarExpression{8}}
-    log_DEFAULT(var8);
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var8);
   }
   {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{8}}?TypeCast{Type:any:GetField{VarExpression{8}.value}}:TypeCast{Type:any:ValueExpression{"empty"}}}}
     // GetField is currently not supported
     Value tmp0 [2];
     {
-      tmp0={(Value){.asU64=0xc000000000000005},(Value){.asPtr=(tmp+0)}}
-      // data={(Value){.raw8={0x65,0x6d,0x70,0x74,0x79,0x0,0x0,0x0}}}
+      if(/*TODO typeCast:Type:bool*/var8){
+        tmp0=/*TODO typeCast:Type:any*/;
+      }else{
+        Value tmp1 [2];
+        {
+          tmp1={(Value){.asU64=0xc000000000000005},(Value){.asPtr=(tmp+0)}}
+          // data={(Value){.raw8={0x65,0x6d,0x70,0x74,0x79,0x0,0x0,0x0}}}
+        }
+        tmp0=/*TODO typeCast:Type:any*/tmp1;
+      }
     }
-    log_DEFAULT((/*TODO typeCast:Type:bool*/var8.asBool?/*TODO typeCast:Type:any*/:/*TODO typeCast:Type:any*/tmp0));
+    logValue(DEFAULT,false,TYPE_SIG_ANY,tmp0);
   }
   return NULL;
 }
@@ -202,6 +296,8 @@ void* proc_readLine(Value* args,size_t* argCount,Value** argData){
   return NULL;
 }
 
+// declarations of all used type Signatures
+Type[] typeData={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(2<<TYPE_CONTENT_SHIFT),TYPE_SIG_EMPTY};
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* run(void* initState){
     Procedure f=*((Procedure*)initState);

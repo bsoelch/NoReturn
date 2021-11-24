@@ -44,8 +44,8 @@ public class IfExpr implements Expression {
     }
 
     @Override
-    public boolean canSet() {
-        return ifVal.canSet()&&elseVal.canSet();
+    public boolean isMutable() {
+        return ifVal.isMutable()&&elseVal.isMutable();
     }
 
     @Override

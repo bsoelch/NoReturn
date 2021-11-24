@@ -651,8 +651,8 @@ public abstract class Value{
         public boolean isMutable() {return true;}
     }
 
-    private static class TypeValue extends Value {
-        final Type value;
+    public static class TypeValue extends Value {
+        public final Type value;
         public TypeValue(Type type) {
             super(Type.TYPE);
             this.value=type;
