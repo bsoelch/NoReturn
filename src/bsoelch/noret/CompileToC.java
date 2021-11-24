@@ -6,6 +6,7 @@ import bsoelch.noret.lang.expression.*;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.UnsupportedEncodingException;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Map;
 
@@ -395,6 +396,8 @@ public class CompileToC {
             comment("  ","var"+i+":"+argNames[i]);//tmp
         }
         if(!proc.isNative()){
+            ArrayList<String> initLines=new ArrayList<>();
+            StringBuilder line=new StringBuilder();
             for(Action a:proc.actions()){
                 if(a instanceof ValDef){
                     argNames[valCount]="var"+valCount;
@@ -405,19 +408,33 @@ public class CompileToC {
                         comment("  " + VALUE_BLOCK_NAME + " var" +valCount+" ["+((ValDef)a).getType().blockCount+"];",
                                 "("+((ValDef) a).getType()+")");
                     }
-                    writeExpression("  ",((ValDef) a).getInitValue(),((ValDef)a).getType().blockCount,"var"+valCount,0, name, argNames);
+                    comment("  {","Initialize: "+((ValDef) a).getInitValue());
+                    line.setLength(0);
+                    line.append("    var").append(valCount).append("=");
+                    writeExpression("    ",initLines,line,((ValDef) a).getInitValue(),0, name, argNames);
+                    for(String l:initLines){
+                        writeLine(l);
+                    }
+                    initLines.clear();
+                    writeLine(line.append(';').toString());
+                    writeLine("  }");
                     valCount++;
                 }else if(a instanceof Assignment){
-                    comment("  {","assign: "+a);
+                    comment("  {","Assign: "+a);
                     //TODO prepare target
                     //TODO preform assignment
                     writeLine("  }");
                 }else if(a instanceof LogAction){
                     comment("  {","Log: "+a);
                     int blocks=((LogAction) a).expr.expectedType().blockCount;
-                    writeLine("    Value logTo"+(blocks>1?" ["+blocks+"];":";"));
-                    writeExpression("    ", ((LogAction) a).expr, blocks,"logTo",0,name,argNames);
-                    //TODO logValue
+                    line.setLength(0);
+                    line.append("    log_").append(((LogAction) a).type).append("(");//TODO log Method(s)
+                    writeExpression("    ",initLines,line,((LogAction) a).expr,0, name, argNames);
+                    for(String l:initLines){
+                        writeLine(l);
+                    }
+                    initLines.clear();
+                    writeLine(line.append(");").toString());
                     writeLine("  }");
                 }else{
                     comment("  ",a.toString());
@@ -434,99 +451,201 @@ public class CompileToC {
         out.newLine();
     }
 
+    private String[] unOpParts(LeftUnaryOp op) {
+        String[] parts=new String[2];
+        Type inType=op.expr.expectedType();
+        Type outType=op.expectedType();
+        switch (op.op){
+            case PLUS:
+                if(inType instanceof Type.Numeric){
+                    parts[0]=parts[1]="";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case MINUS:
+                if(inType instanceof Type.Numeric){
+                    if(((Type.Numeric)outType).isFloat){
+                        parts[0]=CAST_BLOCK+"{.asF"+8 * (1 << ((Type.Numeric)outType).level)+"=-";
+                    }else{
+                        parts[0]=CAST_BLOCK+"{.as"+(((Type.Numeric)outType).signed?"I":"U")+8 * (1 << ((Type.Numeric)outType).level)+"=-";
+                    }
+                    if(((Type.Numeric)inType).isFloat){
+                        parts[1]=".asF"+8 * (1 << ((Type.Numeric)inType).level)+"}";
+                    }else{
+                        parts[1]=".as"+(((Type.Numeric)inType).signed?"I":"U")+8 * (1 << ((Type.Numeric)outType).level)+"}";
+                    }
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case DIV:
+            case INT_DIV:
+            case MULT:
+            case MOD:
+            case POW:
+            case AND:
+            case OR:
+            case XOR:
+            case NOT:
+            case FAST_AND:
+            case FAST_OR:
+            case FLIP:
+            case GT:
+            case GE:
+            case NE:
+            case EQ:
+            case LT:
+            case LE:
+            case IF:
+            case LSHIFT:
+            case RSHIFT:
+                throw new UnsupportedOperationException("unimplemented");
+        }
+        throw new RuntimeException("Unreachable");
+    }
+
+    private String[] binOpParts(BinOp op) {
+        String[] parts=new String[3];
+        Type lType=op.left.expectedType();
+        Type rType=op.right.expectedType();
+        Type outType=op.expectedType();
+        switch (op.op){
+            case PLUS://TODO cast arguments
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    if(((Type.Numeric)outType).isFloat){
+                        parts[0]=CAST_BLOCK+"{.asF"+8 * (1 << ((Type.Numeric)outType).level)+"=";
+                    }else{
+                        parts[0]=CAST_BLOCK+"{.as"+(((Type.Numeric)outType).signed?"I":"U")+8 * (1 << ((Type.Numeric)outType).level)+"=";
+                    }
+                    if(((Type.Numeric)lType).isFloat){
+                        parts[1]=".asF"+8 * (1 << ((Type.Numeric)lType).level)+"+";
+                    }else{
+                        parts[1]=".as"+(((Type.Numeric)lType).signed?"I":"U")+8 * (1 << ((Type.Numeric)lType).level)+"+";
+                    }
+                    if(((Type.Numeric)rType).isFloat){
+                        parts[2]=".asF"+8 * (1 << ((Type.Numeric)rType).level)+"+";
+                    }else{
+                        parts[2]=".as"+(((Type.Numeric)rType).signed?"I":"U")+8 * (1 << ((Type.Numeric)rType).level)+"}";
+                    }
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case DIV:
+            case INT_DIV:
+            case MINUS:
+            case MULT:
+            case MOD:
+            case POW:
+            case AND:
+            case OR:
+            case XOR:
+            case NOT:
+            case FAST_AND:
+            case FAST_OR:
+            case FLIP:
+            case GT:
+            case GE:
+            case NE:
+            case EQ:
+            case LT:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=CAST_BLOCK+"{.asBool=";
+                    if(((Type.Numeric)lType).isFloat){
+                        parts[1]=".asF"+8 * (1 << ((Type.Numeric)lType).level)+"<";
+                    }else{
+                        parts[1]=".as"+(((Type.Numeric)lType).signed?"I":"U")+8 * (1 << ((Type.Numeric)lType).level)+"<";
+                    }
+                    if(((Type.Numeric)rType).isFloat){
+                        parts[2]=".asF"+8 * (1 << ((Type.Numeric)rType).level)+"<";
+                    }else{
+                        parts[2]=".as"+(((Type.Numeric)rType).signed?"I":"U")+8 * (1 << ((Type.Numeric)rType).level)+"}";
+                    }
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case LE:
+            case IF:
+            case LSHIFT:
+            case RSHIFT:
+                throw new UnsupportedOperationException("unimplemented");
+        }
+        throw new RuntimeException("Unreachable");
+    }
+
+
     //addLater inlineExpressions to allow assignments i.e. target=A[i] instead of tmp=A,target=tmp[i]
-    private void writeExpression(String prefix, Expression expr, int targetBlocks, String target, int tmpCount, String procName, String[] varNames) throws IOException {
-        comment(prefix+"{",""+expr);
-        String oldPrefix=prefix;
-        prefix+="  ";
+    private int writeExpression(String indent, ArrayList<String> initLines, StringBuilder line, Expression expr, int tmpCount, String procName, String[] varNames) throws IOException {
         if(expr instanceof VarExpression){
-            writeLine(prefix+target+"="+varNames[((VarExpression)expr).varId]+";");
+            line.append(varNames[((VarExpression)expr).varId]);
+            return tmpCount;
         }else if(expr instanceof ThisExpr){
-            writeLine(prefix+target+"=&"+PROC_PREFIX+procName+";");
+            line.append("(&" + PROC_PREFIX).append(procName).append(")");
+            return tmpCount;
         }else if(expr instanceof ValueExpression){
             if(((ValueExpression) expr).constId!=null){
-                writeLine(prefix+target+"="+CONST_PREFIX+asciify(((ValueExpression) expr).constId)+";");
-            }else{
+                line.append(CONST_PREFIX).append(asciify(((ValueExpression) expr).constId));
+                return tmpCount;
+            }else{//TODO inline values without vardata
+                int blockCount=expr.expectedType().blockCount;
                 DataOut data=new DataOut("data={",0,"tmp",LEN_MASK_TMP);//TODO handle dataOut
-                StringBuilder tmp=new StringBuilder(prefix+target+"=");//TODO brackets if targetSize>1
-                if(targetBlocks>1){
+                if(blockCount>1){
+                    initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
+                }else{
+                    initLines.add(indent+"Value tmp"+tmpCount+";");
+                }
+                StringBuilder tmp=new StringBuilder("  tmp"+tmpCount+"=");
+                if(blockCount>1){
                     tmp.append('{');
                 }
                 writeConstValueAsUnion(tmp,((ValueExpression)expr).getValue(),data,true,false,false,true);
-                if(targetBlocks>1){
+                if(blockCount>1){
                     tmp.append('}');
                 }
-                writeLine(tmp.append(";").toString());
-                comment(prefix,data.build.append("};").toString());
+                initLines.add(indent+"{");
+                initLines.add(indent+tmp);
+                initLines.add(indent+"  // "+data.build.append("}"));
+                initLines.add(indent+"}");
+                line.append("tmp").append(tmpCount);
+                return tmpCount+1;
             }
         }else if(expr instanceof BinOp){
-            int w=((BinOp)expr).left.expectedType().blockCount;
-            if(w>1){
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+" ["+w+"];");
-            }else{
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+";");
-            }
-            writeExpression(prefix,((BinOp)expr).left,w,"tmp"+tmpCount,++tmpCount, procName, varNames);
-            w=((BinOp)expr).right.expectedType().blockCount;
-            if(w>1){
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+" ["+w+"];");
-            }else{
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+";");
-            }
-            writeExpression(prefix,((BinOp)expr).right,0,"tmp"+tmpCount,++tmpCount, procName, varNames);
-            //TODO perform operation
+            String[] parts=binOpParts(((BinOp) expr));
+            line.append(parts[0]);
+            tmpCount=writeExpression(indent,initLines,line,((BinOp)expr).left,tmpCount, procName, varNames);
+            line.append(parts[1]);
+            tmpCount=writeExpression(indent,initLines,line,((BinOp)expr).right,tmpCount, procName, varNames);
+            line.append(parts[2]);
+            return tmpCount;
         }else if(expr instanceof LeftUnaryOp){
-            int w=((LeftUnaryOp)expr).expr.expectedType().blockCount;
-            if(w>1){
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+" ["+w+"];");
-            }else{
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+";");
-            }
-            writeExpression(prefix,((LeftUnaryOp)expr).expr,w,"tmp"+tmpCount,++tmpCount, procName, varNames);
-            //TODO perform operation
+            String[] parts=unOpParts(((LeftUnaryOp) expr));
+            line.append(parts[0]);
+            tmpCount=writeExpression(indent,initLines,line,((LeftUnaryOp)expr).expr,tmpCount, procName, varNames);
+            line.append(parts[1]);
+            return tmpCount;
         }else if(expr instanceof TypeCast){
-            int w=((TypeCast)expr).value.expectedType().blockCount;
-            if(w>1){
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+" ["+w+"];");
-            }else{
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+";");
-            }
-            writeExpression(prefix,((TypeCast)expr).value,w,"tmp"+tmpCount,++tmpCount, procName, varNames);
-            //TODO perform operation
+            line.append("/*TODO typeCast:").append(expr.expectedType()).append("*/");
+            tmpCount=writeExpression(indent,initLines,line,((TypeCast)expr).value,tmpCount, procName, varNames);
+            //TODO perform typecasts
+            return tmpCount;
         }else if(expr instanceof IfExpr){
-            int w=((IfExpr)expr).cond.expectedType().blockCount;
-            if(w>1){
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+" ["+w+"];");
-            }else{
-                writeLine(prefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+";");
-            }
-            writeExpression(prefix,((IfExpr)expr).cond,w,"tmp"+tmpCount,tmpCount+1, procName, varNames);
-            String blockPrefix=prefix+"  ";
-            writeLine(prefix+"if(tmp"+tmpCount+".asBool){");
-            w=((IfExpr)expr).ifVal.expectedType().blockCount;
-            if(w>1){
-                writeLine(blockPrefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+" ["+w+"];");
-            }else{
-                writeLine(blockPrefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+";");
-            }
-            writeExpression(blockPrefix,((IfExpr)expr).ifVal,0,target,++tmpCount, procName, varNames);
-            writeLine(prefix+"}else{");
-            w=((IfExpr)expr).elseVal.expectedType().blockCount;
-            if(w>1){
-                writeLine(blockPrefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+" ["+w+"];");
-            }else{
-                writeLine(blockPrefix+ VALUE_BLOCK_NAME + " tmp" +tmpCount+";");
-            }
-            writeExpression(blockPrefix,((IfExpr)expr).elseVal,0,target,++tmpCount, procName, varNames);
-            writeLine(prefix+"}");
-            //TODO perform operation
+            //TODO? use if instead of ?: to prevent unnecessary execution of code sections
+            line.append('(');
+            tmpCount=writeExpression(indent,initLines,line,((IfExpr)expr).cond,tmpCount, procName, varNames);
+            line.append(".asBool?");
+            tmpCount=writeExpression(indent,initLines,line,((IfExpr)expr).ifVal,tmpCount, procName, varNames);
+            line.append(':');
+            tmpCount=writeExpression(indent,initLines,line,((IfExpr)expr).elseVal,tmpCount, procName, varNames);
+            line.append(')');
+            return tmpCount;
         }else {
             //TODO other expressions value
-            comment(prefix,expr.getClass().getSimpleName()+" is currently not supported");
+            comment(indent,expr.getClass().getSimpleName()+" is currently not supported");
+            return tmpCount;
         }
-        writeLine(oldPrefix+"}");
     }
-
 
     private void writeRunSignature() throws IOException {
         comment(" main procedure handling function (written in a way that allows easy usage in pthreads)");
@@ -549,7 +668,7 @@ public class CompileToC {
         writeLine("    if(argCache==NULL){");
         writeLine("        return (void*)-1;");//addLater useful handling of return codes
         writeLine("    }");
-        writeLine("    //initArgs");
+        writeLine("    // initArgs");
         writeLine("    memcpy(argCache,initState,argCount*sizeof(" + VALUE_BLOCK_NAME + "));");
         writeLine("    do{");
         writeLine("        f=(Procedure)f(argCache,&argCount,&argData);");

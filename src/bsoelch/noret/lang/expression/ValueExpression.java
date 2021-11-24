@@ -9,13 +9,16 @@ public class ValueExpression implements Expression {
     public final String constId;
 
     public static Expression create(Value value,String constId){
-        //TODO own class for constants with dataValues
         return new ValueExpression(value,constId);
     }
 
     public ValueExpression(Value value, String constId) {
         this.value = value;
         this.constId = constId;
+    }
+
+    public boolean isVarSizeConstant(){
+        return constId!=null&&value.getType().varSize;
     }
 
     @Override

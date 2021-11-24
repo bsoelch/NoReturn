@@ -7,7 +7,7 @@ import bsoelch.noret.lang.*;
 import java.util.ArrayList;
 
 public class LeftUnaryOp implements Expression {
-    final OperatorType op;
+    public final OperatorType op;
     public final Expression expr;
 
     final Type expectedOutput;

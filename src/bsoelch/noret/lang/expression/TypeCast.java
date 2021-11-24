@@ -48,7 +48,7 @@ public class TypeCast implements Expression{
 
             @Override
             public void set(Value newValue) {
-                //TODO type handling
+                //FIXME type handling
                 source.set(newValue);
             }
         };

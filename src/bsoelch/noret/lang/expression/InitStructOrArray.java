@@ -11,8 +11,7 @@ public class InitStructOrArray implements Expression {
         Value[] values=new Value[expressions.size()];
         for(int i=0;i< expressions.size();i++){
             if(expressions.get(i) instanceof ValueExpression){
-                if(((ValueExpression) expressions.get(i)).constId!=null&&
-                    expressions.get(i).expectedType().varSize){
+                if(((ValueExpression) expressions.get(i)).isVarSizeConstant()){
                     isConstant=false;
                 }else{
                     values[i]=((ValueExpression) expressions.get(i)).value;
@@ -31,8 +30,7 @@ public class InitStructOrArray implements Expression {
         Value[] values=new Value[expressions.size()];
         for(int i=0;i< expressions.size();i++){
             if(expressions.get(i) instanceof ValueExpression){
-                if(((ValueExpression) expressions.get(i)).constId!=null&&
-                        expressions.get(i).expectedType().varSize){
+                if(((ValueExpression) expressions.get(i)).isVarSizeConstant()){
                     isConstant=false;
                 }else{
                     values[i]=((ValueExpression) expressions.get(i)).value;
