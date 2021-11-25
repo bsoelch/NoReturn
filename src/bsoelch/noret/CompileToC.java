@@ -201,11 +201,18 @@ public class CompileToC {
         comment("Type data for all contained Types");
         writeLine("Type typeData [];");
         typeDataDeclarations=new StringBuilder("Type typeData []={");
-        //Type* typeCache
         out.newLine();
         //Value struct
-        comment("Value-Block Definition");
+        comment("value-block type");
         writeLine("typedef union " + VALUE_BLOCK_NAME + "Impl "+VALUE_BLOCK_NAME+";");
+        //Procedure Type
+        comment("procedure type (the return-type is void* instead of "+PROCEDURE_TYPE+"* to avoid a recursive type definition)");
+        out.write("typedef "+procedureOut+ "(*" + PROCEDURE_TYPE + ")(");
+        for(int i=0;i<procedureArgs.length;i++){
+            out.write((i>0?",":"")+procedureArgs[i]);
+        }
+        writeLine(");");
+        comment("balue-block definition");
         writeLine("union " + VALUE_BLOCK_NAME + "Impl{");
         writeLine("  bool       asBool;");
         writeLine("  int8_t     asI8;");//addLater use constants/function for typenames
@@ -219,7 +226,7 @@ public class CompileToC {
         writeLine("  float      asF32;");//addLater ensure correct size
         writeLine("  double     asF64;");
         writeLine("  Type       asType;");
-        writeLine("  " + PROCEDURE_TYPE + "* asProc;");
+        writeLine("  " + PROCEDURE_TYPE + "  asProc;");
         writeLine("  " + VALUE_BLOCK_NAME + "*     asPtr;");//reference
         writeLine("  uint8_t    raw8[8];");
         writeLine("  uint16_t   raw16[4];");
@@ -232,13 +239,6 @@ public class CompileToC {
         //  any     ->  typeID,     val_ptr/raw_data
         //  opt     ->  hasData,    data
         out.newLine();
-        //Procedure Type
-        comment("Procedure Type, the return-type is void* instead of "+PROCEDURE_TYPE+"* to avoid a recursive type definition");
-        out.write("typedef "+procedureOut+ "(*" + PROCEDURE_TYPE + ")(");
-        for(int i=0;i<procedureArgs.length;i++){
-            out.write((i>0?",":"")+procedureArgs[i]);
-        }
-        writeLine(");");
         comment("definitions and functions for log");
         writeLine("typedef enum{");
         comment("  null,","blank type for initial value");
@@ -256,7 +256,7 @@ public class CompileToC {
         comment("sets log-streams to their initial value");
         writeLine("void initLogStreams(){");
         for(LogType.Type t:LogType.Type.values()){
-            writeLine("log_"+t+" = "+(t== LogType.Type.ERR?"stderr":"stdout")+";");
+            writeLine("  log_"+t+" = "+(t== LogType.Type.ERR?"stderr":"stdout")+";");
         }
         writeLine("}");
         comment("log-Method");
@@ -586,6 +586,33 @@ public class CompileToC {
         writeLine(";");
     }
 
+
+    private void writeArgs(String indent,Expression[] args, ArrayList<String> initLines, StringBuilder line, String name, String[] argNames) throws IOException {
+        long argOff=0;
+        int blockSize;
+        for (Expression firstArg : args) {
+            comment(indent+"{","arg1: "+firstArg.expectedType());
+            blockSize = firstArg.expectedType().blockCount;
+            if (blockSize == 1) {
+                line.append(indent).append("  argsOut[").append(argOff).append("]=");
+                writeExpression("  ", initLines, line, firstArg, 0, name, argNames);
+                line.append(";");
+            } else {
+                line.append(indent).append("  memcpy,argsOut[").append(argOff).append("],");
+                writeExpression("  ", initLines, line, firstArg, 0, name, argNames);
+                line.append(",").append(blockSize).append(");");
+            }
+            argOff += blockSize;//addLater handle argOverflow
+            for (String l : initLines) {
+                writeLine(l);
+            }
+            initLines.clear();
+            writeLine(line.toString());
+            line.setLength(0);
+            writeLine(indent+"}");
+        }
+    }
+
     private void writeProcImplementation(String name, Procedure proc) throws IOException{
         writeProcSignature(name, proc);
         writeLine("{");
@@ -682,31 +709,9 @@ public class CompileToC {
             initLines.clear();
             line.setLength(0);
             if(firstStatic!=null){
-                long argOff=0;
-                int blockSize;
-                for (Expression firstArg : firstArgs) {
-                    comment("  {","arg1: "+firstArg.expectedType());
-                    blockSize = firstArg.expectedType().blockCount;
-                    if (blockSize == 1) {
-                        line.append("    argsOut[").append(argOff).append("]=");
-                        writeExpression("  ", initLines, line, firstArg, 0, name, argNames);
-                        line.append(";");
-                    } else {
-                        line.append("    memcpy,argsOut[").append(argOff).append("],");
-                        writeExpression("  ", initLines, line, firstArg, 0, name, argNames);
-                        line.append(",").append(blockSize).append(");");
-                    }
-                    argOff += blockSize;//addLater handle argOverflow
-                    for (String l : initLines) {
-                        writeLine(l);
-                    }
-                    initLines.clear();
-                    writeLine(line.toString());
-                    line.setLength(0);
-                    writeLine("  }");
-                }
+                writeArgs("  ",firstArgs, initLines, line, name, argNames);
                 if(firstStatic instanceof Procedure.StaticProcChild){
-                    writeLine("  return &"+((Procedure.StaticProcChild) firstStatic).name+";");
+                    writeLine("  return &"+PROC_PREFIX+asciify(((Procedure.StaticProcChild) firstStatic).name)+";");
                 }else{
                     writeLine("  return "+argNames[((Procedure.DynamicProcChild)firstStatic).varId]+".asProc");
                 }
@@ -718,9 +723,18 @@ public class CompileToC {
                 //writeAllOther
             }else{
                 //all children are optional
-                writeLine("  "+PROCEDURE_TYPE+"* ret=NULL;");
-                //TODO optional procedure-calls
-                comment("  ","TODO optional procedure-calls are currently not supported in compile mode");
+                writeLine("  "+PROCEDURE_TYPE+" ret=NULL;");
+                for(int i=0;i<children.size();i++){
+                    writeLine("  if("+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[0].asBool){");
+                    writeLine("    if(ret==NULL){");
+                    writeArgs("      ",childArgs.get(i), initLines, line, name, argNames);
+                    writeLine("      ret="+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[1].asProc;");
+                    writeLine("    }else{");
+                    writeLine("      assert(false&&\"unimplemented\");");
+                    //TODO additional procedure-calls
+                    writeLine("    }");
+                    writeLine("  }");
+                }
                 writeLine("  return ret;");
             }
         }else {
@@ -822,23 +836,48 @@ public class CompileToC {
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
+            case MINUS:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=";
+                    parts[1]=typeField((Type.Numeric)lType)+"-";
+                    parts[2]=typeField((Type.Numeric)rType)+"}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
             case DIV:
             case INT_DIV:
-            case MINUS:
             case MULT:
             case MOD:
             case POW:
             case AND:
             case OR:
             case XOR:
-            case NOT:
             case FAST_AND:
             case FAST_OR:
-            case FLIP:
-            case GT:
-            case GE:
             case NE:
             case EQ:
+            case LSHIFT:
+            case RSHIFT:
+                throw new UnsupportedOperationException("unimplemented:"+op.op);
+            case GT:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=CAST_BLOCK+"{.asBool=";
+                    parts[1]=typeField((Type.Numeric)lType)+">";
+                    parts[2]=typeField((Type.Numeric)rType)+"}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case GE:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=CAST_BLOCK+"{.asBool=";
+                    parts[1]=typeField((Type.Numeric)lType)+">=";
+                    parts[2]=typeField((Type.Numeric)rType)+"}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
             case LT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
                     parts[0]=CAST_BLOCK+"{.asBool=";
@@ -849,10 +888,18 @@ public class CompileToC {
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case LE:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=CAST_BLOCK+"{.asBool=";
+                    parts[1]=typeField((Type.Numeric)lType)+"<=";
+                    parts[2]=typeField((Type.Numeric)rType)+"}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case NOT:
+            case FLIP:
             case IF:
-            case LSHIFT:
-            case RSHIFT:
-                throw new UnsupportedOperationException("unimplemented");
+                throw new SyntaxError(op.op+" is no binary operation");
         }
         throw new RuntimeException("Unreachable");
     }
@@ -995,7 +1042,7 @@ public class CompileToC {
         writeLine("    " + VALUE_BLOCK_NAME + "* argsI=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
         writeLine("    " + VALUE_BLOCK_NAME + "* argsO=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
         writeLine("    " + VALUE_BLOCK_NAME + "* argsTmp;");
-        writeLine("    if(args1==NULL||args2==NULL){");
+        writeLine("    if((argsI==NULL)||(argsO==NULL)){");
         writeLine("        return (void*)-1;");//addLater useful handling of return codes
         writeLine("    }");
         writeLine("    // initArgs");
@@ -1054,7 +1101,9 @@ public class CompileToC {
             writeLine("    k0++;");
             writeLine("  }");
         }
+        writeLine("  initLogStreams();");
         writeLine("  run(init);");
+        comment("  puts(\"\");","finish last line in stdout");
         writeLine("  return 0;");
         writeLine("}");
     }

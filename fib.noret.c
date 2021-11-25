@@ -47,8 +47,11 @@ typedef uint64_t Type;
 // Type data for all contained Types
 Type typeData [];
 
-// Value-Block Definition
+// value-block type
 typedef union ValueImpl Value;
+// procedure type (the return-type is void* instead of Procedure* to avoid a recursive type definition)
+typedef void*(*Procedure)(Value*,Value*,Value**);
+// balue-block definition
 union ValueImpl{
   bool       asBool;
   int8_t     asI8;
@@ -62,15 +65,13 @@ union ValueImpl{
   float      asF32;
   double     asF64;
   Type       asType;
-  Procedure* asProc;
+  Procedure  asProc;
   Value*     asPtr;
   uint8_t    raw8[8];
   uint16_t   raw16[4];
   uint32_t   raw32[2];
 };
 
-// Procedure Type, the return-type is void* instead of Procedure* to avoid a recursive type definition
-typedef void*(*Procedure)(Value*,Value*,Value**);
 // definitions and functions for log
 typedef enum{
   null,// blank type for initial value
@@ -89,10 +90,10 @@ FILE* log_DEBUG;
 FILE* log_INFO;
 // sets log-streams to their initial value
 void initLogStreams(){
-log_DEFAULT = stdout;
-log_ERR = stderr;
-log_DEBUG = stdout;
-log_INFO = stdout;
+  log_DEFAULT = stdout;
+  log_ERR = stderr;
+  log_DEBUG = stdout;
+  log_INFO = stdout;
 }
 // log-Method
 void logValue(LogType logType,bool append,Type type,Value* value){
@@ -221,7 +222,7 @@ void* proc_printFib(Value* argsIn,Value* argsOut,Value** argData){
   {// Initialize: IfExpr{BinOp{VarExpression{2} GT ValueExpression{0}}?TypeCast{Type:((Type:int64, Type:int64, Type:int64)=>?)?:this}:TypeCast{Type:((Type:int64, Type:int64, Type:int64)=>?)?:ValueExpression{none}}}
     Value tmp0 [2];
     {
-      if((Value){.asBool=(*(argsIn+2)).asI64<((Value){.asI32=0}).asI32}.asBool){
+      if((Value){.asBool=(*(argsIn+2)).asI64>((Value){.asI32=0}).asI32}.asBool){
         memcpy(tmp0,(Value[]){(Value){.asBool=true},(Value){.asProc=&proc_printFib}},2);
       }else{
         memcpy(tmp0,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
@@ -230,7 +231,7 @@ void* proc_printFib(Value* argsIn,Value* argsOut,Value** argData){
     memcpy(var3,tmp0,2);
   }
   {// Assign: Assignment:{VarExpression{2}=BinOp{VarExpression{2} MINUS ValueExpression{1}}}
-    (*(argsIn+2)) = (Value){.asBool=(*(argsIn+2)).asI64<((Value){.asI32=1}).asI32};
+    (*(argsIn+2)) = (Value){.asI64=(*(argsIn+2)).asI64-((Value){.asI32=1}).asI32};
   }
   Value var4;// (Type:int64)
   {// Initialize: BinOp{VarExpression{0} PLUS VarExpression{1}}
@@ -239,8 +240,24 @@ void* proc_printFib(Value* argsIn,Value* argsOut,Value** argData){
   {// Log: Log[DEFAULT]{VarExpression{0}}
     logValue(DEFAULT,false,TYPE_SIG_I64,&(*(argsIn+0)));
   }
-  // TODO optional procedure-calls are currently not supported in compile mode
-  return NULL;
+  Procedure ret=NULL;
+  if(var3[0].asBool){
+    if(ret==NULL){
+      {// arg1: Type:int64
+        argsOut[0]=(*(argsIn+1));
+      }
+      {// arg1: Type:int64
+        argsOut[1]=var4;
+      }
+      {// arg1: Type:int64
+        argsOut[2]=(*(argsIn+2));
+      }
+      ret=var3[1].asProc;
+    }else{
+      assert(false&&"unimplemented");
+    }
+  }
+  return ret;
 }
 
 // start()
@@ -266,7 +283,7 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   {// arg1: Type:int64
     argsOut[2]=var2;
   }
-  return &printFib;
+  return &proc_printFib;
 }
 
 // readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
@@ -290,7 +307,7 @@ void* run(void* initState){
     Value* argsI=malloc(MAX_ARG_SIZE*sizeof(Value));
     Value* argsO=malloc(MAX_ARG_SIZE*sizeof(Value));
     Value* argsTmp;
-    if(args1==NULL||args2==NULL){
+    if((argsI==NULL)||(argsO==NULL)){
         return (void*)-1;
     }
     // initArgs
@@ -320,6 +337,8 @@ int main(){
   }
   *((Value**)(init+off))=argData;
   off+=sizeof(Value*);
+  initLogStreams();
   run(init);
+  puts("");// finish last line in stdout
   return 0;
 }
