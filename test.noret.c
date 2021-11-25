@@ -51,7 +51,7 @@ Type typeData [];
 typedef union ValueImpl Value;
 // procedure type (the return-type is void* instead of Procedure* to avoid a recursive type definition)
 typedef void*(*Procedure)(Value*,Value*,Value**);
-// balue-block definition
+// value-block definition
 union ValueImpl{
   bool       asBool;
   int8_t     asI8;
@@ -94,6 +94,81 @@ void initLogStreams(){
   log_ERR = stderr;
   log_DEBUG = stdout;
   log_INFO = stdout;
+}
+// recursive printing of types
+void printType(const Type type,FILE* log){
+  switch(type&TYPE_SIG_MASK){
+    case TYPE_SIG_EMPTY:
+      fputs("Type:\"empty\"",log);
+      break;
+    case TYPE_SIG_BOOL:
+      fputs("Type:bool",log);
+      break;
+    case TYPE_SIG_I8:
+      fputs("Type:int8",log);
+      break;
+    case TYPE_SIG_U8:
+      fputs("Type:uint8",log);
+      break;
+    case TYPE_SIG_I16:
+      fputs("Type:int16",log);
+      break;
+    case TYPE_SIG_U16:
+      fputs("Type:uint16",log);
+      break;
+    case TYPE_SIG_I32:
+      fputs("Type:int32",log);
+      break;
+    case TYPE_SIG_U32:
+      fputs("Type:uint32",log);
+      break;
+    case TYPE_SIG_I64:
+      fputs("Type:int64",log);
+      break;
+    case TYPE_SIG_U64:
+      fputs("Type:uint64",log);
+      break;
+    case TYPE_SIG_F32:
+      fputs("Type:float32",log);
+      break;
+    case TYPE_SIG_F64:
+      fputs("Type:float64",log);
+      break;
+    case TYPE_SIG_STRING8:
+      fputs("Type:string8",log);
+      break;
+    case TYPE_SIG_STRING16:
+      fputs("Type:string16",log);
+      break;
+    case TYPE_SIG_STRING32:
+      fputs("Type:string32",log);
+      break;
+    case TYPE_SIG_TYPE:
+      fputs("Type:type",log);
+      break;
+    case TYPE_SIG_NONE:
+      fputs("Type:\"none\"",log);
+      break;
+    case TYPE_SIG_ANY:
+      fputs("Type:any",log);
+      break;
+    case TYPE_SIG_OPTIONAL:
+      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);
+      fputs("?",log);
+      break;
+    case TYPE_SIG_REFERENCE:
+      fputs("@",log);
+      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);
+      break;
+    case TYPE_SIG_ARRAY:
+      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);
+      fputs("[]",log);
+      break;
+    case TYPE_SIG_PROC:
+    case TYPE_SIG_STRUCT:
+      assert(false && " unreachable ");
+      break;
+  }
 }
 // log-Method
 void logValue(LogType logType,bool append,const Type type,const Value* value){
@@ -177,24 +252,33 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
     case TYPE_SIG_STRING8:
     case TYPE_SIG_STRING16:
     case TYPE_SIG_STRING32:
-      assert(false&&"unimplemented");
+      assert(false && "unimplemented");
       break;
     case TYPE_SIG_TYPE:
-      assert(false&&"unimplemented");
+      printType(value->asType,log);
       break;
     case TYPE_SIG_ANY:
        prevType=logType;
        logValue(logType,true,value->asType,value+1/*content*/);
        break;
     case TYPE_SIG_OPTIONAL:
+      if(value[0].asBool){
+        prevType=logType;
+        fputs("Optional{",log);
+        logValue(logType,true,typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],value+1/*value*/);
+        fputs("}",log);
+      }else{
+        fputs("Optional{}",log);
+      }
+      break;
     case TYPE_SIG_REFERENCE:
     case TYPE_SIG_ARRAY:
     case TYPE_SIG_PROC:
     case TYPE_SIG_STRUCT:
-      assert(false&&"unimplemented");
+      assert(false && " unimplemented ");
       break;
     default:
-      assert(false&&"unreachable");
+      assert(false && " unreachable ");
       break;
   }
   prevType=logType;
@@ -204,7 +288,7 @@ Value constData [];
 // const Type:int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
 // const Type:any : array_test = {{1,2,3},{4,5},{6}}
-const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(null<<TYPE_CONTENT_SHIFT)},{.asPtr=(constData+0)},};
+const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT)},{.asPtr=(constData+0)},};
 // const Type:string8[] : str_test = {"str1","str2"}
 const Value const_str__test []={{.asU64=0x2},{.asU64=0x8000000000000004},{.asPtr=(constData+13)},{.asU64=0x8000000000000004},{.asPtr=(constData+14)}};
 // const Type:int32[] : y = {2112454933,2,3}
@@ -214,8 +298,6 @@ const Value const_type__sig__test []={{.asU64=0x0}};
 // data for values used in constants
 Value constData []={{.asU64=0x3},{.asU64=0x8000000000000003},{.asPtr=(constData+3)},{.asI32=1},{.asI32=2},{.asI32=3},{.asU64=0x8000000000000002},{.asPtr=(constData+8)},{.asI32=4},{.asI32=5},{.asU64=0x8000000000000001},{.asPtr=(constData+12)},{.asI32=6},{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}},{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}}};
 
-// loop(Type:int8)
-void* proc_loop(Value* argsIn,Value* argsOut,Value** argData);
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut,Value** argData);
 // readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
@@ -223,102 +305,82 @@ void* proc_readLine(Value* argsIn,Value* argsOut,Value** argData);
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* run(void* initState);
 
-// loop(Type:int8)
-void* proc_loop(Value* argsIn,Value* argsOut,Value** argData){
-  // var0:(*(argsIn+0))
-  {// Log: Log[DEFAULT]{VarExpression{0}}
-    logValue(DEFAULT,false,TYPE_SIG_I8,&(*(argsIn+0)));
-  }
-  Value var1 [2];// (Type:((Type:int8)=>?)?)
-  {// Initialize: IfExpr{BinOp{VarExpression{0} LT ValueExpression{5}}?TypeCast{Type:((Type:int8)=>?)?:this}:TypeCast{Type:((Type:int8)=>?)?:ValueExpression{none}}}
-    Value tmp0 [2];
-    {
-      if((Value){.asBool=(*(argsIn+0)).asI8<((Value){.asI32=5}).asI32}.asBool){
-        memcpy(tmp0,(Value[]){(Value){.asBool=true},(Value){.asProc=&proc_loop}},2);
-      }else{
-        memcpy(tmp0,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
-      }
-    }
-    memcpy(var1,tmp0,2);
-  }
-  Procedure ret=NULL;
-  if(var1[0].asBool){
-    if(ret==NULL){
-      {// arg1: Type:int8
-        argsOut[0]=(Value){.asI8=(*(argsIn+0)).asI8+((Value){.asI8=1}).asI8};
-      }
-      ret=var1[1].asProc;
-    }else{
-      assert(false&&"unimplemented");
-    }
-  }
-  return ret;
-}
-
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   // var0:(argsIn+0)
-  Value var1;// (Type:int32)
-  {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    var1=(Value){.asI32=((Value){.asI32=1}).asI32+(Value){.asI32=(int32_t)(((argsIn+0))[0]).asU64}.asI32};
+  Value var1 [2];// (Type:string8)
+  {// Initialize: ValueExpression{"UTF8-String"}
+    Value tmp0 [2];
+    {
+      memcpy(tmp0,(Value[]){(Value){.asU64=0xc00000000000000b},(Value){.asPtr=(tmp+0)}},2);
+      // TODO handle data
+      // data={(Value){.raw8={0x55,0x54,0x46,0x38,0x2d,0x53,0x74,0x72}},(Value){.raw8={0x69,0x6e,0x67,0x0,0x0,0x0,0x0,0x0}}}
+    }
+    memcpy(var1,tmp0,2);
   }
-  {// Log: Log[DEFAULT]{ValueExpression{{2112454933,2,3}}}
-    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),const_y);
+  Value var2 [2];// (Type:string16)
+  {// Initialize: ValueExpression{"UTF16-String"}
+    Value tmp0 [2];
+    {
+      memcpy(tmp0,(Value[]){(Value){.asU64=0xc00000000000000c},(Value){.asPtr=(tmp+0)}},2);
+      // TODO handle data
+      // data={(Value){.raw16={0x55,0x54,0x46,0x31}},(Value){.raw16={0x36,0x2d,0x53,0x74}},(Value){.raw16={0x72,0x69,0x6e,0x67}}}
+    }
+    memcpy(var2,tmp0,2);
+  }
+  Value var3 [2];// (Type:string32)
+  {// Initialize: ValueExpression{"UTF32-String"}
+    Value tmp0 [2];
+    {
+      memcpy(tmp0,(Value[]){(Value){.asU64=0xc00000000000000c},(Value){.asPtr=(tmp+0)}},2);
+      // TODO handle data
+      // data={(Value){.raw32={0x55,0x54}},(Value){.raw32={0x46,0x33}},(Value){.raw32={0x32,0x2d}},(Value){.raw32={0x53,0x74}},(Value){.raw32={0x72,0x69}},(Value){.raw32={0x6e,0x67}}}
+    }
+    memcpy(var3,tmp0,2);
+  }
+  Value var4;// (Type:int32)
+  {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
+    var4=(Value){.asI32=((Value){.asI32=1}).asI32+(Value){.asI32=(int32_t)(((argsIn+0))[0]).asU64}.asI32};
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:int32[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}));
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(null<<TYPE_CONTENT_SHIFT)}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(3<<TYPE_CONTENT_SHIFT)}));
   }
-  Value var2;// (Type:uint64)
+  Value var5;// (Type:uint64)
   {// Initialize: ValueExpression{3}
-    var2=((Value){.asU64=3});
+    var5=((Value){.asU64=3});
   }
-  {// Log: Log[DEFAULT]{VarExpression{2}}
-    logValue(DEFAULT,false,TYPE_SIG_U64,&var2);
-  }
-  Value var3 [2];// (Type:int32[])
-  {// Initialize: ValueExpression{{1,2,3,4}}
-    Value tmp0 [2];
-    {
-      memcpy(tmp0,(Value[]){(Value){.asU64=0xc000000000000004},(Value){.asPtr=(tmp+0)}},2);
-      // TODO handle data
-      // data={(Value){.asI32=1},(Value){.asI32=2},(Value){.asI32=3},(Value){.asI32=4}}
-    }
-    memcpy(var3,tmp0,2);
-  }
-  {// Log: Log[DEFAULT]{VarExpression{3}}
-    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),var3);
+  {// Log: Log[DEFAULT]{VarExpression{5}}
+    logValue(DEFAULT,false,TYPE_SIG_U64,&var5);
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_NONE}));
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"empty"[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(null<<TYPE_CONTENT_SHIFT)}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(4<<TYPE_CONTENT_SHIFT)}));
   }
-  Value var4 [2];// (Type:int32?)
+  Value var6 [2];// (Type:int32?)
   {// Initialize: TypeCast{Type:int32?:ValueExpression{none}}
-    memcpy(var4,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
+    memcpy(var6,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
   }
-  {// Log: Log[DEFAULT]{VarExpression{4}}
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var4);
+  {// Log: Log[DEFAULT]{VarExpression{6}}
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var6);
   }
-  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{4}}?TypeCast{Type:int32?:GetField{VarExpression{4}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
+  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{6}}?TypeCast{Type:int32?:GetField{VarExpression{6}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
     Value tmp0 [2];
     {
-      if((var4)[0].asBool){
-        memcpy(tmp0,(Value[]){(Value){.asBool=true},(var4)[1]},2);
+      if((var6)[0].asBool){
+        memcpy(tmp0,(Value[]){(Value){.asBool=true},(var6)[1]},2);
       }else{
         memcpy(tmp0,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
       }
     }
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),tmp0);
   }
-  {// arg1: Type:int8
-    argsOut[0]=((Value){.asI8=0});
-  }
-  return &proc_loop;
+  Procedure ret=NULL;
+  return ret;
 }
 
 // readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)

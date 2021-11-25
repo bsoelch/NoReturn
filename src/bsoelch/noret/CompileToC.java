@@ -74,6 +74,10 @@ public class CompileToC {
         writeLine("#include <"+include+">");
     }
 
+    private String escapeStr(Object o){
+        return o.toString().replace("\"","\\\"");
+    }
+
     private Long typeOffset(Type t) {
         Long off = typeOffsets.get(t);
         if (off == null) {
@@ -81,8 +85,8 @@ public class CompileToC {
             if(typeDataOff>0){
                 typeDataDeclarations.append(',');
             }
-            typeDataOff++;
             typeDataDeclarations.append(typeSignature(t));
+            return typeDataOff++;
         }
         return off;
     }
@@ -125,15 +129,15 @@ public class CompileToC {
         }else if(t==Type.Primitive.ANY){
             return "TYPE_SIG_ANY";
         }else if(t instanceof Type.Optional){
-            typeSignature(((Type.Optional) t).content);//ensure contentSignature exists
+            typeSignature(((Type.Optional) t).content);//ensure type-signature exists
             Long off = typeOffset(((Type.Optional) t).content);
             return "TYPE_SIG_OPTIONAL|("+off+"<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Reference){
-            typeSignature(((Type.Reference) t).content);//ensure contentSignature exists
+            typeSignature(((Type.Reference) t).content);//ensure type-signature exists
             Long off = typeOffset(((Type.Reference) t).content);
             return "TYPE_SIG_REFERENCE|("+off+"<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Array){
-            typeSignature(((Type.Array) t).content);//ensure contentSignature exists
+            typeSignature(((Type.Array) t).content);//ensure type-signature exists
             Long off = typeOffset(((Type.Array) t).content);
             return "TYPE_SIG_ARRAY|("+off+"<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Proc){
@@ -212,10 +216,10 @@ public class CompileToC {
             out.write((i>0?",":"")+procedureArgs[i]);
         }
         writeLine(");");
-        comment("balue-block definition");
+        comment("value-block definition");
         writeLine("union " + VALUE_BLOCK_NAME + "Impl{");
         writeLine("  bool       asBool;");
-        writeLine("  int8_t     asI8;");//addLater use constants/function for typenames
+        writeLine("  int8_t     asI8;");//addLater use constants/function for type-names
         writeLine("  uint8_t    asU8;");
         writeLine("  int16_t    asI16;");
         writeLine("  uint16_t   asU16;");
@@ -258,6 +262,81 @@ public class CompileToC {
         for(LogType.Type t:LogType.Type.values()){
             writeLine("  log_"+t+" = "+(t== LogType.Type.ERR?"stderr":"stdout")+";");
         }
+        writeLine("}");
+        comment("recursive printing of types");//addLater surround types with brackets when printing
+        writeLine("void printType(const Type type,FILE* log){");
+        writeLine("  switch(type&TYPE_SIG_MASK){");
+        writeLine("    case TYPE_SIG_EMPTY:");
+        writeLine("      fputs(\""+escapeStr(Type.EMPTY_TYPE)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_BOOL:");
+        writeLine("      fputs(\""+escapeStr(Type.Primitive.BOOL)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_I8:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.INT8)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_U8:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.UINT8)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_I16:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.INT16)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_U16:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.UINT16)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_I32:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.INT32)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_U32:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.UINT32)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_I64:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.INT64)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_U64:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.UINT64)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_F32:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.FLOAT32)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_F64:");
+        writeLine("      fputs(\""+escapeStr(Type.Numeric.FLOAT64)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_STRING8:");
+        writeLine("      fputs(\""+escapeStr(Type.NoRetString.STRING8)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_STRING16:");
+        writeLine("      fputs(\""+escapeStr(Type.NoRetString.STRING16)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_STRING32:");
+        writeLine("      fputs(\""+escapeStr(Type.NoRetString.STRING32)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_TYPE:");
+        writeLine("      fputs(\""+escapeStr(Type.TYPE)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_NONE:");
+        writeLine("      fputs(\""+escapeStr(Type.NONE_TYPE)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_ANY:");
+        writeLine("      fputs(\""+escapeStr(Type.Primitive.ANY)+"\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_OPTIONAL:");
+        writeLine("      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);");
+        writeLine("      fputs(\"?\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_REFERENCE:");
+        writeLine("      fputs(\"@\",log);");
+        writeLine("      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_ARRAY:");
+        writeLine("      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);");
+        writeLine("      fputs(\"[]\",log);");
+        writeLine("      break;");
+        writeLine("    case TYPE_SIG_PROC:");
+        writeLine("    case TYPE_SIG_STRUCT:");
+        writeLine("      assert(false && \" unreachable \");");
+        writeLine("      break;");
+        writeLine("  }");
         writeLine("}");
         comment("log-Method");
         writeLine("void logValue(LogType logType,bool append,const Type type,const "+VALUE_BLOCK_NAME+"* value){");
@@ -313,26 +392,34 @@ public class CompileToC {
         writeLine("    case TYPE_SIG_STRING16:");
         writeLine("    case TYPE_SIG_STRING32:");
         //TODO print strings
-        writeLine("      assert(false&&\"unimplemented\");");
+        writeLine("      assert(false && \"unimplemented\");");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_TYPE:");
-        //TODO print Type-Name
-        writeLine("      assert(false&&\"unimplemented\");");
+        writeLine("      printType(value->asType,log);");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_ANY:");
         writeLine("       prevType=logType;");
         writeLine("       logValue(logType,true,value->asType,value+1/*content*/);");//TODO dereference content if pointer
         writeLine("       break;");
         writeLine("    case TYPE_SIG_OPTIONAL:");
+        writeLine("      if(value[0].asBool){");
+        writeLine("        prevType=logType;");
+        writeLine("        fputs(\"Optional{\",log);");
+        writeLine("        logValue(logType,true,typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],value+1/*value*/);");
+        writeLine("        fputs(\"}\",log);");
+        writeLine("      }else{");
+        writeLine("        fputs(\"Optional{}\",log);");
+        writeLine("      }");
+        writeLine("      break;");
         writeLine("    case TYPE_SIG_REFERENCE:");
         writeLine("    case TYPE_SIG_ARRAY:");
         writeLine("    case TYPE_SIG_PROC:");
         writeLine("    case TYPE_SIG_STRUCT:");
         //TODO Print Containers
-        writeLine("      assert(false&&\"unimplemented\");");
+        writeLine("      assert(false && \" unimplemented \");");
         writeLine("      break;");
         writeLine("    default:");
-        writeLine("      assert(false&&\"unreachable\");");
+        writeLine("      assert(false && \" unreachable \");");
         writeLine("      break;");
         writeLine("  }");
         writeLine("  prevType=logType;");
@@ -568,7 +655,7 @@ public class CompileToC {
     }
 
     //FIXME = does not work for multi-block values
-    // replace with function of form assingN(target,source,count)
+    // replace with function of form assignN(target,source,count)
     private void writeProcSignature(String name, Procedure proc) throws IOException{
         String tmp=Arrays.toString(proc.argTypes());
         comment(name+"("+tmp.substring(1,tmp.length()-1)+")");
@@ -731,7 +818,7 @@ public class CompileToC {
                     writeArgs("      ",childArgs.get(i), initLines, line, name, argNames);
                     writeLine("      ret="+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[1].asProc;");
                     writeLine("    }else{");
-                    writeLine("      assert(false&&\"unimplemented\");");
+                    writeLine("      assert(false && \"unimplemented\");");
                     //TODO additional procedure-calls
                     writeLine("    }");
                     writeLine("  }");
@@ -1040,7 +1127,7 @@ public class CompileToC {
                 return tmpCount;
             }else if(((GetField) expr).value.expectedType() instanceof Type.Optional&&
                     ((GetField) expr).fieldName.equals(Type.FIELD_NAME_VALUE)){
-                //TODO check value before dereferencing
+                //TODO check value before access, dereference pointers
                 line.append('(');
                 writeExpression(indent,initLines,line, ((GetField) expr).value, tmpCount,procName,varNames);
                 line.append(")[1]");//optional.length
