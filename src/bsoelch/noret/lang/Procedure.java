@@ -8,14 +8,16 @@ public class Procedure extends Value{
     public interface ProcChild {}
 
     public static class StaticProcChild implements ProcChild {
+        public final String name;
         final Procedure value;
-        public StaticProcChild(Procedure value) {
+        public StaticProcChild(String name, Procedure value) {
+            this.name = name;
             this.value = value;
         }
     }
     public static class DynamicProcChild implements ProcChild {
-        final int varId;
-        final boolean isOptional;
+        public final int varId;
+        public final boolean isOptional;
         public DynamicProcChild(int varId, boolean isOptional) {
             this.varId = varId;
             this.isOptional=isOptional;
@@ -84,6 +86,17 @@ public class Procedure extends Value{
 
     public Iterable<Action> actions() {
         return Arrays.asList(primitives);
+    }
+
+    public ArrayList<ProcChild> children(){
+        return new ArrayList<>(Arrays.asList(children));
+    }
+    public ArrayList<Expression[]> childArguments(){
+        ArrayList<Expression[]> ret=new ArrayList<>(childArgs.length);
+        for(Expression[] a:childArgs){
+            ret.add(a.clone());
+        }
+        return ret;
     }
 
     /**returns true if this procedure does not have any child procedures*/

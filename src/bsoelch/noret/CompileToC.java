@@ -15,8 +15,8 @@ public class CompileToC {
     public static final String VALUE_BLOCK_NAME = "Value";
     public static final String CAST_BLOCK = "("+VALUE_BLOCK_NAME+")";
 
-    private static final String[] procedureArgs     ={VALUE_BLOCK_NAME + "*", "size_t*", VALUE_BLOCK_NAME + "**"};
-    private static final String[] procedureArgNames ={"args",   "argCount", "argData"};
+    private static final String[] procedureArgs     ={VALUE_BLOCK_NAME + "*", VALUE_BLOCK_NAME+"*", VALUE_BLOCK_NAME + "**"};
+    private static final String[] procedureArgNames ={"argsIn",               "argsOut",            "argData"};
     private static final String procedureOut="void*";
 
     private static final String CONST_DATA_NAME = "constData";
@@ -29,6 +29,7 @@ public class CompileToC {
     private static final long LEN_MASK_TMP      = 0xC000000000000000L;
     public static final String PROC_PREFIX = "proc_";
     public static final String CONST_PREFIX = "const_";
+    public static final String PROCEDURE_TYPE = "Procedure";
 
     private static class DataOut {
         final StringBuilder build;
@@ -206,32 +207,34 @@ public class CompileToC {
         comment("Value-Block Definition");
         writeLine("typedef union " + VALUE_BLOCK_NAME + "Impl "+VALUE_BLOCK_NAME+";");
         writeLine("union " + VALUE_BLOCK_NAME + "Impl{");
-        writeLine("  bool     asBool;");
-        writeLine("  int8_t   asI8;");
-        writeLine("  uint8_t  asU8;");
-        writeLine("  int16_t  asI16;");
-        writeLine("  uint16_t asU16;");
-        writeLine("  int32_t  asI32;");
-        writeLine("  uint32_t asU32;");
-        writeLine("  int64_t  asI64;");
-        writeLine("  uint64_t asU64;");
-        writeLine("  float    asF32;");//addLater ensure correct size
-        writeLine("  double   asF64;");
-        writeLine("  Type     asType;");
-        writeLine("  " + VALUE_BLOCK_NAME + "*   asPtr;");//reference
+        writeLine("  bool       asBool;");
+        writeLine("  int8_t     asI8;");//addLater use constants/function for typenames
+        writeLine("  uint8_t    asU8;");
+        writeLine("  int16_t    asI16;");
+        writeLine("  uint16_t   asU16;");
+        writeLine("  int32_t    asI32;");
+        writeLine("  uint32_t   asU32;");
+        writeLine("  int64_t    asI64;");
+        writeLine("  uint64_t   asU64;");
+        writeLine("  float      asF32;");//addLater ensure correct size
+        writeLine("  double     asF64;");
+        writeLine("  Type       asType;");
+        writeLine("  " + PROCEDURE_TYPE + "* asProc;");
+        writeLine("  " + VALUE_BLOCK_NAME + "*     asPtr;");//reference
+        writeLine("  uint8_t    raw8[8];");
+        writeLine("  uint16_t   raw16[4];");
+        writeLine("  uint32_t   raw32[2];");
+        writeLine("};");
         //multi-value types:
         //  string  ->  len,        val_ptr/raw_data
         //  array   ->  len,        val_ptr/raw_data
+        //  struct  ->  elt1,elt2,...,eltN
         //  any     ->  typeID,     val_ptr/raw_data
         //  opt     ->  hasData,    data
-        writeLine("  uint8_t  raw8[8];");
-        writeLine("  uint16_t raw16[4];");
-        writeLine("  uint32_t raw32[2];");
-        writeLine("};");
         out.newLine();
         //Procedure Type
-        comment("Procedure Type");
-        out.write("typedef "+procedureOut+"(*Procedure)(");
+        comment("Procedure Type, the return-type is void* instead of "+PROCEDURE_TYPE+"* to avoid a recursive type definition");
+        out.write("typedef "+procedureOut+ "(*" + PROCEDURE_TYPE + ")(");
         for(int i=0;i<procedureArgs.length;i++){
             out.write((i>0?",":"")+procedureArgs[i]);
         }
@@ -382,7 +385,7 @@ public class CompileToC {
                 dataOut.off++;}
             if(incOff){
                 dataOut.off++;}//increment before store
-            if(contentType.varSize) {//addLater different handling for optional/reference
+            if(contentType.blockCount>1) {
                 out.append(',');
                 if (prefix) {
                     out.append(CAST_BLOCK);
@@ -592,9 +595,9 @@ public class CompileToC {
         int valCount=0;
         for(int i=0;i<argTypes.length;i++){
             if(argTypes[i].blockCount==1){
-                argNames[i]="(*(args+"+(off++)+"))";
+                argNames[i]="(*(argsIn+"+(off++)+"))";
             }else{
-                argNames[i]= "(*((" + VALUE_BLOCK_NAME + "[" +argTypes[i].blockCount+"])(args+"+(off)+")))";
+                argNames[i]= "(*((" + VALUE_BLOCK_NAME + "[" +argTypes[i].blockCount+"])(argsIn+"+(off)+")))";
                 off+=argTypes[i].blockCount;
             }
             valCount++;
@@ -606,22 +609,28 @@ public class CompileToC {
             for(Action a:proc.actions()){
                 if(a instanceof ValDef){
                     argNames[valCount]="var"+valCount;
-                    if(((ValDef)a).getType().blockCount==1){
+                    line.setLength(0);
+                    int blockCount = ((ValDef) a).getType().blockCount;
+                    if(blockCount ==1){
                         comment("  " + VALUE_BLOCK_NAME + " var" +valCount+";",
                                 "("+((ValDef) a).getType()+")");
+                        line.append("    var").append(valCount).append("=");
                     }else{
-                        comment("  " + VALUE_BLOCK_NAME + " var" +valCount+" ["+((ValDef)a).getType().blockCount+"];",
+                        comment("  " + VALUE_BLOCK_NAME + " var" +valCount+" ["+ blockCount +"];",
                                 "("+((ValDef) a).getType()+")");
+                        line.append("    memcpy(var").append(valCount).append(",");
                     }
                     comment("  {","Initialize: "+((ValDef) a).getInitValue());
-                    line.setLength(0);
-                    line.append("    var").append(valCount).append("=");
                     writeExpression("    ",initLines,line,((ValDef) a).getInitValue(),0, name, argNames);
                     for(String l:initLines){
                         writeLine(l);
                     }
                     initLines.clear();
-                    writeLine(line.append(';').toString());
+                    if(blockCount==1){
+                        writeLine(line.append(';').toString());
+                    }else{
+                        writeLine(line.append(",").append(blockCount).append(");").toString());
+                    }
                     writeLine("  }");
                     valCount++;
                 }else if(a instanceof Assignment){
@@ -656,14 +665,92 @@ public class CompileToC {
                     throw new UnsupportedOperationException("Unsupported ActionType: "+a.getClass().getSimpleName());
                 }
             }
-        }else{
-            comment("  ","Native");
+            Procedure.ProcChild firstStatic=null;
+            Expression[] firstArgs=null;
+            ArrayList<Procedure.ProcChild> children= proc.children();
+            ArrayList<Expression[]> childArgs= proc.childArguments();
+            for(int i=0;i<children.size();i++){
+                Procedure.ProcChild c=children.get(i);
+                if(c instanceof Procedure.StaticProcChild||
+                        (c instanceof Procedure.DynamicProcChild&&!((Procedure.DynamicProcChild) c).isOptional)){
+                    firstStatic=children.remove(i);
+                    firstArgs=childArgs.remove(i);
+                    //static procedure
+                    break;
+                }
+            }
+            initLines.clear();
+            line.setLength(0);
+            if(firstStatic!=null){
+                long argOff=0;
+                int blockSize;
+                for (Expression firstArg : firstArgs) {
+                    comment("  {","arg1: "+firstArg.expectedType());
+                    blockSize = firstArg.expectedType().blockCount;
+                    if (blockSize == 1) {
+                        line.append("    argsOut[").append(argOff).append("]=");
+                        writeExpression("  ", initLines, line, firstArg, 0, name, argNames);
+                        line.append(";");
+                    } else {
+                        line.append("    memcpy,argsOut[").append(argOff).append("],");
+                        writeExpression("  ", initLines, line, firstArg, 0, name, argNames);
+                        line.append(",").append(blockSize).append(");");
+                    }
+                    argOff += blockSize;//addLater handle argOverflow
+                    for (String l : initLines) {
+                        writeLine(l);
+                    }
+                    initLines.clear();
+                    writeLine(line.toString());
+                    line.setLength(0);
+                    writeLine("  }");
+                }
+                if(firstStatic instanceof Procedure.StaticProcChild){
+                    writeLine("  return &"+((Procedure.StaticProcChild) firstStatic).name+";");
+                }else{
+                    writeLine("  return "+argNames[((Procedure.DynamicProcChild)firstStatic).varId]+".asProc");
+                }
+                if(children.size()>0){//TODO allow multiple children procedure-calls (pthreads)
+                    //for(int i=0;i<children.size();i++){
+                    throw new UnsupportedOperationException("Multiple children are currently not supported in compile mode");
+                    //}
+                }
+                //writeAllOther
+            }else{
+                //all children are optional
+                writeLine("  "+PROCEDURE_TYPE+"* ret=NULL;");
+                //TODO optional procedure-calls
+                comment("  ","TODO optional procedure-calls are currently not supported in compile mode");
+                writeLine("  return ret;");
+            }
+        }else {
+            comment("  ", "Native");
             //TODO implementations of native procedures
+            writeLine("  return NULL;");
         }
-        //TODO return id of next procedure
-        writeLine("  return NULL;");
         writeLine("}");
         out.newLine();
+    }
+
+    private String typeField(Type.Numeric type){
+        if(type.isFloat){
+            return ".asF"+8 * (1 << type.level);
+        }else{
+            return ".as"+(type.signed?"I":"U")+8 * (1 << type.level);
+        }
+    }
+    private String cTypeName(Type.Numeric type){
+        if(type.isFloat){
+            if(type.level<=2){
+                return "float";
+            }else if(type.level==3){
+                return "double";
+            }else{
+                throw new SyntaxError("float out of range:"+type);
+            }
+        }else{
+            return (type.signed?"int":"uint")+8 * (1 << type.level)+"_t";
+        }
     }
 
     private String[] unOpParts(LeftUnaryOp op) {
@@ -680,24 +767,16 @@ public class CompileToC {
                 }
             case MINUS://TODO? cast arguments
                 if(inType instanceof Type.Numeric){
-                    if(((Type.Numeric)outType).isFloat){
-                        parts[0]=CAST_BLOCK+"{.asF"+8 * (1 << ((Type.Numeric)outType).level)+"=-";
-                    }else{
-                        parts[0]=CAST_BLOCK+"{.as"+(((Type.Numeric)outType).signed?"I":"U")+8 * (1 << ((Type.Numeric)outType).level)+"=-";
-                    }
-                    if(((Type.Numeric)inType).isFloat){
-                        parts[1]=".asF"+8 * (1 << ((Type.Numeric)inType).level)+"}";
-                    }else{
-                        parts[1]=".as"+(((Type.Numeric)inType).signed?"I":"U")+8 * (1 << ((Type.Numeric)inType).level)+"}";
-                    }
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=-("+ cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)inType)+"}";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case FLIP:
                 if(inType instanceof Type.Numeric&&!((Type.Numeric)outType).isFloat){
-                    parts[0]=CAST_BLOCK+"{.as"+(((Type.Numeric)outType).signed?"I":"U")+8 * (1 << ((Type.Numeric)outType).level)+"=~";
-                    parts[1]=".as"+(((Type.Numeric)inType).signed?"I":"U")+8 * (1 << ((Type.Numeric)inType).level)+"}";
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=~("+ cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)inType)+"}";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -734,23 +813,11 @@ public class CompileToC {
         Type rType=op.right.expectedType();
         Type outType=op.expectedType();
         switch (op.op){
-            case PLUS://TODO cast arguments
+            case PLUS:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    if(((Type.Numeric)outType).isFloat){
-                        parts[0]=CAST_BLOCK+"{.asF"+8 * (1 << ((Type.Numeric)outType).level)+"=";
-                    }else{
-                        parts[0]=CAST_BLOCK+"{.as"+(((Type.Numeric)outType).signed?"I":"U")+8 * (1 << ((Type.Numeric)outType).level)+"=";
-                    }
-                    if(((Type.Numeric)lType).isFloat){
-                        parts[1]=".asF"+8 * (1 << ((Type.Numeric)lType).level)+"+";
-                    }else{
-                        parts[1]=".as"+(((Type.Numeric)lType).signed?"I":"U")+8 * (1 << ((Type.Numeric)lType).level)+"+";
-                    }
-                    if(((Type.Numeric)rType).isFloat){
-                        parts[2]=".asF"+8 * (1 << ((Type.Numeric)rType).level)+"+";
-                    }else{
-                        parts[2]=".as"+(((Type.Numeric)rType).signed?"I":"U")+8 * (1 << ((Type.Numeric)rType).level)+"}";
-                    }
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=";
+                    parts[1]=typeField((Type.Numeric)lType)+"+";
+                    parts[2]=typeField((Type.Numeric)rType)+"}";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -775,16 +842,8 @@ public class CompileToC {
             case LT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
                     parts[0]=CAST_BLOCK+"{.asBool=";
-                    if(((Type.Numeric)lType).isFloat){
-                        parts[1]=".asF"+8 * (1 << ((Type.Numeric)lType).level)+"<";
-                    }else{
-                        parts[1]=".as"+(((Type.Numeric)lType).signed?"I":"U")+8 * (1 << ((Type.Numeric)lType).level)+"<";
-                    }
-                    if(((Type.Numeric)rType).isFloat){
-                        parts[2]=".asF"+8 * (1 << ((Type.Numeric)rType).level)+"<";
-                    }else{
-                        parts[2]=".as"+(((Type.Numeric)rType).signed?"I":"U")+8 * (1 << ((Type.Numeric)rType).level)+"}";
-                    }
+                    parts[1]=typeField((Type.Numeric)lType)+"<";
+                    parts[2]=typeField((Type.Numeric)rType)+"}";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -797,15 +856,27 @@ public class CompileToC {
         }
         throw new RuntimeException("Unreachable");
     }
+    private String[] typecastParts(Type to, Type from) {
+        String[] parts=new String[2];
+        if(from instanceof Type.Numeric&&to instanceof Type.Numeric){
+            parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)to)+"=("+cTypeName((Type.Numeric)to)+")(";
+            parts[1]=")"+typeField((Type.Numeric)from)+"}";
+            return parts;
+        }else if(to instanceof Type.Optional&&from.blockCount==1){
+            parts[0]="("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool="+(from!=Type.NONE_TYPE)+"},";
+            parts[1]="}";
+            return parts;
+        }else{
+            throw new UnsupportedOperationException("Cast from "+from+" to "+to+" is currently not implemented");
+        }
+    }
 
-
-    //addLater inlineExpressions to allow assignments i.e. target=A[i] instead of tmp=A,target=tmp[i]
     private int writeExpression(String indent, ArrayList<String> initLines, StringBuilder line, Expression expr, int tmpCount, String procName, String[] varNames) throws IOException {
         if(expr instanceof VarExpression){
             line.append(varNames[((VarExpression)expr).varId]);
             return tmpCount;
         }else if(expr instanceof ThisExpr){
-            line.append("(&" + PROC_PREFIX).append(procName).append(")");
+            line.append(CAST_BLOCK+"{.asProc=&" + PROC_PREFIX).append(procName).append("}");
             return tmpCount;
         }else if(expr instanceof ValueExpression){
             if(((ValueExpression) expr).constId!=null){
@@ -814,21 +885,23 @@ public class CompileToC {
             }else if(expr.expectedType().varSize){
                 int blockCount=expr.expectedType().blockCount;
                 DataOut data=new DataOut("data={",0,"tmp",LEN_MASK_TMP);//TODO handle dataOut
+                StringBuilder tmp;
                 if(blockCount>1){
                     initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
+                    tmp=new StringBuilder("  memcpy(tmp"+tmpCount+",("+VALUE_BLOCK_NAME+"[]){");
                 }else{
                     initLines.add(indent+"Value tmp"+tmpCount+";");
-                }
-                StringBuilder tmp=new StringBuilder("  tmp"+tmpCount+"=");
-                if(blockCount>1){
-                    tmp.append('{');
+                    tmp=new StringBuilder("  tmp"+tmpCount+"=");
                 }
                 writeConstValueAsUnion(tmp,((ValueExpression)expr).getValue(),data,true,false,false,true);
                 if(blockCount>1){
-                    tmp.append('}');
+                    tmp.append("},").append(blockCount).append(");");
+                }else{
+                    tmp.append(";");
                 }
                 initLines.add(indent+"{");
                 initLines.add(indent+tmp);
+                initLines.add(indent+"  // TODO handle data");
                 initLines.add(indent+"  // "+data.build.append("}"));
                 initLines.add(indent+"}");
                 line.append("tmp").append(tmpCount);
@@ -855,36 +928,52 @@ public class CompileToC {
             line.append(parts[1]);
             return tmpCount;
         }else if(expr instanceof TypeCast){
-            line.append("/*TODO typeCast:").append(expr.expectedType()).append("*/");
+            String[] parts=typecastParts(((TypeCast) expr).type,((TypeCast) expr).value.expectedType());
+            line.append(parts[0]);
             tmpCount=writeExpression(indent,initLines,line,((TypeCast)expr).value,tmpCount, procName, varNames);
-            //TODO perform typecasts
+            line.append(parts[1]);
             return tmpCount;
         }else if(expr instanceof IfExpr){
             //addLater use ?: if both arguments can be inlined
             int blockCount = expr.expectedType().blockCount;
-            initLines.add(indent+"Value tmp"+tmpCount+(blockCount >1?" ["+blockCount+"];":";"));
+            initLines.add(indent+"Value tmp"+tmpCount+(blockCount!=1?" ["+blockCount+"];":";"));
             int prevTmp=tmpCount++;
             initLines.add(indent+"{");
             StringBuilder tmp=new StringBuilder(indent+"  if(");
             tmpCount=writeExpression(indent+"    ",initLines,tmp,((IfExpr)expr).cond,tmpCount, procName, varNames);
             initLines.add(tmp.append(".asBool){").toString());
-            tmp=new StringBuilder(indent+"    tmp"+prevTmp+"=");
+            if(blockCount==1) {
+                tmp = new StringBuilder(indent + "    tmp" + prevTmp + "=");
+            }else{
+                tmp = new StringBuilder(indent + "    memcpy(tmp" + prevTmp + ",");
+            }
             tmpCount=writeExpression(indent,initLines,tmp,((IfExpr)expr).ifVal,tmpCount, procName, varNames);
+            if(blockCount!=1) {
+                tmp.append(",").append(blockCount).append(')');
+            }
             initLines.add(tmp.append(";").toString());
             initLines.add(indent+"  }else{");
-            tmp=new StringBuilder(indent+"    tmp"+prevTmp+"=");
+            if(blockCount==1) {
+                tmp = new StringBuilder(indent + "    tmp" + prevTmp + "=");
+            }else{
+                tmp = new StringBuilder(indent + "    memcpy(tmp" + prevTmp + ",");
+            }
             writeExpression(indent+"    ",initLines,tmp,((IfExpr)expr).elseVal,tmpCount, procName, varNames);
+            if(blockCount!=1) {
+                tmp.append(",").append(blockCount).append(')');
+            }
             initLines.add(tmp.append(";").toString());
             initLines.add(indent+"  }");
             initLines.add(indent+"}");
             line.append("tmp").append(prevTmp);
             return prevTmp;
         }else {
-            //TODO other expressions value
-            comment(indent,"TODO "+expr.getClass().getSimpleName()+" is currently not supported");
-            return tmpCount;
+            //TODO other expressions
+            throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
+            //return tmpCount;
         }
     }
+
 
     private void writeRunSignature() throws IOException {
         comment(" main procedure handling function (written in a way that allows easy usage in pthreads)");
@@ -897,20 +986,26 @@ public class CompileToC {
     /**writes an integrated interpreted that runs the NoRet C-Representation as a C-Program*/
     private void writeMain(boolean hasArgs) throws IOException {
         writeRunSignature();writeLine("{");
-        writeLine("    Procedure f=*((Procedure*)initState);");
-        writeLine("    initState+=sizeof(Procedure);");
+        writeLine("    " + PROCEDURE_TYPE + " f=*((Procedure*)initState);");
+        writeLine("    initState+=sizeof(" + PROCEDURE_TYPE + ");");
         writeLine("    size_t argCount=*((size_t*)initState);");
         writeLine("    initState+=sizeof(size_t);");
         writeLine("    " + VALUE_BLOCK_NAME + "* argData=*(("+VALUE_BLOCK_NAME+"**)initState);");
         writeLine("    initState+=sizeof(" + VALUE_BLOCK_NAME + "*);");
-        writeLine("    " + VALUE_BLOCK_NAME + "* argCache=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
-        writeLine("    if(argCache==NULL){");
+        writeLine("    " + VALUE_BLOCK_NAME + "* argsI=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
+        writeLine("    " + VALUE_BLOCK_NAME + "* argsO=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
+        writeLine("    " + VALUE_BLOCK_NAME + "* argsTmp;");
+        writeLine("    if(args1==NULL||args2==NULL){");
         writeLine("        return (void*)-1;");//addLater useful handling of return codes
         writeLine("    }");
         writeLine("    // initArgs");
-        writeLine("    memcpy(argCache,initState,argCount*sizeof(" + VALUE_BLOCK_NAME + "));");
+        writeLine("    memcpy(argsI,initState,argCount*sizeof(" + VALUE_BLOCK_NAME + "));");
         writeLine("    do{");
-        writeLine("        f=(Procedure)f(argCache,&argCount,&argData);");
+        writeLine("        f=(" + PROCEDURE_TYPE + ")f(argsI,argsO,&argData);");
+        comment("        ","swap args");
+        writeLine("        argsTmp=argsI;");
+        writeLine("        argsI=argsO;");
+        writeLine("        argsO=argsTmp;");
         writeLine("    }while(f!=NULL);");
         writeLine("    return (void*)0;");
         writeLine("}");
@@ -920,14 +1015,14 @@ public class CompileToC {
         if(hasArgs){
             writeLine("int main(int argc,char** argv){");
             //ignore first argument for consistency with interpreter
-            writeLine("  void* init=malloc(sizeof(Procedure)+sizeof(size_t)+sizeof(" + VALUE_BLOCK_NAME + "*)+((1+2*(argc-1))*sizeof("+VALUE_BLOCK_NAME+")));");
+            writeLine("  void* init=malloc(sizeof(" + PROCEDURE_TYPE + ")+sizeof(size_t)+sizeof(" + VALUE_BLOCK_NAME + "*)+((1+2*(argc-1))*sizeof("+VALUE_BLOCK_NAME+")));");
         }else{
             writeLine("int main(){");
-            writeLine("  void* init=malloc(sizeof(Procedure)+sizeof(size_t));");
+            writeLine("  void* init=malloc(sizeof(" + PROCEDURE_TYPE + ")+sizeof(size_t));");
         }
         writeLine("  size_t off=0;");
-        writeLine("  *((Procedure*)init)=&" + PROC_PREFIX + "start;");
-        writeLine("  off+=sizeof(Procedure);");
+        writeLine("  *((" + PROCEDURE_TYPE + "*)init)=&" + PROC_PREFIX + "start;");
+        writeLine("  off+=sizeof(" + PROCEDURE_TYPE + ");");
         writeLine("  *((size_t*)(init+off))=1;");
         writeLine("  off+=sizeof(size_t);");
         writeLine("  " + VALUE_BLOCK_NAME + "* argData=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");//TODO handling of argData

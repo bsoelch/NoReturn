@@ -1661,7 +1661,7 @@ public class Parser {
                 }
             }else{
                 outTypes=proc.argTypes();
-                targets.add(new Procedure.StaticProcChild(proc));
+                targets.add(new Procedure.StaticProcChild(procName, proc));
             }
             token=tokens.getNextToken();
             if(token==null||token.tokenType !=ParserTokenType.OPEN_BRACKET){
@@ -1698,6 +1698,7 @@ public class Parser {
             for(int i=0;i< argBuffer.size();i++){
                 //Type-check parameters
                 if(Type.canAssign(outTypes[i],argBuffer.get(i).expectedType(),generics)){
+                    //TODO ensure element is cast to correct type (respecting generics)
                     argArray[i]=argBuffer.get(i);
                 }else{
                     throw new TypeError("Cannot assign "+ argBuffer.get(i).expectedType()+" to "+outTypes[i]+" generics:"+generics);
