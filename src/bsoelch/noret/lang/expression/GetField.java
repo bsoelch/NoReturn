@@ -7,8 +7,8 @@ import bsoelch.noret.lang.*;
 import java.util.ArrayList;
 
 public class GetField implements Expression{
-    final Expression value;
-    final String fieldName;
+    public final Expression value;
+    public final String fieldName;
     final Type type;
 
     public static Expression create(Expression value, String fieldName){

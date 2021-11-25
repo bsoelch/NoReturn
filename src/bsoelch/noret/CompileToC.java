@@ -260,7 +260,7 @@ public class CompileToC {
         }
         writeLine("}");
         comment("log-Method");
-        writeLine("void logValue(LogType logType,bool append,Type type,"+VALUE_BLOCK_NAME+"* value){");
+        writeLine("void logValue(LogType logType,bool append,const Type type,const "+VALUE_BLOCK_NAME+"* value){");
         writeLine("  if(prevType!=null){");
         writeLine("    if((logType!=prevType)||(!append)){");
         writeLine("      switch(prevType){");
@@ -624,7 +624,7 @@ public class CompileToC {
             if(argTypes[i].blockCount==1){
                 argNames[i]="(*(argsIn+"+(off++)+"))";
             }else{
-                argNames[i]= "(*((" + VALUE_BLOCK_NAME + "[" +argTypes[i].blockCount+"])(argsIn+"+(off)+")))";
+                argNames[i]= "(argsIn+"+(off)+")";
                 off+=argTypes[i].blockCount;
             }
             valCount++;
@@ -680,7 +680,8 @@ public class CompileToC {
                     line.setLength(0);
                     line.append("    logValue(").append(((LogAction) a).type.type).append(",")
                             .append(((LogAction) a).type.append).append(',')
-                            .append(typeSignature(((LogAction) a).expr.expectedType())).append(",&");
+                            .append(typeSignature(((LogAction) a).expr.expectedType()))
+                            .append(((LogAction) a).expr.expectedType().blockCount==1?",&":",");
                     writeExpression("    ",initLines,line,((LogAction) a).expr,0, name, argNames);
                     for(String l:initLines){
                         writeLine(l);
@@ -913,6 +914,14 @@ public class CompileToC {
             parts[0]="("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool="+(from!=Type.NONE_TYPE)+"},";
             parts[1]="}";
             return parts;
+        }else if(to == Type.Primitive.ANY&&from.blockCount==1){
+            parts[0]="("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asType="+typeSignature(from)+"},";
+            parts[1]="}";
+            return parts;
+        }else if(to== Type.Primitive.BOOL &&from instanceof Type.Optional){
+            parts[0]="(";
+            parts[1]=")[0]";
+            return parts;
         }else{
             throw new UnsupportedOperationException("Cast from "+from+" to "+to+" is currently not implemented");
         }
@@ -1014,6 +1023,32 @@ public class CompileToC {
             initLines.add(indent+"}");
             line.append("tmp").append(prevTmp);
             return prevTmp;
+        }else if(expr instanceof GetField){
+            if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_TYPE)){
+                if(((GetField) expr).value.expectedType()== Type.Primitive.ANY){
+                    //TODO read type from any
+                    throw new UnsupportedOperationException("\"any.type\" is currently not supported");
+                }else{
+                    line.append(CAST_BLOCK + "{.asType=").append(typeSignature(((GetField) expr).value.expectedType())).append('}');
+                    return tmpCount;
+                }
+            }else if(((GetField) expr).value.expectedType() instanceof Type.Array&&
+                    ((GetField) expr).fieldName.equals(Type.FIELD_NAME_LENGTH)){
+                line.append('(');
+                writeExpression(indent,initLines,line, ((GetField) expr).value, tmpCount,procName,varNames);
+                line.append(")[0]");//array.length
+                return tmpCount;
+            }else if(((GetField) expr).value.expectedType() instanceof Type.Optional&&
+                    ((GetField) expr).fieldName.equals(Type.FIELD_NAME_VALUE)){
+                //TODO check value before dereferencing
+                line.append('(');
+                writeExpression(indent,initLines,line, ((GetField) expr).value, tmpCount,procName,varNames);
+                line.append(")[1]");//optional.length
+                return tmpCount;
+            }else{
+                throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
+            }
+            //return tmpCount;
         }else {
             //TODO other expressions
             throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");

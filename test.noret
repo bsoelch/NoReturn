@@ -11,23 +11,22 @@ log count;
 }=>[optional_proc(count+(int8:)1)]
 
 start(string8[]):(args)=>{
-    string8:utf8=u8"UTF8-String";
-    string16:utf16=u16"UTF16-String";
-    string32:utf32=u32"UTF32-String";
+    ## string8:utf8=u8"UTF8-String";
+    ## string16:utf16=u16"UTF16-String";
+    ## string32:utf32=u32"UTF32-String";
     int:two=1+(int:)(args.length);
-    int32[]:x={1,-2,3,constant};
-    log x;
-    log x.type;
-    log type_sig_test.type;
-    uint64:x_len=((int32[]:)x).length;
-    log x_len;
-    x[0]=123456789;
-    any:x_elt=((int32[]:)x)[1];
-    log x_elt;
     log y;
+    ## log y[0];
+    log y.type;
+    log type_sig_test.type;
+    uint64:y_len=y.length;
+    log y_len;
+    int32[]:x={1,2,3,4};
+    ## x[0]=123456789;
+    log x;
     log none.type;
     log {}.type;
     int32?:optional=none;
     log optional;
-    log optional?optional.value:"empty";
+    log optional?optional.value:none;
 }=>[loop((int8:)0)]

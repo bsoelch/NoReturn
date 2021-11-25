@@ -9,12 +9,11 @@ public class Type {
     *  to allow all types to have a .type field without the need for a specific class-loading order*/
     private static final ArrayDeque<Type> waitingForTypeType=new ArrayDeque<>();
 
-    static final String FIELD_NAME_TYPE = "type";
-    static final String FIELD_NAME_LENGTH = "length";
+    public static final String FIELD_NAME_TYPE = "type";
+    public static final String FIELD_NAME_LENGTH = "length";
 
-    static final String FIELD_NAME_HAS_VALUE = "hasValue";
-    static final String FIELD_NAME_VALUE = "value";
-    static final String FIELDS_PROC_TYPES = "argTypes";
+    public static final String FIELD_NAME_VALUE = "value";
+    public static final String FIELDS_PROC_TYPES = "argTypes";
 
     private static final class TypeType extends Type{
         private TypeType() {
@@ -271,7 +270,6 @@ public class Type {
         public Optional(Type content) {
             super(content.wrappedName()+"?", 2, content.varSize);
             this.content=content;
-            fields.put(FIELD_NAME_HAS_VALUE,Primitive.BOOL);
             fields.put(FIELD_NAME_VALUE,content);
         }
         String wrappedName(){
@@ -337,7 +335,13 @@ public class Type {
         }
     }
 
-    public static class Struct extends Type{//TODO save order of fields
+    //TODO redesing structures
+    // structure defintion:
+    //   struct <NAME> { <type>:<name> (,<type>:<name>)* }
+    //   union <NAME> { <type>:<name> (,<type>:<name>)* }
+    // struct/union type is stored as array of types, element-names, and field offsets
+    // structs/unions are identified by their name
+    public static class Struct extends Type{
         private final HashSet<String> fieldNames=new HashSet<>();
         private static String structName(Type[] types,String[] names) {
             if(types.length!=names.length){
