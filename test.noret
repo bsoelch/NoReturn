@@ -4,8 +4,12 @@ const int[]:y={1234567890123456789,2,3.0};
 const any: array_test ={{1,2,3},{4,5},{6}};
 const string8[]:str_test={"str1","str2"};
 const int32[][]?[]:type_sig_test={};
+## struct struct_test{tuple{int32,int64}:a,union{int32:c,float64:d}:b};
 
 start(string8[]):(args)=>{
+    ## fraction:aStruct={.num=0,.den=1};
+    ## log aStruct;
+    ## log aStruct.type;
     string8:utf8=u8"UTF8-String";
     string16:utf16=u16"UTF16-String";
     string32:utf32=u32"UTF32-String";

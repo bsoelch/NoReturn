@@ -561,6 +561,7 @@ public abstract class Value{
             return elements;
         }
     }
+    //TODO update Struct
     public static class Struct extends Value{
         final HashMap<String,Value> elements;
 
@@ -575,7 +576,8 @@ public abstract class Value{
             for(int i=0;i<types.length;i++){
                 types[i]=elements[i].type;
             }
-            return new Type.Struct(types,names);
+            //TODO type-caching
+            return new Type.Struct(null,types,names);
         }
         public Struct(Value[] elements,String[] names) {
             super(typeFromElements(elements,names));

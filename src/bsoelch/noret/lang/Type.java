@@ -206,12 +206,12 @@ public class Type {
         }
         //{A0,..,AN}->{B0,...,BN} iff A_i -> B_i for all i
         if(to instanceof Struct&&from instanceof Struct){
-            if(((Struct) to).fieldNames.size()!=((Struct) from).fieldNames.size())
+            if(((Struct) to).fieldNames.length!=((Struct) from).fieldNames.length)
                 return false;
             Type t_to,t_from;
-            for(String s:((Struct) to).fieldNames){
-                t_to=to.fields.get(s);
-                t_from=from.fields.get(s);
+            for(int i=0;i<((Struct) to).fieldNames.length;i++){
+                t_to=to.fields.get(((Struct) to).fieldNames[i]);
+                t_from=from.fields.get(((Struct) from).fieldNames[i]);
                 if(!canAssign(t_to,t_from,allowCast, generics))
                     return false;
             }
@@ -256,7 +256,7 @@ public class Type {
     }
 
     //FIXME ensure that no Value is assigned without castTo()
-    // castTo should only return this one this.type,any and generics
+    // castTo should only return a value with eactly the supplied type (setting generics to any)
     public static boolean canAssign(Type to,Type from, HashMap<String, GenericBound> generics){
         return canAssign(to, from,false, generics);
     }
@@ -335,14 +335,10 @@ public class Type {
         }
     }
 
-    //TODO redesign structures
-    // structure definition:
-    //   struct <NAME> { <type>:<name> (,<type>:<name>)* }
-    //   union <NAME> { <type>:<name> (,<type>:<name>)* }
-    // struct/union type is stored as array of types, element-names, and field offsets
-    // structs/unions are identified by their name
+    //TODO add union and tuple types
     public static class Struct extends Type{
-        private final HashSet<String> fieldNames=new HashSet<>();
+        final String structName;
+        String[] fieldNames;
         private static String structName(Type[] types,String[] names) {
             if(types.length!=names.length){
                 throw new IllegalArgumentException("lengths of types and names do not match");
@@ -372,13 +368,14 @@ public class Type {
             return false;
         }
 
-        public Struct(Type[] types, String[] names) {
-            super(structName(types,names), calculateBlockCount(types), isVarSize(types));
+        public Struct(String name,Type[] types, String[] names) {
+            super(name==null?structName(types,names):name, calculateBlockCount(types), isVarSize(types));
+            structName=name;
+            this.fieldNames=names.clone();
             for(int i=0;i<names.length;i++){
                 if(fields.put(names[i],types[i])!=null){
                     throw new TypeError("duplicate or reserved field-name \""+names[i]+"\" in struct "+this);
                 }
-                fieldNames.add(names[i]);
             }
         }
 

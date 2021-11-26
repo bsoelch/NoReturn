@@ -22,7 +22,7 @@ public class Parser {
     enum ParserTokenType {
         OPEN_BRACKET,CLOSE_BRACKET,OPEN_SQ_BRACKET,CLOSE_SQ_BRACKET,OPEN_CR_BRACKET,CLOSE_CR_BRACKET,
         OPERATOR,DOLLAR,OPTION,AT,SEPARATOR,END, ASSIGN,DOT,COMMA,MAPS_TO,WORD,TYPE,EXPRESSION,
-        INDEX,RANGE
+        INDEX,RANGE,STRUCT_DEFINITION
     }
 
     static class TokenPosition{
@@ -666,6 +666,11 @@ public class Parser {
                 case "false":
                     tokens.addLast(new ExprToken(Value.FALSE, null, currentPos()));
                     break;
+                case "struct"://named list of fields
+                case "tuple"://list of anonymous fields
+                case "union"://multiple fields in same storage location
+                    tokens.addLast(new NamedToken(ParserTokenType.STRUCT_DEFINITION, str, currentPos()));
+                    break;
                 default:
                     tokens.addLast(new NamedToken(ParserTokenType.WORD, str, currentPos()));
             }
@@ -862,7 +867,7 @@ public class Parser {
     }
 
     enum TypeParserState{
-        ROOT,BRACKET,STRUCT_TYPE,STRUCT_NAME
+        ROOT,BRACKET,STRUCT_TYPE,STRUCT_NAME,TUPLE
     }
     enum ExpressionParserState{
         ROOT,BRACKET, ARRAY,STRUCT_NAME,STRUCT_VALUE,INDEX,RANGE
@@ -914,7 +919,11 @@ public class Parser {
         }
     }
 
-    private Type typeFromTokens(ParserContext context, ArrayList<ParserToken> tokens) {
+    private Type typeFromTokens(ParserContext context, ArrayList<ParserToken> tokens, String structName) {
+        if(structName!=null&&tokens.get(0).tokenType!=ParserTokenType.STRUCT_DEFINITION){
+            //addLater allow top-level structs containing optionals/arrays/references to themselves
+            throw new RuntimeException("structName shoudl only be non-null if the current call is a struct definition");
+        }
         //1. parse primitives to TYPE
         // <Primitive> | <typedef Type>
         Type tmp;
@@ -924,7 +933,8 @@ public class Parser {
                 if (i > 0 && tokens.get(i - 1).tokenType == ParserTokenType.DOLLAR) {
                     token = tokens.remove(i--);
                     tokens.set(i, new TypeToken(new Type.Generic(((NamedToken) token).value), token.pos));
-                } else if (i == 0 || tokens.get(i - 1).tokenType != ParserTokenType.SEPARATOR) {
+                } else if (i == 0 ||(tokens.get(i - 1).tokenType != ParserTokenType.SEPARATOR&&
+                        tokens.get(i-1).tokenType!=ParserTokenType.STRUCT_DEFINITION)) {
                     //word preceded with : is param name
                     token=tokens.get(i);
                     tmp = context.getType(((NamedToken) token).value);
@@ -938,29 +948,49 @@ public class Parser {
         //2. parse parentheses
         // '('<Type>')'
         // '('<Type>(','<Type>)*')=>?'
-        // '{'<Type>':'<Name>(','<Type>':'<Name>)*'}'
+        // struct '{'<Type>':'<Name>(','<Type>':'<Name>)*'}'
+        // union  '{'<Type>':'<Name>(','<Type>':'<Name>)*'}'
         ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();
         TypeParserState state=TypeParserState.ROOT;
         ArrayList<ParserToken> tokenBuffer=new ArrayList<>();
         ArrayList<Type> typeBuffer=new ArrayList<>();
         ArrayList<String> nameBuffer=new ArrayList<>();
+        boolean isUnion=false;
         for(int i=0;i<tokens.size();i++){
             updateBracketStack(tokens.get(i), bracketStack);
             switch (state){
-                case ROOT:if(bracketStack.size()>0){
-                    if(bracketStack.peekLast()==ParserTokenType.OPEN_BRACKET){
-                        tokens.remove(i--);
-                        state=TypeParserState.BRACKET;
-                    }else if(bracketStack.peekLast()==ParserTokenType.OPEN_CR_BRACKET){
-                        tokens.remove(i--);
-                        state=TypeParserState.STRUCT_TYPE;
+                case ROOT:
+                    if(tokens.get(i).tokenType==ParserTokenType.STRUCT_DEFINITION){
+                        switch (((NamedToken)tokens.get(i)).value){
+                            case "struct":
+                            case "union":
+                            case "tuple":
+                                if(i+1<tokens.size()&&tokens.get(i+1).tokenType==ParserTokenType.OPEN_CR_BRACKET){
+                                    updateBracketStack(tokens.remove(i+1),bracketStack);
+                                }else{
+                                    throw new SyntaxError("unexpected start of anonymous struct:"+tokens.get(i+1)+
+                                            " expected: <struct-type>{<content>}");
+                                }
+                                isUnion=((NamedToken)tokens.get(i)).value.equals("union");
+                                state=((NamedToken)tokens.remove(i--)).value.equals("tuple")?TypeParserState.TUPLE:TypeParserState.STRUCT_TYPE;
+                                break;
+                            default:
+                                throw new RuntimeException("Unexpected struct-type:"+((NamedToken)tokens.get(i)).value);
+                        }
+                    }else if(bracketStack.size()>0){
+                        if(bracketStack.peekLast()==ParserTokenType.OPEN_BRACKET){
+                            tokens.remove(i--);
+                            state=TypeParserState.BRACKET;
+                        }else if(bracketStack.peekLast()==ParserTokenType.OPEN_CR_BRACKET){
+                            throw new SyntaxError("unexpected { (struct definitions need to be preceded by the struct keyword)");
+                        }
                     }
-                }break;
+                break;
                 case BRACKET:
                     if(bracketStack.isEmpty()||(bracketStack.size()==1
                             &&tokens.get(i).tokenType ==ParserTokenType.COMMA)){
                         if(bracketStack.size()>0||tokenBuffer.size()>0){
-                            typeBuffer.add(typeFromTokens(context, tokenBuffer));
+                            typeBuffer.add(typeFromTokens(context, tokenBuffer, null));
                         }
                         tokenBuffer.clear();
                         if(bracketStack.isEmpty()){
@@ -990,7 +1020,7 @@ public class Parser {
                 case STRUCT_TYPE:
                     if(bracketStack.size()==1&&
                             (tokens.get(i).tokenType ==ParserTokenType.SEPARATOR)){
-                        typeBuffer.add(typeFromTokens(context, tokenBuffer));
+                        typeBuffer.add(typeFromTokens(context, tokenBuffer, null));
                         tokenBuffer.clear();
                         state=TypeParserState.STRUCT_NAME;
                         tokens.remove(i--);
@@ -1005,8 +1035,12 @@ public class Parser {
                             if(bracketStack.removeLast()!=ParserTokenType.OPEN_CR_BRACKET){
                                 throw new SyntaxError("mismatched bracket");
                             }
-                            tokens.set(i,new TypeToken(new Type.Struct(typeBuffer.toArray(new Type[0]),
-                                    nameBuffer.toArray(new String[0])),tokens.get(i).pos));
+                            if(isUnion){
+                                //TODO implement unions
+                                throw new UnsupportedOperationException("unimplemented");
+                            }else{
+                                tokens.set(i,new TypeToken(new Type.Struct(structName,typeBuffer.toArray(new Type[0]),nameBuffer.toArray(new String[0])),tokens.get(i).pos));
+                            }
                             nameBuffer.clear();
                             typeBuffer.clear();
                             state=TypeParserState.ROOT;
@@ -1020,6 +1054,19 @@ public class Parser {
                         throw new SyntaxError(
                                 "unexpected token for struct-entry name:\""+ tokens.get(i)+
                                         "\" expected Word");
+                    }
+                    break;
+                case TUPLE:
+                    if(bracketStack.size()==0||(bracketStack.size()==1&&
+                            (tokens.get(i).tokenType ==ParserTokenType.COMMA))){
+                        typeBuffer.add(typeFromTokens(context, tokenBuffer, null));
+                        tokenBuffer.clear();
+                        tokens.remove(i--);
+                        if(bracketStack.size()==0){
+                            throw new UnsupportedOperationException("unimplemented");
+                        }
+                    }else{
+                        tokenBuffer.add(tokens.remove(i--));
                     }
                     break;
             }
@@ -1076,7 +1123,7 @@ public class Parser {
         while((token=tokens.getNextToken())!=null&&token.tokenType !=ParserTokenType.END){
             typeTokens.add(token);
         }
-        context.defType(name,typeFromTokens(context,typeTokens));
+        context.defType(name,typeFromTokens(context,typeTokens, null));
     }
 
     //addLater convert all type-names to type-values
@@ -1122,7 +1169,7 @@ public class Parser {
                         if(tokenBuffer.size()>0&&
                                 tokenBuffer.get(tokenBuffer.size()-1).tokenType==ParserTokenType.SEPARATOR){
                             tokenBuffer.remove(tokenBuffer.size()-1);//(<Type>:) -> type-cast
-                            tokens.set(i,new TypeToken(typeFromTokens(context,tokenBuffer),tokens.get(i).pos));
+                            tokens.set(i,new TypeToken(typeFromTokens(context,tokenBuffer, null),tokens.get(i).pos));
                         }else{//(<Expr>) -> <Expr>
                             tokens.set(i,new ExprToken(expressionFromTokens(procName,procType,context,tokenBuffer),
                                     tokens.get(i).pos));
@@ -1378,7 +1425,7 @@ public class Parser {
             updateBracketStack(token,bracketStack);
             tokenBuffer.add(token);
         }
-        constType=typeFromTokens(context,tokenBuffer);
+        constType=typeFromTokens(context,tokenBuffer, null);
         //addLater restrict usage of generics in constants (only in proc-arguments)
         tokenBuffer.clear();
         if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.WORD){
@@ -1418,7 +1465,7 @@ public class Parser {
             if(bracketStack.isEmpty()||(bracketStack.size()==1&&
                     token.tokenType ==ParserTokenType.COMMA)){
                 if(bracketStack.size()>0||tokenBuffer.size()>0){//ignore empty buffer only at end
-                    argTypes.add(typeFromTokens(context,tokenBuffer));
+                    argTypes.add(typeFromTokens(context,tokenBuffer, null));
                 }
                 tokenBuffer.clear();
             }else{
@@ -1499,7 +1546,7 @@ public class Parser {
                         }
                     }else if(bracketStack.isEmpty()&&
                             token.tokenType==ParserTokenType.SEPARATOR){
-                        defType=typeFromTokens(context,tokenBuffer);
+                        defType=typeFromTokens(context,tokenBuffer, null);
                         tokenBuffer.clear();
                         token=tokens.getNextToken();
                         if(token==null||token.tokenType!=ParserTokenType.WORD){
@@ -1738,6 +1785,31 @@ public class Parser {
                 }else{
                     throw new SyntaxError("\""+token+"\" is already defined");
                 }
+            }else if(token.tokenType==ParserTokenType.STRUCT_DEFINITION){
+                ArrayList<ParserToken> tokenBuffer=new ArrayList<>();
+                tokenBuffer.add(token);
+                String name;
+                if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.WORD){
+                    throw new SyntaxError("unexpected start of struct:"+token+" expected: <struct-type> <struct-name>{<content>}");
+                }
+                name=((NamedToken)token).value;
+                if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.OPEN_CR_BRACKET){
+                    throw new SyntaxError("unexpected start of struct:"+token+" expected: <struct-type> <struct-name>{<content>}");
+                }
+                tokenBuffer.add(token);
+                int c=1;
+                while((token=tokens.getNextToken())!=null&&c>0){
+                    tokenBuffer.add(token);
+                    if(token.tokenType==ParserTokenType.OPEN_CR_BRACKET){
+                        c++;
+                    }else if(token.tokenType==ParserTokenType.CLOSE_CR_BRACKET){
+                        c--;
+                    }
+                }
+                if(c>0){
+                    throw new SyntaxError("unfinished struct definition "+tokenBuffer.get(0));
+                }
+                context.defType(name, typeFromTokens(context, tokenBuffer, name));
             }else{
               throw new SyntaxError("Illegal root level token:\""+token+
                       "\" expected \"typedef\" or identifier");

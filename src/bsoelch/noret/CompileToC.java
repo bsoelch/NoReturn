@@ -5,7 +5,6 @@ import bsoelch.noret.lang.expression.*;
 
 import java.io.BufferedWriter;
 import java.io.IOException;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -460,7 +459,7 @@ public class CompileToC {
 
     /**Writes a value as a array of union declarations*/
     private void writeConstValueAsUnion(StringBuilder out, Value v, DataOut dataOut, boolean isFirst, boolean inPlaceValues,
-                                        boolean incOff,boolean prefix) throws IOException{
+                                        boolean incOff,boolean prefix){
         if(!isFirst){
             out.append(',');
         }
@@ -633,14 +632,14 @@ public class CompileToC {
                 }
             }
         }else if(v instanceof Value.Struct){
-            throw new UnsupportedEncodingException("structs are currently not supported");
+            throw new UnsupportedOperationException("structs are currently not supported");
             //write fields one by one
             //write fields preceded with types if in any
         }else if(v == Value.NONE){
             if(prefix){out.append(CAST_BLOCK); }
             out.append("{.asBool=false/*none*/}");
         }else{
-            throw new UnsupportedEncodingException(v.getType()+" is currently not supported in the compiler");
+            throw new UnsupportedOperationException(v.getType()+" is currently not supported in the compiler");
         }
     }
 
@@ -1120,7 +1119,7 @@ public class CompileToC {
         }
     }
 
-    private int writeExpression(String indent, ArrayList<String> initLines, StringBuilder line, Expression expr, int tmpCount, String procName, String[] varNames) throws IOException {
+    private int writeExpression(String indent, ArrayList<String> initLines, StringBuilder line, Expression expr, int tmpCount, String procName, String[] varNames){
         if(expr instanceof VarExpression){
             line.append(varNames[((VarExpression)expr).varId]);
             return tmpCount;
