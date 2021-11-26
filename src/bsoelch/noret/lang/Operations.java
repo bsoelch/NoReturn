@@ -132,14 +132,14 @@ public class Operations {
                     String s2=rVal.stringValue();
                     return Value.createPrimitive((Type.NoRetString)rVal.type,s1+s2);
                 }else if(lVal.type instanceof Type.Array&&rVal.type instanceof Type.Array){
-                    Value[] newArray=new Value[((Value.Array)lVal).elements.length+
-                            ((Value.Array)rVal).elements.length];
-                    System.arraycopy(((Value.Array)lVal).elements,0,
-                            newArray,0,((Value.Array)lVal).elements.length);
-                    System.arraycopy(((Value.Array)rVal).elements,0,
-                            newArray,((Value.Array)lVal).elements.length
-                            ,((Value.Array)rVal).elements.length);
-                    return new Value.Array(newArray);
+                    Value[] newArray=new Value[((Value.ArrayOrTuple)lVal).elements.length+
+                            ((Value.ArrayOrTuple)rVal).elements.length];
+                    System.arraycopy(((Value.ArrayOrTuple)lVal).elements,0,
+                            newArray,0,((Value.ArrayOrTuple)lVal).elements.length);
+                    System.arraycopy(((Value.ArrayOrTuple)rVal).elements,0,
+                            newArray,((Value.ArrayOrTuple)lVal).elements.length
+                            ,((Value.ArrayOrTuple)rVal).elements.length);
+                    return new Value.ArrayOrTuple(newArray,true);//also allow tuples in array+array
                 }
                 return null;
             }
@@ -276,11 +276,11 @@ public class Operations {
                 (d1,d2)->null,
                 (x1,x2)-> {
                        if(x1.type instanceof Type.Array){//pushLast
-                           Value[] newElements=new Value[((Value.Array)x1).elements.length+1];
-                           System.arraycopy(newElements,0,((Value.Array)x1).elements,
-                                   0,((Value.Array)x1).elements.length);
-                           newElements[((Value.Array)x1).elements.length]=x2;
-                           return new Value.Array(newElements);
+                           Value[] newElements=new Value[((Value.ArrayOrTuple)x1).elements.length+1];
+                           System.arraycopy(newElements,0,((Value.ArrayOrTuple)x1).elements,
+                                   0,((Value.ArrayOrTuple)x1).elements.length);
+                           newElements[((Value.ArrayOrTuple)x1).elements.length]=x2;
+                           return new Value.ArrayOrTuple(newElements,true);
                        }
                        return null;
                 }
@@ -296,11 +296,11 @@ public class Operations {
                 (d1,d2)->null,
                 (x1,x2)-> {
                     if(x2.type instanceof Type.Array){//pushFirst
-                        Value[] newElements=new Value[((Value.Array)x2).elements.length+1];
-                        System.arraycopy(newElements,1,((Value.Array)x2).elements,
-                                0,((Value.Array)x2).elements.length);
+                        Value[] newElements=new Value[((Value.ArrayOrTuple)x2).elements.length+1];
+                        System.arraycopy(newElements,1,((Value.ArrayOrTuple)x2).elements,
+                                0,((Value.ArrayOrTuple)x2).elements.length);
                         newElements[0]=x1;
-                        return new Value.Array(newElements);
+                        return new Value.ArrayOrTuple(newElements,true);
                     }
                     return null;
                 }

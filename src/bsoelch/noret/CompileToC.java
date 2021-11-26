@@ -138,13 +138,19 @@ public class CompileToC {
             typeSignature(((Type.Array) t).content);//ensure type-signature exists
             Long off = typeOffset(((Type.Array) t).content);
             return "TYPE_SIG_ARRAY|("+off+"<<TYPE_CONTENT_SHIFT)";
-        }else if(t instanceof Type.Proc){
-            //TODO block-type signatures
+        }else if(t instanceof Type.Tuple){
             throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
-           // return "TYPE_SIG_PROC|("+off+"<<TYPE_CONTENT_SHIFT)";
+            //  return "TYPE_SIG_TUPLE|("+off+"<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Struct){
             throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
           //  return "TYPE_SIG_STRUCT|("+off+"<<TYPE_CONTENT_SHIFT)";
+        }else if(t instanceof Type.Union){
+            throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
+            //  return "TYPE_SIG_UNION|("+off+"<<TYPE_CONTENT_SHIFT)";
+        }else if(t instanceof Type.Proc){
+            //TODO block-type signatures
+            throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
+            // return "TYPE_SIG_PROC|("+off+"<<TYPE_CONTENT_SHIFT)";
         }
         throw new UnsupportedOperationException("unsupported Type :"+t);
     }
@@ -192,11 +198,13 @@ public class CompileToC {
         writeLine("#define TYPE_SIG_TYPE       0xf");
         writeLine("#define TYPE_SIG_NONE       0x10");
         writeLine("#define TYPE_SIG_ANY        0x11");
-        writeLine("#define TYPE_SIG_OPTIONAL   0x12");//content[u32-off][u16-size]
-        writeLine("#define TYPE_SIG_REFERENCE  0x13");//content[u32-off][u16-size]
-        writeLine("#define TYPE_SIG_ARRAY      0x14");//content[u32-off][u16-size]
-        writeLine("#define TYPE_SIG_PROC       0x15");//signature[u32-off][u16-size]
-        writeLine("#define TYPE_SIG_STRUCT     0x16");//contents[u32-off][u16-size]
+        writeLine("#define TYPE_SIG_OPTIONAL   0x12");//content[u32-off]
+        writeLine("#define TYPE_SIG_REFERENCE  0x13");//content[u32-off]
+        writeLine("#define TYPE_SIG_ARRAY      0x14");//content[u32-off]
+        writeLine("#define TYPE_SIG_TUPLE      0x15");//content[u32-off][u16-size]
+        writeLine("#define TYPE_SIG_UNION      0x16");//contents[u32-off][u16-size]
+        writeLine("#define TYPE_SIG_STRUCT     0x17");//contents[u32-off][u16-size]
+        writeLine("#define TYPE_SIG_PROC       0x18");//signature[u32-off][u16-size]
         writeLine("#define TYPE_CONTENT_SHIFT  8");
         writeLine("#define TYPE_CONTENT_MASK   0xffffffff");
         writeLine("#define TYPE_COUNT_SHIFT    40");
@@ -607,19 +615,19 @@ public class CompileToC {
                 if(incOff){
                     dataOut.off++;}
             }
-        }else if(v instanceof Value.Array){
+        }else if(v instanceof Value.ArrayOrTuple){
             if(inPlaceValues) {
                 if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|((Value.Array) v).elements().length)).append("}");
+                out.append("{.asU64=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|((Value.ArrayOrTuple) v).elements().length)).append("}");
                 if(incOff){
                     dataOut.off++;}
                 //ensure constant block-size (1 for bool,float[N],[u]int[N],reference  2 for string, array, any, optional)
-                for (Value elt : ((Value.Array) v).elements()) {
+                for (Value elt : ((Value.ArrayOrTuple) v).elements()) {
                     writeConstValueAsUnion(out, elt, dataOut, false, false, incOff,prefix);
                 }
             }else{
                 if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.asU64=0x").append(Long.toHexString(dataOut.mask|((Value.Array) v).elements().length)).append("}");
+                out.append("{.asU64=0x").append(Long.toHexString(dataOut.mask|((Value.ArrayOrTuple) v).elements().length)).append("}");
                 if(incOff){
                     dataOut.off++;}
                 if(incOff){
@@ -627,7 +635,7 @@ public class CompileToC {
                 out.append(',');
                 if(prefix){out.append(CAST_BLOCK); }
                 out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
-                for (Value elt : ((Value.Array) v).elements()) {
+                for (Value elt : ((Value.ArrayOrTuple) v).elements()) {
                     writeConstValueAsUnion(dataOut.build,elt, dataOut, dataOut.off==0, true, true,prefix);
                 }
             }

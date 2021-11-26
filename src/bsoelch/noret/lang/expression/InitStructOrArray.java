@@ -6,7 +6,7 @@ import java.util.ArrayList;
 
 public class InitStructOrArray implements Expression {
     //TODO initialization of non-constant expressions
-    public static Expression newArray(ArrayList<Expression> expressions) {
+    public static Expression newTuple(ArrayList<Expression> expressions) {
         boolean isConstant=true;
         Value[] values=new Value[expressions.size()];
         for(int i=0;i< expressions.size();i++){
@@ -21,7 +21,7 @@ public class InitStructOrArray implements Expression {
             }
         }
         if(isConstant){
-            return ValueExpression.create(new Value.Array(values), null);
+            return ValueExpression.create(new Value.ArrayOrTuple(values,false), null);
         }
         throw new UnsupportedOperationException("unimplemented");
     }

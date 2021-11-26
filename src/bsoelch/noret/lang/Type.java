@@ -3,6 +3,8 @@ package bsoelch.noret.lang;
 import bsoelch.noret.TypeError;
 
 import java.util.*;
+import java.util.stream.IntStream;
+import java.util.stream.Stream;
 
 public class Type {
     /*queue for storing all Types that are declared before TYPE is defined,
@@ -164,7 +166,7 @@ public class Type {
     }
 
     private static boolean canAssign(Type to, Type from, boolean allowCast, HashMap<String, GenericBound> generics){
-        if(to==from)
+        if(to==from||to.equals(from))
             return true;
         if(from==EMPTY_TYPE||to==Primitive.ANY)
             return true;
@@ -180,8 +182,21 @@ public class Type {
         }
         //A[]->B[] iff A->B
         //{A0,..,AN}->B[] iff A_i -> B for all i
-        if(to instanceof Array&&from instanceof Array){
-            return canAssign(((Array) to).content,((Array) from).content,allowCast, generics);
+        if(to instanceof Array){
+            if(from instanceof Array){
+                return canAssign(((Array) to).content,((Array) from).content,allowCast, generics);
+            }else if(from instanceof Tuple){
+                return Stream.of(((Tuple) from).elements).allMatch(e->canAssign(((Array) to).content,e,allowCast,generics));
+            }
+        }else if(to instanceof Tuple){
+            if(from instanceof Array){
+                return Stream.of(((Tuple) to).elements).allMatch(e->canAssign(e,((Array) from).content,allowCast,generics));
+            }else if(from instanceof Tuple){
+                if(((Tuple) to).elements.length!=((Tuple) from).elements.length)
+                    return false;
+                return IntStream.range(0,((Tuple) to).elements.length)
+                        .allMatch(i->canAssign(((Tuple) to).elements[i],((Tuple) from).elements[i],allowCast, generics));
+            }
         }
         //A? -> bool , A? -> B? iff A->B
         if(from instanceof Optional){
@@ -204,28 +219,27 @@ public class Type {
         }else if(allowCast&&to instanceof Reference){
             return canAssign(((Reference) to).content,from,true, generics);
         }
+        //union{A,B,C}->D if A->D and B->D and C->D
+        //A->union{B,C,D} if A->B or A->C or A->D
+        if(to instanceof Union){
+            return Stream.of(((Union) to).fieldNames).map(to.fields::get).anyMatch(e->canAssign(e,from,allowCast,generics));
+        }else if(from instanceof Union){
+            return Stream.of(((Union) from).fieldNames).map(from.fields::get).allMatch(e->canAssign(to,e,allowCast,generics));
+        }
         //{A0,..,AN}->{B0,...,BN} iff A_i -> B_i for all i
         if(to instanceof Struct&&from instanceof Struct){
             if(((Struct) to).fieldNames.length!=((Struct) from).fieldNames.length)
                 return false;
-            Type t_to,t_from;
-            for(int i=0;i<((Struct) to).fieldNames.length;i++){
-                t_to=to.fields.get(((Struct) to).fieldNames[i]);
-                t_from=from.fields.get(((Struct) from).fieldNames[i]);
-                if(!canAssign(t_to,t_from,allowCast, generics))
-                    return false;
-            }
-            return true;
+            return IntStream.range(0,((Struct) to).fieldNames.length)
+                    .allMatch(i->canAssign(to.fields.get(((Struct) to).fieldNames[i]),from.fields.get(((Struct) from).fieldNames[i]),
+                            allowCast, generics));
         }
         //(A0,...,AN)=>? -> (B0,...,BN)=>? iff A_i -> B_i for all i
         if(to instanceof Proc&&from instanceof Proc){
             if(((Proc) to).argTypes.length!=((Proc) from).argTypes.length)
                 return false;
-            for(int i=0;i<((Proc) from).argTypes.length;i++){
-                if(!canAssign(((Proc) from).argTypes[i],((Proc) to).argTypes[i],allowCast,generics))
-                    return false;
-            }
-            return true;
+            return IntStream.range(0,((Proc) to).argTypes.length)
+                    .allMatch(i->canAssign(((Proc) from).argTypes[i],((Proc) to).argTypes[i],allowCast,generics));
         }
         if(to instanceof Generic){
             if(from instanceof Generic){
@@ -335,15 +349,62 @@ public class Type {
         }
     }
 
-    //TODO add union and tuple types
-    public static class Struct extends Type{
+    private static int calculateBlockCount(Type[] types) {
+        return Stream.of(types).mapToInt(t->t.blockCount).sum();
+    }
+    private static boolean isVarSize(Type[] types) {
+        return Stream.of(types).anyMatch(t->t.varSize);
+    }
+    public static class Tuple extends Type{
+        final String tupleName;
+        final Type[] elements;
+        private static String tupleName(Type[] types) {
+            StringBuilder ret=new StringBuilder("tuple{");
+            for(int i=0;i<types.length;i++){
+                if(i>0){
+                    ret.append(", ");
+                }
+                ret.append(types[i]);
+            }
+            return ret.append('}').toString();
+        }
+        public Tuple(String name, Type[] elements) {
+            super(name==null?tupleName(elements):name, calculateBlockCount(elements), isVarSize(elements));
+            this.tupleName=name;
+            this.elements=elements;
+        }
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Tuple tuple = (Tuple) o;
+            return Arrays.equals(elements, tuple.elements);
+        }
+        @Override
+        public int hashCode() {
+            return Arrays.deepHashCode(elements);
+        }
+    }
+
+    public static class Struct extends StructOrUnion{
+        public Struct(String name, Type[] types, String[] names) {
+            super(name,types,names,false);
+        }
+    }
+    public static class Union extends StructOrUnion{
+        public Union(String name, Type[] types, String[] names) {
+            super(name,types,names,true);
+        }
+    }
+    private static abstract class StructOrUnion extends Type{
+        public final boolean isUnion;
         final String structName;
         String[] fieldNames;
-        private static String structName(Type[] types,String[] names) {
+        private static String structName(Type[] types,String[] names,boolean isUnion) {
             if(types.length!=names.length){
                 throw new IllegalArgumentException("lengths of types and names do not match");
             }
-            StringBuilder ret=new StringBuilder("{");
+            StringBuilder ret=new StringBuilder(isUnion?"union{":"struct{");
             for(int i=0;i<types.length;i++){
                 if(i>0){
                     ret.append(", ");
@@ -352,25 +413,12 @@ public class Type {
             }
             return ret.append('}').toString();
         }
-
-        private static int calculateBlockCount(Type[] types) {
-            int count=0;
-            for(Type t:types){
-                count+=t.blockCount;
-            }
-            return count;
-        }
-        private static boolean isVarSize(Type[] types) {
-            for(Type t:types){
-                if(t.varSize)
-                    return true;
-            }
-            return false;
-        }
-
-        public Struct(String name,Type[] types, String[] names) {
-            super(name==null?structName(types,names):name, calculateBlockCount(types), isVarSize(types));
+        private StructOrUnion(String name, Type[] types, String[] names,boolean isUnion){
+            super(name==null?structName(types,names,isUnion):name,
+                    isUnion?Stream.of(types).mapToInt(t->t.blockCount).max().orElse(0):Stream.of(types).mapToInt(t->t.blockCount).max().orElse(0)
+                    , isVarSize(types));
             structName=name;
+            this.isUnion=isUnion;
             this.fieldNames=names.clone();
             for(int i=0;i<names.length;i++){
                 if(fields.put(names[i],types[i])!=null){
@@ -418,11 +466,7 @@ public class Type {
         }
         /**Number of blocks needed to store the arguments of this procedure*/
         public long argsBlockSize() {
-            long ret=0;
-            for(Type t:argTypes){
-                ret+=t.blockCount;
-            }
-            return ret;
+            return Type.calculateBlockCount(argTypes);
         }
 
         @Override

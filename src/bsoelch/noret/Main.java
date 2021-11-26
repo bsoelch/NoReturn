@@ -5,9 +5,7 @@ import bsoelch.noret.lang.Procedure;
 import bsoelch.noret.lang.Type;
 import bsoelch.noret.lang.Value;
 
-import java.io.BufferedWriter;
 import java.io.FileReader;
-import java.io.FileWriter;
 import java.io.IOException;
 
 public class Main {
@@ -19,7 +17,7 @@ public class Main {
             return;
         }
         Parser parser=new Parser(new FileReader(args[0]));
-        parser.compile(new BufferedWriter(new FileWriter(args[0]+".c")));
+        //parser.compile(new BufferedWriter(new FileWriter(args[0]+".c")));
         Procedure start=parser.interpret();
         Value[] progArgs;
         if(start.argTypes().length==0){
@@ -30,7 +28,7 @@ public class Main {
                 progArgs[i-1]=Value.createPrimitive(Type.NoRetString.STRING8,args[i]);
             }
             progArgs=new Value[]{
-                    new Value.Array(progArgs)
+                    new Value.ArrayOrTuple(progArgs,true)
             };
         }
         CallQueue callQueue=new CallQueue();

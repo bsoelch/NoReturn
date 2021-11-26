@@ -1036,10 +1036,11 @@ public class Parser {
                                 throw new SyntaxError("mismatched bracket");
                             }
                             if(isUnion){
-                                //TODO implement unions
-                                throw new UnsupportedOperationException("unimplemented");
+                                tokens.set(i,new TypeToken(new Type.Union(structName,typeBuffer.toArray(new Type[0]),
+                                        nameBuffer.toArray(new String[0])),tokens.get(i).pos));
                             }else{
-                                tokens.set(i,new TypeToken(new Type.Struct(structName,typeBuffer.toArray(new Type[0]),nameBuffer.toArray(new String[0])),tokens.get(i).pos));
+                                tokens.set(i,new TypeToken(new Type.Struct(structName,typeBuffer.toArray(new Type[0]),
+                                        nameBuffer.toArray(new String[0])),tokens.get(i).pos));
                             }
                             nameBuffer.clear();
                             typeBuffer.clear();
@@ -1061,9 +1062,11 @@ public class Parser {
                             (tokens.get(i).tokenType ==ParserTokenType.COMMA))){
                         typeBuffer.add(typeFromTokens(context, tokenBuffer, null));
                         tokenBuffer.clear();
-                        tokens.remove(i--);
                         if(bracketStack.size()==0){
-                            throw new UnsupportedOperationException("unimplemented");
+                            tokens.set(i,new TypeToken(new Type.Tuple(structName,typeBuffer.toArray(new Type[0])),
+                                    tokens.get(i).pos));
+                        }else{
+                            tokens.remove(i--);
                         }
                     }else{
                         tokenBuffer.add(tokens.remove(i--));
@@ -1188,7 +1191,7 @@ public class Parser {
                             tokenBuffer.clear();
                         }
                         if(bracketStack.isEmpty()){
-                            tokens.set(i,new ExprToken(InitStructOrArray.newArray(exprBuffer),tokens.get(i).pos));
+                            tokens.set(i,new ExprToken(InitStructOrArray.newTuple(exprBuffer),tokens.get(i).pos));
                             state=ExpressionParserState.ROOT;
                         }else{
                             tokens.remove(i--);

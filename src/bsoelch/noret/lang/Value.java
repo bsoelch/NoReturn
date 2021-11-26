@@ -8,6 +8,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Stream;
 
 public abstract class Value{
 
@@ -123,6 +124,9 @@ public abstract class Value{
             return type==Type.Primitive.ANY?this:new AnyValue(this);
         }else if(t instanceof Type.Optional&&Type.canCast(((Type.Optional) t).content,type,null)){
             return new Optional((Type.Optional)t,castTo(((Type.Optional) t).content));
+        }else if(t instanceof Type.Union){
+            //TODO cast to union..
+            throw  new UnsupportedOperationException("unimplemented");
         }else if(t instanceof Type.NoRetString){
             //TODO cast to string..
             throw  new UnsupportedOperationException("unimplemented");
@@ -446,50 +450,66 @@ public abstract class Value{
         }
     }
 
-    //addLater? primitiveArrays
-    public static class Array extends Value{
+    /**stores either an array or a tuple*/
+    public static class ArrayOrTuple extends Value{
         final Value[] elements;
-
-        private static Type typeFromElements(Value[] elements) {
-            Type type=Type.EMPTY_TYPE;
-            for (Value element : elements) {
-                type = Type.commonSupertype(type, element.type);
+        private static Type typeFromElements(Value[] elements,boolean asArray) {
+            if(asArray){
+                return new Type.Array(Stream.of(elements).map(Value::getType).reduce(Type.EMPTY_TYPE,Type::commonSupertype));
+            }else{
+                return new Type.Tuple(null,Stream.of(elements).map(Value::getType).toArray(Type[]::new));
             }
-            return new Type.Array(type);
         }
-        public Array(Value[] elements) {
-            this(typeFromElements(elements),elements);
+        public ArrayOrTuple(Value[] elements,boolean asArray) {
+            this(typeFromElements(elements,asArray),elements);
         }
-        public Array(Type type,Value[] elements) {
+        public ArrayOrTuple(Type type, Value[] elements) {
             super(type);
             this.elements=elements;
             getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.UINT64,
                     elements.length));
         }
-
         @Override
         public Value independentCopy(){
             Value[] newElements=new Value[elements.length];
             for(int i=0;i< newElements.length;i++){
                 newElements[i]=elements[i].independentCopy();
             }
-            return new Array(newElements);
+            return new ArrayOrTuple(type,newElements);
         }
 
         @Override
         public Value castTo(Type t) {
-            if(t instanceof Type.Array){
-                if(Type.canCast(((Type.Array) t).content,
-                    ((Type.Array)type).content,null)){
-                    //addLater in-place calculation if possible
+            if(type instanceof Type.Array){
+                if(t instanceof Type.Array){
                     Value[] newElements=new Value[elements.length];
                     for(int i=0;i<elements.length;i++){
                         newElements[i]=elements[i].
                                 castTo(((Type.Array) t).content);
                     }
-                    return new Array(t,newElements);
-                }else{
-                    throw new TypeError("Cannot cast type:"+type+ " to "+t);
+                    return new ArrayOrTuple(t,newElements);
+                }else if(t instanceof Type.Tuple){
+                    Value[] newElements=new Value[elements.length];
+                    for(int i=0;i<elements.length;i++){
+                        newElements[i]=elements[i].castTo(((Type.Tuple) t).elements[i]);
+                    }
+                    return new ArrayOrTuple(t,newElements);
+                }
+            }else if(type instanceof Type.Tuple){
+                if(t instanceof Type.Array){
+                    Value[] newElements=new Value[elements.length];
+                    for(int i=0;i<elements.length;i++){
+                        newElements[i]=elements[i].castTo(((Type.Array) t).content);
+                    }
+                    return new ArrayOrTuple(t,newElements);
+                }else if(t instanceof Type.Tuple){
+                    if(((Type.Tuple) t).elements.length==((Type.Tuple) type).elements.length){
+                        Value[] newElements=new Value[elements.length];
+                        for(int i=0;i<elements.length;i++){
+                            newElements[i]=elements[i].castTo(((Type.Tuple) t).elements[i]);
+                        }
+                        return new ArrayOrTuple(t,newElements);
+                    }
                 }
             }
             //addLater? Array -> String (utf8,utf16,utf32)
@@ -498,8 +518,8 @@ public abstract class Value{
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof Array)) return false;
-            Array array = (Array) o;
+            if (!(o instanceof ArrayOrTuple)) return false;
+            ArrayOrTuple array = (ArrayOrTuple) o;
             return Objects.equals(type,array.type)&&
                     Arrays.equals(elements, array.elements);
         }
@@ -532,7 +552,7 @@ public abstract class Value{
             }
         }
         @Override
-        public Array setAtIndex(Value index, Value value) {
+        public ArrayOrTuple setAtIndex(Value index, Value value) {
             //long since indices are internally uint64
             long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
             if(lIndex<0||lIndex>=elements.length){
@@ -550,7 +570,7 @@ public abstract class Value{
         }
 
         @Override
-        public Array setRange(Value off, Value to, Value value) {
+        public ArrayOrTuple setRange(Value off, Value to, Value value) {
             //TODO Array.setRange
             throw new UnsupportedOperationException("unimplemented");
         }
@@ -561,10 +581,9 @@ public abstract class Value{
             return elements;
         }
     }
-    //TODO update Struct
+    //TODO implement Union
     public static class Struct extends Value{
         final HashMap<String,Value> elements;
-
         private Struct(Type.Struct type,HashMap<String,Value> elements) {
             super(type);
             this.elements=elements;
