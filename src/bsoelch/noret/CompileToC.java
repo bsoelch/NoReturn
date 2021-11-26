@@ -21,7 +21,6 @@ public class CompileToC {
 
     private static final String CONST_DATA_NAME = "constData";
     private static final String CONST_DATA_SIGNATURE = VALUE_BLOCK_NAME + " " +CONST_DATA_NAME+" []";
-    private static final int MAX_ARG_SIZE = 0x2000;
 
     private static final long LEN_MASK_IN_PLACE = 0x0000000000000000L;
     private static final long LEN_MASK_CONST    = 0x8000000000000000L;
@@ -152,7 +151,7 @@ public class CompileToC {
     }
 
 
-    private void writeFileHeader() throws IOException {
+    private void writeFileHeader(long maxArgSize) throws IOException {
         comment("Auto generated code from NoRet compiler");
         //addLater print information about compiled code
         out.newLine();
@@ -164,7 +163,8 @@ public class CompileToC {
         include("inttypes.h");
         include("assert.h");
         out.newLine();
-        writeLine("#define MAX_ARG_SIZE 0x"+Integer.toHexString(MAX_ARG_SIZE));
+        writeLine("#define MAX_ARG_SIZE       0x"+Long.toHexString(maxArgSize));
+        writeLine("#define ARG_DATA_INIT_SIZE 0x1000");
         out.newLine();
         writeLine("#define LEN_MASK_IN_PLACE 0x"+Long.toHexString(LEN_MASK_IN_PLACE));
         writeLine("#define LEN_MASK_CONST    0x"+Long.toHexString(LEN_MASK_CONST));
@@ -174,7 +174,7 @@ public class CompileToC {
         //Type enum
         comment("Type Definitions");
         writeLine("typedef uint64_t Type;");
-        writeLine("#define TYPE_SIG_MASK       0xff");//TODO mark var-size Types
+        writeLine("#define TYPE_SIG_MASK       0xff");
         writeLine("#define TYPE_SIG_EMPTY      0x0");
         writeLine("#define TYPE_SIG_BOOL       0x1");
         writeLine("#define TYPE_SIG_I8         0x2");
@@ -653,9 +653,6 @@ public class CompileToC {
         writeConstValueAsUnion(tmp, value, constData, true, true, false,false);
         writeLine(tmp.append("};").toString());
     }
-
-    //FIXME = does not work for multi-block values
-    // replace with function of form assignN(target,source,count)
     private void writeProcSignature(String name, Procedure proc) throws IOException{
         String tmp=Arrays.toString(proc.argTypes());
         comment(name+"("+tmp.substring(1,tmp.length()-1)+")");
@@ -674,22 +671,22 @@ public class CompileToC {
     }
 
 
-    private void writeArgs(String indent,Expression[] args, ArrayList<String> initLines, StringBuilder line, String name, String[] argNames) throws IOException {
+    private void writeArgs(String indent, Expression[] args, ArrayList<String> initLines, StringBuilder line, String name, String[] argNames, final String argsOut) throws IOException {
         long argOff=0;
         int blockSize;
         for (Expression firstArg : args) {
             comment(indent+"{","arg1: "+firstArg.expectedType());
             blockSize = firstArg.expectedType().blockCount;
             if (blockSize == 1) {
-                line.append(indent).append("  argsOut[").append(argOff).append("]=");
+                line.append(indent).append("  ").append(argsOut).append("[").append(argOff).append("]=");
                 writeExpression("  ", initLines, line, firstArg, 0, name, argNames);
                 line.append(";");
             } else {
-                line.append(indent).append("  memcpy,argsOut[").append(argOff).append("],");
+                line.append(indent).append("  memcpy,").append(argsOut).append("[").append(argOff).append("],");
                 writeExpression("  ", initLines, line, firstArg, 0, name, argNames);
                 line.append(",").append(blockSize).append(");");
             }
-            argOff += blockSize;//addLater handle argOverflow
+            argOff += blockSize;
             for (String l : initLines) {
                 writeLine(l);
             }
@@ -751,7 +748,7 @@ public class CompileToC {
                     comment("  {","Assign: "+a);
                     line.setLength(0);
                     line.append("    ");
-                    //prepare target TODO ensure that all expressions in target are inlined and keep mutability
+                    //prepare target TODO writeMutableExpression mode, that stores all expressions as pointer to their location
                     writeExpression("    ",initLines,line,((Assignment) a).target,0, name, argNames);
                     line.append(" = ");
                     //preform assignment
@@ -797,29 +794,51 @@ public class CompileToC {
             initLines.clear();
             line.setLength(0);
             if(firstStatic!=null){
-                writeArgs("  ",firstArgs, initLines, line, name, argNames);
+                //TODO allow multiple children procedure-calls (pthreads)
+                //writeAllOtherCalls
+                for(int i=0;i<children.size();i++){
+                    Procedure.ProcChild c=children.get(i);
+                    comment("  ","Call:"+c);
+                    if(c instanceof Procedure.StaticProcChild||
+                            (c instanceof Procedure.DynamicProcChild&&!((Procedure.DynamicProcChild) c).isOptional)){
+                        writeLine("  {");
+                        writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");//TODO check pointer
+                        writeArgs("    ",childArgs.get(i),initLines,line,name,argNames,"newArgs");
+                        //addLater call function (via pthreads)
+                        writeLine("    assert(false && \"unimplemented\");");
+                        writeLine("  }");
+                        //static procedure
+                        break;
+                    }else{
+                        writeLine("  if("+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[0].asBool){");
+                        writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");//TODO check pointer
+                        writeArgs("    ",childArgs.get(i),initLines,line,name,argNames,"newArgs");
+                        //addLater call function (via pthreads)
+                        writeLine("      assert(false && \"unimplemented\");");
+                        writeLine("  }");
+                    }
+                }
+                comment("  ","Call:"+firstStatic);
+                writeArgs("  ",firstArgs, initLines, line, name, argNames, "argsOut");
                 if(firstStatic instanceof Procedure.StaticProcChild){
                     writeLine("  return &"+PROC_PREFIX+asciify(((Procedure.StaticProcChild) firstStatic).name)+";");
                 }else{
                     writeLine("  return "+argNames[((Procedure.DynamicProcChild)firstStatic).varId]+".asProc");
                 }
-                if(children.size()>0){//TODO allow multiple children procedure-calls (pthreads)
-                    //for(int i=0;i<children.size();i++){
-                    throw new UnsupportedOperationException("Multiple children are currently not supported in compile mode");
-                    //}
-                }
-                //writeAllOther
             }else{
                 //all children are optional
                 writeLine("  "+PROCEDURE_TYPE+" ret=NULL;");
                 for(int i=0;i<children.size();i++){
+                    comment("  ","Call:"+children.get(i));
                     writeLine("  if("+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[0].asBool){");
                     writeLine("    if(ret==NULL){");
-                    writeArgs("      ",childArgs.get(i), initLines, line, name, argNames);
+                    writeArgs("      ",childArgs.get(i), initLines, line, name, argNames, "argsOut");
                     writeLine("      ret="+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[1].asProc;");
                     writeLine("    }else{");
+                    writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");//TODO check pointer
+                    writeArgs("    ",childArgs.get(i),initLines,line,name,argNames,"newArgs");
+                    //addLater call function (via pthreads)
                     writeLine("      assert(false && \"unimplemented\");");
-                    //TODO additional procedure-calls
                     writeLine("    }");
                     writeLine("  }");
                 }
@@ -865,15 +884,15 @@ public class CompileToC {
                     parts[0]=parts[1]="";
                     return parts;
                 }else{
-                    throw new UnsupportedOperationException("unimplemented");
+                    throw new SyntaxError("unsupported type for +:"+inType);
                 }
-            case MINUS://TODO? cast arguments
+            case MINUS:
                 if(inType instanceof Type.Numeric){
                     parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=-("+ cTypeName((Type.Numeric)outType)+")";
                     parts[1]=typeField((Type.Numeric)inType)+"}";
                     return parts;
                 }else{
-                    throw new UnsupportedOperationException("unimplemented");
+                    throw new SyntaxError("unsupported type for -:"+inType);
                 }
             case FLIP:
                 if(inType instanceof Type.Numeric&&!((Type.Numeric)outType).isFloat){
@@ -881,10 +900,15 @@ public class CompileToC {
                     parts[1]=typeField((Type.Numeric)inType)+"}";
                     return parts;
                 }else{
-                    throw new UnsupportedOperationException("unimplemented");
+                    throw new SyntaxError("unsupported type for ~:"+inType);
                 }
             case NOT:
-                throw new UnsupportedOperationException("unimplemented");
+                if(inType == Type.Primitive.BOOL){
+                    parts[0]=CAST_BLOCK+"{.asBool=!";
+                    parts[1]=".asBool}";
+                    return parts;
+                }
+                throw new SyntaxError("unsupported type for !:"+inType);
             case DIV:
             case INT_DIV:
             case MULT:
@@ -917,36 +941,118 @@ public class CompileToC {
         switch (op.op){
             case PLUS:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=";
-                    parts[1]=typeField((Type.Numeric)lType)+"+";
-                    parts[2]=typeField((Type.Numeric)rType)+"}";
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")+(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case MINUS:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=";
-                    parts[1]=typeField((Type.Numeric)lType)+"-";
-                    parts[2]=typeField((Type.Numeric)rType)+"}";
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")-(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case MULT:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")*(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case DIV:
-            case INT_DIV:
-            case MULT:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")/(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
             case MOD:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")%(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case INT_DIV:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    if((((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
+                        throw new UnsupportedOperationException("unimplemented");
+                    }else{
+                        parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                        parts[1]=typeField((Type.Numeric)lType)+")/(("+cTypeName((Type.Numeric)outType)+")";
+                        parts[2]=typeField((Type.Numeric)rType)+")}";
+                        return parts;
+                    }
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
             case POW:
+                throw new UnsupportedOperationException("unimplemented:"+op.op);
             case AND:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
+                    !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")&(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
             case OR:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
+                        !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")|(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
             case XOR:
-            case FAST_AND:
-            case FAST_OR:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
+                        !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")^(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case LSHIFT:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
+                        !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")<<(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case RSHIFT:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
+                        !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
+                    parts[0]=CAST_BLOCK+"{"+typeField((Type.Numeric)outType)+"=(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[1]=typeField((Type.Numeric)lType)+")>>(("+cTypeName((Type.Numeric)outType)+")";
+                    parts[2]=typeField((Type.Numeric)rType)+")}";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case FAST_AND://addLater own handling of fastAnd if(cond1){res=cond2}else{res=false}
+            case FAST_OR://addLater own handling of fastOr if(cond1){res=true}else{res=cond2}
             case NE:
             case EQ:
-            case LSHIFT:
-            case RSHIFT:
                 throw new UnsupportedOperationException("unimplemented:"+op.op);
             case GT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
@@ -1027,7 +1133,7 @@ public class CompileToC {
                 return tmpCount;
             }else if(expr.expectedType().varSize){
                 int blockCount=expr.expectedType().blockCount;
-                DataOut data=new DataOut("data={",0,"tmp",LEN_MASK_TMP);//TODO handle dataOut
+                DataOut data=new DataOut("data={",0,"tmp",LEN_MASK_TMP);//TODO handle data
                 StringBuilder tmp;
                 if(blockCount>1){
                     initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
@@ -1157,14 +1263,13 @@ public class CompileToC {
         writeRunSignature();writeLine("{");
         writeLine("    " + PROCEDURE_TYPE + " f=*((Procedure*)initState);");
         writeLine("    initState+=sizeof(" + PROCEDURE_TYPE + ");");
-        writeLine("    size_t argCount=*((size_t*)initState);");
-        writeLine("    initState+=sizeof(size_t);");
+        writeLine("    " + VALUE_BLOCK_NAME + "* argsI=*(("+VALUE_BLOCK_NAME+"**)initState);");
+        writeLine("    initState+=sizeof(" + VALUE_BLOCK_NAME + "*);");
         writeLine("    " + VALUE_BLOCK_NAME + "* argData=*(("+VALUE_BLOCK_NAME+"**)initState);");
         writeLine("    initState+=sizeof(" + VALUE_BLOCK_NAME + "*);");
-        writeLine("    " + VALUE_BLOCK_NAME + "* argsI=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
         writeLine("    " + VALUE_BLOCK_NAME + "* argsO=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
         writeLine("    " + VALUE_BLOCK_NAME + "* argsTmp;");
-        writeLine("    if((argsI==NULL)||(argsO==NULL)){");
+        writeLine("    if(argsO==NULL){");
         writeLine("        return (void*)-1;");//addLater useful handling of return codes
         writeLine("    }");
         writeLine("    // initArgs");
@@ -1184,17 +1289,21 @@ public class CompileToC {
         if(hasArgs){
             writeLine("int main(int argc,char** argv){");
             //ignore first argument for consistency with interpreter
-            writeLine("  void* init=malloc(sizeof(" + PROCEDURE_TYPE + ")+sizeof(size_t)+sizeof(" + VALUE_BLOCK_NAME + "*)+((1+2*(argc-1))*sizeof("+VALUE_BLOCK_NAME+")));");
         }else{
             writeLine("int main(){");
-            writeLine("  void* init=malloc(sizeof(" + PROCEDURE_TYPE + ")+sizeof(size_t));");
         }
+        comment("  ","[proc_ptr,args_ptr,arg_data]");
+        writeLine("  void* init=malloc(sizeof(" + PROCEDURE_TYPE + ")+2*sizeof("+VALUE_BLOCK_NAME+"*));");//TODO replace malloc with local array
         writeLine("  size_t off=0;");
         writeLine("  *((" + PROCEDURE_TYPE + "*)init)=&" + PROC_PREFIX + "start;");
         writeLine("  off+=sizeof(" + PROCEDURE_TYPE + ");");
-        writeLine("  *((size_t*)(init+off))=1;");
-        writeLine("  off+=sizeof(size_t);");
-        writeLine("  " + VALUE_BLOCK_NAME + "* argData=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");//TODO handling of argData
+        writeLine("  " + VALUE_BLOCK_NAME + "* initArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
+        writeLine("  if(initArgs==NULL){");
+        writeLine("    return -1;");//addLater useful handling of return codes
+        writeLine("  }");
+        writeLine("  *((" + VALUE_BLOCK_NAME + "**)(init+off))=initArgs;");
+        writeLine("  off+=sizeof(" + VALUE_BLOCK_NAME + "*);");
+        writeLine("  " + VALUE_BLOCK_NAME + "* argData=malloc(ARG_DATA_INIT_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
         writeLine("  if(argData==NULL){");
         writeLine("    return -1;");//addLater useful handling of return codes
         writeLine("  }");
@@ -1204,6 +1313,8 @@ public class CompileToC {
             comment("  ","prepare program Arguments");
             //this code only works if argv iss encoded with UTF-8
             comment("  ","!!! currently only UTF-8 encoding is supported !!!");//addLater support for other encodings of argv
+            writeLine("  assert(false && \"unimplemented\");");
+            /* TODO store argument data in argsData
             writeLine("  int l;");
             writeLine("  int k0=0;");
             writeLine("  for(int i=1;i<argc;i++){");//skip first argument
@@ -1221,7 +1332,7 @@ public class CompileToC {
             writeLine("      argData[k0].raw8[j]=argv[i][j+k];");
             writeLine("    }");
             writeLine("    k0++;");
-            writeLine("  }");
+            writeLine("  }");*/
         }
         writeLine("  initLogStreams();");
         writeLine("  run(init);");
@@ -1231,7 +1342,7 @@ public class CompileToC {
     }
 
     public void compile(Parser.ParserContext context) throws IOException {
-        writeFileHeader();
+        writeFileHeader(context.maxArgSize());
         DataOut constData=new DataOut(CONST_DATA_SIGNATURE + "={",0,CONST_DATA_NAME,LEN_MASK_CONST);
         writeLine(CONST_DATA_SIGNATURE+";");
         for(Map.Entry<String, Value> e:context.constants.entrySet()){

@@ -515,8 +515,8 @@ public class Operations {
             switch (calc.level){
                 case 0:
                 case 1:
-                case 2:
                     return Type.Numeric.FLOAT32;
+                case 2:
                 case 3:
                     return Type.Numeric.FLOAT64;
                 default:

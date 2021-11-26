@@ -12,14 +12,15 @@ start(string8[]):(args)=>{
     ## log utf8;
     ## log utf16;
     ## log utf32;
-    int:two=1+(int:)(args.length);
+    int:add=1+(int:)(args.length);
+    int:mathTest=add*add-add//2;
     ## log y;
     ## log y[0];
     log y.type;
     log type_sig_test.type;
     uint64:y_len=y.length;
     log y_len;
-    ## int32[]:x={1,2,3,4};
+    ## int32[]:x={1,2,3,constant};
     ## x[0]=123456789;
     ## log x;
     log none.type;

@@ -787,7 +787,7 @@ public class Parser {
     }
 
 
-    static class ParserContext{
+    public static class ParserContext{
         final HashMap<String, Type>      typeNames = new HashMap<>();
         final HashMap<String, Procedure> procNames = new HashMap<>();
         final HashMap<String, Value>     constants = new HashMap<>();
@@ -795,8 +795,11 @@ public class Parser {
         final HashMap<String, Integer>   varIds    = new HashMap<>();
         final ArrayList<Type> varTypes = new ArrayList<>();
 
+        long maxArgSize=0;
+
         public void declareProcedure(String name,Procedure proc){
             procNames.put(name,proc);
+            maxArgSize=Math.max(maxArgSize,((Type.Proc)proc.getType()).argsBlockSize());
             varIds.clear();
             varTypes.clear();
         }
@@ -852,6 +855,10 @@ public class Parser {
         public Value getConst(String constName){
             return constants.get(constName);
         }
+
+        public long maxArgSize() {
+            return maxArgSize;
+        }
     }
 
     enum TypeParserState{
@@ -879,7 +886,7 @@ public class Parser {
     public Parser(Reader in) throws IOException {
         context=new ParserContext();
         Type.addPrimitives(context.typeNames);
-        Native.addProcsTo(context.procNames);
+        Native.addProcsTo(context);
         parse(in);
     }
     private void updateBracketStack(ParserToken nextToken, ArrayDeque<ParserTokenType> bracketStack) {
@@ -1392,8 +1399,8 @@ public class Parser {
     }
 
     //TODO update types of values depending on maximum range of parameters
-    // i.e. dont use type any for values that are always an integer
-    //TODO detect variables with predictable valuecode
+    // i.e. don't use type any for values that are always an integer
+    //TODO detect variables with predictable value-code
     private void readProcDef(String name,Tokenizer tokens,ParserContext context) throws IOException {
         ParserToken token;
         ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();

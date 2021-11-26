@@ -7,7 +7,8 @@
 #include <inttypes.h>
 #include <assert.h>
 
-#define MAX_ARG_SIZE 0x2000
+#define MAX_ARG_SIZE       0x3
+#define ARG_DATA_INIT_SIZE 0x1000
 
 #define LEN_MASK_IN_PLACE 0x0
 #define LEN_MASK_CONST    0x8000000000000000
@@ -340,7 +341,11 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   }
   Value var4;// (Type:int32)
   {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    var4=(Value){.asI32=((Value){.asI32=1}).asI32+(Value){.asI32=(int32_t)(((argsIn+0))[0]).asU64}.asI32};
+    var4=(Value){.asI32=((int32_t)((Value){.asI32=1}).asI32)+((int32_t)(Value){.asI32=(int32_t)(((argsIn+0))[0]).asU64}.asI32)};
+  }
+  Value var5;// (Type:int32)
+  {// Initialize: BinOp{BinOp{VarExpression{4} MULT VarExpression{4}} MINUS BinOp{VarExpression{4} INT_DIV ValueExpression{2}}}
+    var5=(Value){.asI32=((int32_t)(Value){.asI32=((int32_t)var4.asI32)*((int32_t)var4.asI32)}.asI32)-((int32_t)(Value){.asI32=((int32_t)var4.asI32)/((int32_t)((Value){.asI32=2}).asI32)}.asI32)};
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:int32[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}));
@@ -348,12 +353,12 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(3<<TYPE_CONTENT_SHIFT)}));
   }
-  Value var5;// (Type:uint64)
+  Value var6;// (Type:uint64)
   {// Initialize: ValueExpression{3}
-    var5=((Value){.asU64=3});
+    var6=((Value){.asU64=3});
   }
-  {// Log: Log[DEFAULT]{VarExpression{5}}
-    logValue(DEFAULT,false,TYPE_SIG_U64,&var5);
+  {// Log: Log[DEFAULT]{VarExpression{6}}
+    logValue(DEFAULT,false,TYPE_SIG_U64,&var6);
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_NONE}));
@@ -361,18 +366,18 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   {// Log: Log[DEFAULT]{ValueExpression{Type:"empty"[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(4<<TYPE_CONTENT_SHIFT)}));
   }
-  Value var6 [2];// (Type:int32?)
+  Value var7 [2];// (Type:int32?)
   {// Initialize: TypeCast{Type:int32?:ValueExpression{none}}
-    memcpy(var6,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
+    memcpy(var7,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
   }
-  {// Log: Log[DEFAULT]{VarExpression{6}}
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var6);
+  {// Log: Log[DEFAULT]{VarExpression{7}}
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var7);
   }
-  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{6}}?TypeCast{Type:int32?:GetField{VarExpression{6}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
+  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{7}}?TypeCast{Type:int32?:GetField{VarExpression{7}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
     Value tmp0 [2];
     {
-      if((var6)[0].asBool){
-        memcpy(tmp0,(Value[]){(Value){.asBool=true},(var6)[1]},2);
+      if((var7)[0].asBool){
+        memcpy(tmp0,(Value[]){(Value){.asBool=true},(var7)[1]},2);
       }else{
         memcpy(tmp0,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
       }
@@ -397,14 +402,13 @@ Type typeData []={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_A
 void* run(void* initState){
     Procedure f=*((Procedure*)initState);
     initState+=sizeof(Procedure);
-    size_t argCount=*((size_t*)initState);
-    initState+=sizeof(size_t);
+    Value* argsI=*((Value**)initState);
+    initState+=sizeof(Value*);
     Value* argData=*((Value**)initState);
     initState+=sizeof(Value*);
-    Value* argsI=malloc(MAX_ARG_SIZE*sizeof(Value));
     Value* argsO=malloc(MAX_ARG_SIZE*sizeof(Value));
     Value* argsTmp;
-    if((argsI==NULL)||(argsO==NULL)){
+    if(argsO==NULL){
         return (void*)-1;
     }
     // initArgs
@@ -422,13 +426,18 @@ void* run(void* initState){
 // main method of the C representation: 
 //   transforms the input arguments and starts the run function on this thread
 int main(int argc,char** argv){
-  void* init=malloc(sizeof(Procedure)+sizeof(size_t)+sizeof(Value*)+((1+2*(argc-1))*sizeof(Value)));
+  // [proc_ptr,args_ptr,arg_data]
+  void* init=malloc(sizeof(Procedure)+2*sizeof(Value*));
   size_t off=0;
   *((Procedure*)init)=&proc_start;
   off+=sizeof(Procedure);
-  *((size_t*)(init+off))=1;
-  off+=sizeof(size_t);
-  Value* argData=malloc(MAX_ARG_SIZE*sizeof(Value));
+  Value* initArgs=malloc(MAX_ARG_SIZE*sizeof(Value));
+  if(initArgs==NULL){
+    return -1;
+  }
+  *((Value**)(init+off))=initArgs;
+  off+=sizeof(Value*);
+  Value* argData=malloc(ARG_DATA_INIT_SIZE*sizeof(Value));
   if(argData==NULL){
     return -1;
   }
@@ -436,24 +445,7 @@ int main(int argc,char** argv){
   off+=sizeof(Value*);
   // prepare program Arguments
   // !!! currently only UTF-8 encoding is supported !!!
-  int l;
-  int k0=0;
-  for(int i=1;i<argc;i++){
-    int l=strlen(argv[i]);
-    *((Value*)(init+off))=(Value){.asU64=LEN_MASK_LOCAL|l};
-    off+=sizeof(Value);
-    *((Value*)(init+off))=(Value){.asPtr=argData+k0};
-    off+=sizeof(Value);
-    for(int j=0,k=0;j+k<l;j++){
-      if(j==8){
-        j=0;
-        k++;
-        k0++;
-      }
-      argData[k0].raw8[j]=argv[i][j+k];
-    }
-    k0++;
-  }
+  assert(false && "unimplemented");
   initLogStreams();
   run(init);
   puts("");// finish last line in stdout

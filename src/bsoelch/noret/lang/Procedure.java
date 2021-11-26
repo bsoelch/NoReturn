@@ -14,6 +14,10 @@ public class Procedure extends Value{
             this.name = name;
             this.value = value;
         }
+        @Override
+        public String toString() {
+            return "Proc{" + name +'}';
+        }
     }
     public static class DynamicProcChild implements ProcChild {
         public final int varId;
@@ -21,6 +25,10 @@ public class Procedure extends Value{
         public DynamicProcChild(int varId, boolean isOptional) {
             this.varId = varId;
             this.isOptional=isOptional;
+        }
+        @Override
+        public String toString() {
+            return (isOptional?"optional ":"")+"Proc{ varId:" + varId +"}";
         }
     }
     public static final ProcChild RECURSIVE_CALL=new ProcChild() {};

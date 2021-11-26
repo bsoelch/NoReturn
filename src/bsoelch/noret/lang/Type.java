@@ -335,8 +335,8 @@ public class Type {
         }
     }
 
-    //TODO redesing structures
-    // structure defintion:
+    //TODO redesign structures
+    // structure definition:
     //   struct <NAME> { <type>:<name> (,<type>:<name>)* }
     //   union <NAME> { <type>:<name> (,<type>:<name>)* }
     // struct/union type is stored as array of types, element-names, and field offsets
@@ -419,6 +419,14 @@ public class Type {
         public Type[] getArgTypes(){
             return argTypes;
         }
+        /**Number of blocks needed to store the arguments of this procedure*/
+        public long argsBlockSize() {
+            long ret=0;
+            for(Type t:argTypes){
+                ret+=t.blockCount;
+            }
+            return ret;
+        }
 
         @Override
         public boolean equals(Object o) {
@@ -432,6 +440,7 @@ public class Type {
         public int hashCode() {
             return Arrays.hashCode(argTypes);
         }
+
     }
 
     /**Generics types in NoRet are designed to allow value read operations

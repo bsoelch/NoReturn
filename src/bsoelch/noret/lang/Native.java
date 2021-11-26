@@ -1,13 +1,14 @@
 package bsoelch.noret.lang;
 
-import java.util.HashMap;
+import bsoelch.noret.Parser;
+
 import java.util.Scanner;
 import java.util.function.BiConsumer;
 
 public class Native {//TODO? make part of compiler
-    public static void addProcsTo(HashMap<String, Procedure> procNames) {
+    public static void addProcsTo(Parser.ParserContext procNames) {
         Type.Generic genericA = new Type.Generic("a");
-        procNames.put("readLine",new NativeProcedure(
+        procNames.declareProcedure("readLine",new NativeProcedure(
                 new Type.Proc(new Type[]{genericA,new Type.Proc(new Type[]{Type.NoRetString.STRING8,genericA})}),
                 (queue,params)-> queue.push(new Value[]{Value.createPrimitive(Type.NoRetString.STRING8,new Scanner(System.in).nextLine())
                         ,params[0]},(Procedure) params[1]),3));
