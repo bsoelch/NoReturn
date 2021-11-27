@@ -81,7 +81,7 @@ public class Type {
         }
     }
     public static class Numeric extends Primitive{
-        private static ArrayList<Numeric> numberTypes=new ArrayList<>();
+        private static final ArrayList<Numeric> numberTypes=new ArrayList<>();
         public final int level;
         public final boolean signed,isFloat;
         //addLater u?int[32|64].bitsAsFloat, float[32|64].bitsAsInt

@@ -18,6 +18,7 @@ start(string8[]):(args)=>{
     ## log utf32;
     int:add=1+(int:)(args.length);
     int:mathTest=add*add-add//2;
+    log mathTest;
     ## log y;
     ## log y[0];
     log y.type;

@@ -1317,28 +1317,26 @@ public class CompileToC {
         writeLine("  off+=sizeof(" + VALUE_BLOCK_NAME + "*);");
         if(hasArgs){
             comment("  ","prepare program Arguments");
-            //this code only works if argv iss encoded with UTF-8
             comment("  ","!!! currently only UTF-8 encoding is supported !!!");//addLater support for other encodings of argv
-            writeLine("  assert(false && \"unimplemented\");");
-            /* FIXME argument data
-            writeLine("  int l;");
-            writeLine("  int k0=0;");
+            writeLine("  initArgs[0]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=LEN_MASK_LOCAL|(argc-1)};");
+            writeLine("  initArgs[1]="+CAST_BLOCK+"{.asPtr=argData+"+2+"};");//addLater constant: header size
+            comment("  off=2*(argc-1)+"+2+";","off start of next data section arg-len + header-size");
             writeLine("  for(int i=1;i<argc;i++){");//skip first argument
             writeLine("    int l=strlen(argv[i]);");
-            writeLine("    *((" + VALUE_BLOCK_NAME + "*)(init+off))="+CAST_BLOCK+"{.asU64=LEN_MASK_LOCAL|l};");//store lengths of arguments
-            writeLine("    off+=sizeof(" + VALUE_BLOCK_NAME + ");");
-            writeLine("    *((" + VALUE_BLOCK_NAME + "*)(init+off))="+CAST_BLOCK+"{.asPtr=argData+k0};");//store pointer to data
-            writeLine("    off+=sizeof(" + VALUE_BLOCK_NAME + ");");
+            //store lengths of arguments
+            writeLine("    argData[2*(i-1)+"+2+"]   = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=LEN_MASK_LOCAL|l};");
+            writeLine("    argData[2*(i-1)+1+"+2+"] = "+CAST_BLOCK+"{.asPtr=argData+off};");//pointer to data
             writeLine("    for(int j=0,k=0;j+k<l;j++){");
             writeLine("      if(j==8){");
             writeLine("        j=0;");
-            writeLine("        k++;");
-            writeLine("        k0++;");
+            writeLine("        k+=8;");
+            writeLine("        off++;");
             writeLine("      }");
-            writeLine("      argData[k0].raw8[j]=argv[i][j+k];");
+            writeLine("      argData[off].raw8[j]=argv[i][j+k];");
             writeLine("    }");
-            writeLine("    k0++;");
-            writeLine("  }");*/
+            writeLine("    off++;");
+            writeLine("  }");
+            comment("  argData[1]= "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=off};","store length in argData[1]");
         }
         writeLine("  initLogStreams();");
         writeLine("  run(init);");

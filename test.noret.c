@@ -322,6 +322,9 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   {// Initialize: BinOp{BinOp{VarExpression{1} MULT VarExpression{1}} MINUS BinOp{VarExpression{1} INT_DIV ValueExpression{2}}}
     var2=(Value){.asI32=((int32_t)(Value){.asI32=((int32_t)var1.asI32)*((int32_t)var1.asI32)}.asI32)-((int32_t)(Value){.asI32=((int32_t)var1.asI32)/((int32_t)((Value){.asI32=2}).asI32)}.asI32)};
   }
+  {// Log: Log[DEFAULT]{VarExpression{2}}
+    logValue(DEFAULT,false,TYPE_SIG_I32,&var2);
+  }
   {// Log: Log[DEFAULT]{ValueExpression{Type:int32[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}));
   }
@@ -415,7 +418,24 @@ int main(int argc,char** argv){
   off+=sizeof(Value*);
   // prepare program Arguments
   // !!! currently only UTF-8 encoding is supported !!!
-  assert(false && "unimplemented");
+  initArgs[0]=(Value){.asU64=LEN_MASK_LOCAL|(argc-1)};
+  initArgs[1]=(Value){.asPtr=argData+2};
+  off=2*(argc-1)+2;// off start of next data section arg-len + header-size
+  for(int i=1;i<argc;i++){
+    int l=strlen(argv[i]);
+    argData[2*(i-1)+2]   = (Value){.asU64=LEN_MASK_LOCAL|l};
+    argData[2*(i-1)+1+2] = (Value){.asPtr=argData+off};
+    for(int j=0,k=0;j+k<l;j++){
+      if(j==8){
+        j=0;
+        k+=8;
+        off++;
+      }
+      argData[off].raw8[j]=argv[i][j+k];
+    }
+    off++;
+  }
+  argData[1]= (Value){.asU64=off};// store length in argData[1]
   initLogStreams();
   run(init);
   puts("");// finish last line in stdout
