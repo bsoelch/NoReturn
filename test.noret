@@ -1,18 +1,18 @@
 const int8:constant=42;
 typedef int int32;
 const int[]:y={1234567890123456789,2,3.0};
-const any: array_test ={{1,2,3},{4,5},{6}};
+const any: array_test =(int32[][]:){{1,2,3},{4,5},{6}};
 const string8[]:str_test={"str1","str2"};
 const int32[][]?[]:type_sig_test={};
-struct struct_test{tuple{int32,int64}:a,union{int32:c,float64:d}:b};
+## struct struct_test{tuple{int32,int64}:a,union{int32:c,float64:d}:b};
 
 start(string8[]):(args)=>{
     ## struct_test:aStruct={.a={0,1},.b=0};
     ## log aStruct;
     ## log aStruct.type;
-    string8:utf8=u8"UTF8-String";
-    string16:utf16=u16"UTF16-String";
-    string32:utf32=u32"UTF32-String";
+    ## string8:utf8=u8"UTF8-String";
+    ## string16:utf16=u16"UTF16-String";
+    ## string32:utf32=u32"UTF32-String";
     ## log utf8;
     ## log utf16;
     ## log utf32;
@@ -24,11 +24,11 @@ start(string8[]):(args)=>{
     log type_sig_test.type;
     uint64:y_len=y.length;
     log y_len;
-    int32[]:x={1,2,3,constant};
-    x[0]=123456789;
-    log x;
+    ## int32[]:x={1,2,3,constant};
+    ## x[0]=123456789;
+    ## log x;
     log none.type;
-    log {}.type;
+    ## log {}.type;
     int32?:optional=none;
     log optional;
     log optional?optional.value:none;

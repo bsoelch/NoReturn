@@ -125,8 +125,9 @@ public abstract class Value{
         }else if(t instanceof Type.Optional&&Type.canCast(((Type.Optional) t).content,type,null)){
             return new Optional((Type.Optional)t,castTo(((Type.Optional) t).content));
         }else if(t instanceof Type.Union){
-            //TODO cast to union..
-            throw  new UnsupportedOperationException("unimplemented");
+            if(Type.canCast(t,type,null)){
+                return new Union((Type.Union)t,this);
+            }
         }else if(t instanceof Type.NoRetString){
             //TODO cast to string..
             throw  new UnsupportedOperationException("unimplemented");
@@ -670,6 +671,67 @@ public abstract class Value{
         }
         @Override
         public boolean isMutable() {return true;}
+    }
+
+    public static class Union extends Value{
+        Value content;
+
+        public Union(Type.Union type,Value content) {
+            super(type);
+            this.content=content;
+            initGetters();
+            initSetters();
+        }
+
+        //TODO handle different field types (raw type casting)
+        private void initGetters() {
+            for(String name:((Type.Union)type).fieldNames){
+                getters.put(name,()->content);
+            }
+        }
+        private void initSetters() {
+            for(String name:((Type.Union)type).fieldNames){
+                setters.put(name,(v)-> {
+                    content=v;
+                    return this;
+                });
+            }
+        }
+
+        @Override
+        public Value castTo(Type t) {
+            if(t instanceof Type.Union&&Type.canCast(t,type,null)){
+                return new Union((Type.Union) t,content);
+            }
+            return super.castTo(t);
+        }
+
+        @Override
+        public Value independentCopy(){
+            return new Union((Type.Union) type, content);
+        }
+
+        @Override
+        public boolean isMutable() {
+            return true;
+        }
+
+        @Override
+        public String stringRepresentation() {
+            return "union{"+content+"}";//addLater? .as...=
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            Union union = (Union) o;
+            return Objects.equals(type, union.type)&&Objects.equals(content, union.content);
+        }
+        @Override
+        public int hashCode() {
+            return Objects.hash(type,content);
+        }
     }
 
     public static class TypeValue extends Value {

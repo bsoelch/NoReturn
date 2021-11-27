@@ -39,8 +39,10 @@ typedef uint64_t Type;
 #define TYPE_SIG_OPTIONAL   0x12
 #define TYPE_SIG_REFERENCE  0x13
 #define TYPE_SIG_ARRAY      0x14
-#define TYPE_SIG_PROC       0x15
-#define TYPE_SIG_STRUCT     0x16
+#define TYPE_SIG_TUPLE      0x15
+#define TYPE_SIG_UNION      0x16
+#define TYPE_SIG_STRUCT     0x17
+#define TYPE_SIG_PROC       0x18
 #define TYPE_CONTENT_SHIFT  8
 #define TYPE_CONTENT_MASK   0xffffffff
 #define TYPE_COUNT_SHIFT    40
@@ -52,6 +54,9 @@ Type typeData [];
 typedef union ValueImpl Value;
 // procedure type (the return-type is void* instead of Procedure* to avoid a recursive type definition)
 typedef void*(*Procedure)(Value*,Value*,Value**);
+// float types
+typedef float float32_t;
+typedef double float64_t;
 // value-block definition
 union ValueImpl{
   bool       asBool;
@@ -63,8 +68,8 @@ union ValueImpl{
   uint32_t   asU32;
   int64_t    asI64;
   uint64_t   asU64;
-  float      asF32;
-  double     asF64;
+  float32_t  asF32;
+  float64_t  asF64;
   Type       asType;
   Procedure  asProc;
   Value*     asPtr;
@@ -309,43 +314,13 @@ void* run(void* initState);
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   // var0:(argsIn+0)
-  Value var1 [2];// (Type:string8)
-  {// Initialize: ValueExpression{"UTF8-String"}
-    Value tmp0 [2];
-    {
-      memcpy(tmp0,(Value[]){(Value){.asU64=0xc00000000000000b},(Value){.asPtr=(tmp+0)}},2);
-      // TODO handle data
-      // data={(Value){.raw8={0x55,0x54,0x46,0x38,0x2d,0x53,0x74,0x72}},(Value){.raw8={0x69,0x6e,0x67,0x0,0x0,0x0,0x0,0x0}}}
-    }
-    memcpy(var1,tmp0,2);
-  }
-  Value var2 [2];// (Type:string16)
-  {// Initialize: ValueExpression{"UTF16-String"}
-    Value tmp0 [2];
-    {
-      memcpy(tmp0,(Value[]){(Value){.asU64=0xc00000000000000c},(Value){.asPtr=(tmp+0)}},2);
-      // TODO handle data
-      // data={(Value){.raw16={0x55,0x54,0x46,0x31}},(Value){.raw16={0x36,0x2d,0x53,0x74}},(Value){.raw16={0x72,0x69,0x6e,0x67}}}
-    }
-    memcpy(var2,tmp0,2);
-  }
-  Value var3 [2];// (Type:string32)
-  {// Initialize: ValueExpression{"UTF32-String"}
-    Value tmp0 [2];
-    {
-      memcpy(tmp0,(Value[]){(Value){.asU64=0xc00000000000000c},(Value){.asPtr=(tmp+0)}},2);
-      // TODO handle data
-      // data={(Value){.raw32={0x55,0x54}},(Value){.raw32={0x46,0x33}},(Value){.raw32={0x32,0x2d}},(Value){.raw32={0x53,0x74}},(Value){.raw32={0x72,0x69}},(Value){.raw32={0x6e,0x67}}}
-    }
-    memcpy(var3,tmp0,2);
-  }
-  Value var4;// (Type:int32)
+  Value var1;// (Type:int32)
   {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    var4=(Value){.asI32=((int32_t)((Value){.asI32=1}).asI32)+((int32_t)(Value){.asI32=(int32_t)(((argsIn+0))[0]).asU64}.asI32)};
+    var1=(Value){.asI32=((int32_t)((Value){.asI32=1}).asI32)+((int32_t)(Value){.asI32=(int32_t)(((argsIn+0))[0]).asU64}.asI32)};
   }
-  Value var5;// (Type:int32)
-  {// Initialize: BinOp{BinOp{VarExpression{4} MULT VarExpression{4}} MINUS BinOp{VarExpression{4} INT_DIV ValueExpression{2}}}
-    var5=(Value){.asI32=((int32_t)(Value){.asI32=((int32_t)var4.asI32)*((int32_t)var4.asI32)}.asI32)-((int32_t)(Value){.asI32=((int32_t)var4.asI32)/((int32_t)((Value){.asI32=2}).asI32)}.asI32)};
+  Value var2;// (Type:int32)
+  {// Initialize: BinOp{BinOp{VarExpression{1} MULT VarExpression{1}} MINUS BinOp{VarExpression{1} INT_DIV ValueExpression{2}}}
+    var2=(Value){.asI32=((int32_t)(Value){.asI32=((int32_t)var1.asI32)*((int32_t)var1.asI32)}.asI32)-((int32_t)(Value){.asI32=((int32_t)var1.asI32)/((int32_t)((Value){.asI32=2}).asI32)}.asI32)};
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:int32[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}));
@@ -353,31 +328,28 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(3<<TYPE_CONTENT_SHIFT)}));
   }
-  Value var6;// (Type:uint64)
+  Value var3;// (Type:uint64)
   {// Initialize: ValueExpression{3}
-    var6=((Value){.asU64=3});
+    var3=((Value){.asU64=3});
   }
-  {// Log: Log[DEFAULT]{VarExpression{6}}
-    logValue(DEFAULT,false,TYPE_SIG_U64,&var6);
+  {// Log: Log[DEFAULT]{VarExpression{3}}
+    logValue(DEFAULT,false,TYPE_SIG_U64,&var3);
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_NONE}));
   }
-  {// Log: Log[DEFAULT]{ValueExpression{Type:"empty"[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(4<<TYPE_CONTENT_SHIFT)}));
-  }
-  Value var7 [2];// (Type:int32?)
+  Value var4 [2];// (Type:int32?)
   {// Initialize: TypeCast{Type:int32?:ValueExpression{none}}
-    memcpy(var7,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
+    memcpy(var4,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
   }
-  {// Log: Log[DEFAULT]{VarExpression{7}}
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var7);
+  {// Log: Log[DEFAULT]{VarExpression{4}}
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var4);
   }
-  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{7}}?TypeCast{Type:int32?:GetField{VarExpression{7}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
+  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{4}}?TypeCast{Type:int32?:GetField{VarExpression{4}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
     Value tmp0 [2];
     {
-      if((var7)[0].asBool){
-        memcpy(tmp0,(Value[]){(Value){.asBool=true},(var7)[1]},2);
+      if((var4)[0].asBool){
+        memcpy(tmp0,(Value[]){(Value){.asBool=true},(var4)[1]},2);
       }else{
         memcpy(tmp0,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
       }
@@ -397,7 +369,7 @@ void* proc_readLine(Value* argsIn,Value* argsOut,Value** argData){
 }
 
 // declarations of all used type Signatures
-Type typeData []={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(2<<TYPE_CONTENT_SHIFT),TYPE_SIG_EMPTY};
+Type typeData []={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(2<<TYPE_CONTENT_SHIFT)};
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* run(void* initState){
     Procedure f=*((Procedure*)initState);
@@ -411,8 +383,6 @@ void* run(void* initState){
     if(argsO==NULL){
         return (void*)-1;
     }
-    // initArgs
-    memcpy(argsI,initState,argCount*sizeof(Value));
     do{
         f=(Procedure)f(argsI,argsO,&argData);
         // swap args
@@ -427,7 +397,7 @@ void* run(void* initState){
 //   transforms the input arguments and starts the run function on this thread
 int main(int argc,char** argv){
   // [proc_ptr,args_ptr,arg_data]
-  void* init=malloc(sizeof(Procedure)+2*sizeof(Value*));
+  char init[sizeof(Procedure)+2*sizeof(Value*)];
   size_t off=0;
   *((Procedure*)init)=&proc_start;
   off+=sizeof(Procedure);
