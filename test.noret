@@ -30,7 +30,7 @@ start(string8[]):(args)=>{
     ## log x;
     log none.type;
     ## log {}.type;
-    int32?:optional=none;
+    int32?:optional=4;
     log optional;
     log optional?optional.value:none;
 }=>[]

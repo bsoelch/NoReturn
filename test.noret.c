@@ -226,25 +226,25 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
       fprintf(log,"%"PRIi8,value->asI8);
       break;
     case TYPE_SIG_U8:
-      fprintf(log,"%"PRIu8,value->asI8);
+      fprintf(log,"%"PRIu8,value->asU8);
       break;
     case TYPE_SIG_I16:
       fprintf(log,"%"PRIi16,value->asI16);
       break;
     case TYPE_SIG_U16:
-      fprintf(log,"%"PRIu16,value->asI16);
+      fprintf(log,"%"PRIu16,value->asU16);
       break;
     case TYPE_SIG_I32:
       fprintf(log,"%"PRIi32,value->asI32);
       break;
     case TYPE_SIG_U32:
-      fprintf(log,"%"PRIu32,value->asI32);
+      fprintf(log,"%"PRIu32,value->asU32);
       break;
     case TYPE_SIG_I64:
       fprintf(log,"%"PRIi64,value->asI64);
       break;
     case TYPE_SIG_U64:
-      fprintf(log,"%"PRIu64,value->asI64);
+      fprintf(log,"%"PRIu64,value->asU64);
       break;
     case TYPE_SIG_F32:
       fprintf(log,"%f",value->asF32);
@@ -314,36 +314,36 @@ void* run(void* initState);
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   // var0:(argsIn+0)
-  Value var1;// (Type:int32)
+  Value var1 [1];// (Type:int32)
   {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    var1=(Value){.asI32=((int32_t)((Value){.asI32=1}).asI32)+((int32_t)(Value){.asI32=(int32_t)(((argsIn+0))[0]).asU64}.asI32)};
+    memcpy(var1,((Value[]){(Value){.asI32=((int32_t)(((Value[]){(Value){.asI32=1}})[0].asI32))+((int32_t)(((Value[]){(Value){.asI32=(int32_t)(((argsIn+0))[0].asU64)}})[0].asI32))}}),1*sizeof(Value));
   }
-  Value var2;// (Type:int32)
+  Value var2 [1];// (Type:int32)
   {// Initialize: BinOp{BinOp{VarExpression{1} MULT VarExpression{1}} MINUS BinOp{VarExpression{1} INT_DIV ValueExpression{2}}}
-    var2=(Value){.asI32=((int32_t)(Value){.asI32=((int32_t)var1.asI32)*((int32_t)var1.asI32)}.asI32)-((int32_t)(Value){.asI32=((int32_t)var1.asI32)/((int32_t)((Value){.asI32=2}).asI32)}.asI32)};
+    memcpy(var2,((Value[]){(Value){.asI32=((int32_t)(((Value[]){(Value){.asI32=((int32_t)(var1[0].asI32))*((int32_t)(var1[0].asI32))}})[0].asI32))-((int32_t)(((Value[]){(Value){.asI32=((int32_t)(var1[0].asI32))/((int32_t)(((Value[]){(Value){.asI32=2}})[0].asI32))}})[0].asI32))}}),1*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{2}}
-    logValue(DEFAULT,false,TYPE_SIG_I32,&var2);
+    logValue(DEFAULT,false,TYPE_SIG_I32,var2);
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:int32[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}}));
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_ARRAY|(3<<TYPE_CONTENT_SHIFT)}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(3<<TYPE_CONTENT_SHIFT)}}));
   }
-  Value var3;// (Type:uint64)
+  Value var3 [1];// (Type:uint64)
   {// Initialize: ValueExpression{3}
-    var3=((Value){.asU64=3});
+    memcpy(var3,((Value[]){(Value){.asU64=3}}),1*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{3}}
-    logValue(DEFAULT,false,TYPE_SIG_U64,&var3);
+    logValue(DEFAULT,false,TYPE_SIG_U64,var3);
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,&((Value){.asType=TYPE_SIG_NONE}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_NONE}}));
   }
   Value var4 [2];// (Type:int32?)
-  {// Initialize: TypeCast{Type:int32?:ValueExpression{none}}
-    memcpy(var4,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
+  {// Initialize: TypeCast{Type:int32?:ValueExpression{4}}
+    memcpy(var4,((Value[]){(Value){.asBool=true},(((Value[]){(Value){.asI32=4}}))[0]}),2*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{4}}
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var4);
@@ -352,9 +352,9 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
     Value tmp0 [2];
     {
       if((var4)[0].asBool){
-        memcpy(tmp0,(Value[]){(Value){.asBool=true},(var4)[1]},2);
+        memcpy(tmp0,((Value[]){(Value){.asBool=true},((var4)+1)[0]}),2*sizeof(Value));
       }else{
-        memcpy(tmp0,(Value[]){(Value){.asBool=false},((Value){.asBool=false/*none*/})},2);
+        memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asBool=false/*none*/}}))[0]}),2*sizeof(Value));
       }
     }
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),tmp0);
@@ -366,7 +366,7 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
 // readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
 void* proc_readLine(Value* argsIn,Value* argsOut,Value** argData){
   // var0:(argsIn+0)
-  // var1:(*(argsIn+2))
+  // var1:(argsIn+2)
   // Native
   return NULL;
 }
