@@ -57,8 +57,8 @@ public class GetField implements Expression{
     }
 
     @Override
-    public boolean isMutable() {
-        return value.isMutable();//addLater check if field is mutable
+    public boolean canAssignTo() {
+        return value.canAssignTo();//addLater check if field is mutable
     }
 
     @Override

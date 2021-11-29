@@ -27,7 +27,7 @@ public class StringCompare implements Expression {
     }
 
     @Override
-    public boolean isMutable() {
-        return Expression.super.isMutable();
+    public boolean canAssignTo() {
+        return Expression.super.canAssignTo();
     }
 }

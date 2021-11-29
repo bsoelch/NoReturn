@@ -1634,7 +1634,7 @@ public class Parser {
                         Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
                         if(!Type.canAssign(assignTarget.expectedType(),expr.expectedType(),null)){
                             throw new TypeError("cannot assign " +expr.expectedType()+ " to "+assignTarget.expectedType());
-                        }else if(!assignTarget.isMutable()){
+                        }else if(!assignTarget.canAssignTo()){
                             throw new TypeError("cannot assign values to immutable value"+assignTarget);
                         }
                         actions.add(new Assignment(assignTarget,expr));

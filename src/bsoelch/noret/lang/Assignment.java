@@ -11,7 +11,7 @@ public class Assignment implements Action {
 
     public Assignment(Expression target, Expression expr) {
         this.target = target;
-        if(!target.isMutable()){
+        if(!target.canAssignTo()){
             throw new SyntaxError(target+" cannot be modified");
         }
         //ensure values are cast to the correct type

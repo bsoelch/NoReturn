@@ -44,7 +44,7 @@ public class TypeCast implements Expression{
     }
 
     @Override
-    public boolean isMutable() {
+    public boolean canAssignTo() {
         return false;
     }
 

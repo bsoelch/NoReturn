@@ -39,7 +39,7 @@ public class VarExpression implements Expression {
     }
 
     @Override
-    public boolean isMutable() {
+    public boolean canAssignTo() {
         return true;
     }
     @Override

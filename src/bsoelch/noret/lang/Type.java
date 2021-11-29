@@ -387,6 +387,9 @@ public class Type {
             this.tupleName=name;
             this.elements=elements;
         }
+        public Type[] getElements() {
+            return elements;
+        }
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
