@@ -61,7 +61,7 @@ public class TupleConcat implements Expression {
     private final Type type;
     private final ArrayList<Section> sections;
 
-    //TODO join constants
+    //TODO join constant values
     private TupleConcat(ArrayList<Section> fromSections) {
         this.sections =fromSections;
         if(sections.stream().noneMatch(t->t.varSize)){

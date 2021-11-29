@@ -163,18 +163,30 @@ public class CompileToC {
         throw new UnsupportedOperationException("unsupported Type :"+t);
     }
 
-    private String typeFieldName(Type.Numeric type){
-        if(type.isFloat){
-            return "asF"+ type.bitSize();
+    private String typeFieldName(Type.Primitive type){
+        if(type instanceof Type.Numeric){
+            if(((Type.Numeric)type).isFloat){
+                return "asF"+ ((Type.Numeric)type).bitSize();
+            }else{
+                return "as"+(((Type.Numeric)type).signed?"I":"U")+((Type.Numeric)type).bitSize();
+            }
+        }else if(type== Type.Primitive.BOOL){
+            return "asBool";
         }else{
-            return "as"+(type.signed?"I":"U")+type.bitSize();
+            throw new RuntimeException("unexpected primitive: "+type);
         }
     }
-    private String cTypeName(Type.Numeric type){
-        if(type.isFloat){
-            return "float"+type.bitSize()+"_t";
+    private String cTypeName(Type.Primitive type){
+        if(type instanceof Type.Numeric){
+            if(((Type.Numeric)type).isFloat){
+                return "float"+((Type.Numeric)type).bitSize()+"_t";
+            }else{
+                return (((Type.Numeric)type).signed?"int":"uint")+ ((Type.Numeric)type).bitSize()+"_t";
+            }
+        }else if(type == Type.Primitive.BOOL){
+            return "asBool";
         }else{
-            return (type.signed?"int":"uint")+ type.bitSize()+"_t";
+            throw new RuntimeException("unexpected primitive: "+type);
         }
     }
 
@@ -662,7 +674,7 @@ public class CompileToC {
             comment(indent+"{","arg1: "+firstArg.expectedType());
             blockSize = firstArg.expectedType().blockCount;
             line.append(indent).append("  memcpy,").append(argsOut).append("[").append(argOff).append("],");
-            writeExpression("  ", initLines, line, firstArg, 0, name, argNames);
+            writeExpression("  ", initLines, line, firstArg, false,0, name, argNames);
             line.append(",").append(blockSize).append("*sizeof("+VALUE_BLOCK_NAME+"));");
             argOff += blockSize;
             for (String l : initLines) {
@@ -700,7 +712,7 @@ public class CompileToC {
                             "("+((ValDef) a).getType()+")");
                     line.append("    memcpy(var").append(valCount).append(",");
                     comment("  {","Initialize: "+((ValDef) a).getInitValue());
-                    writeExpression("    ",initLines,line,((ValDef) a).getInitValue(),0, name, argNames);
+                    writeExpression("    ",initLines,line,((ValDef) a).getInitValue(),false,0, name, argNames);
                     for(String l:initLines){
                         writeLine(l);
                     }
@@ -713,10 +725,10 @@ public class CompileToC {
                     line.setLength(0);
                     line.append("    ");
                     //prepare target TODO writeMutableExpression mode, that stores all expressions as pointer to their location
-                    writeExpression("    ",initLines,line,((Assignment) a).target,0, name, argNames);
+                    writeExpression("    ",initLines,line,((Assignment) a).target,false,0, name, argNames);
                     line.append(" = ");
                     //preform assignment
-                    writeExpression("    ",initLines,line,((Assignment) a).expr,0, name, argNames);
+                    writeExpression("    ",initLines,line,((Assignment) a).expr,false,0, name, argNames);
                     for(String l:initLines){
                         writeLine(l);
                     }
@@ -730,7 +742,7 @@ public class CompileToC {
                             .append(((LogAction) a).type.append).append(',')
                             .append(typeSignature(((LogAction) a).expr.expectedType()))
                             .append(",");
-                    writeExpression("    ",initLines,line,((LogAction) a).expr,0, name, argNames);
+                    writeExpression("    ",initLines,line,((LogAction) a).expr,false,0, name, argNames);
                     for(String l:initLines){
                         writeLine(l);
                     }
@@ -818,40 +830,40 @@ public class CompileToC {
     }
 
     //TODO "raw" mode for primitive operations (write values without wrapping in Value[])
-    private String[] unOpParts(LeftUnaryOp op) {
+    private String[] unOpParts(LeftUnaryOp op,boolean unwrap) {
         String[] parts=new String[2];
         Type inType=op.expr.expectedType();
         Type outType=op.expectedType();
         switch (op.op){
             case PLUS:
                 if(inType instanceof Type.Numeric){
-                    parts[0]=parts[1]="";
-                    return parts;
+                    return null;
                 }else{
                     throw new SyntaxError("unsupported type for +:"+inType);
                 }
             case MINUS:
                 if(inType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=-("+ cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)inType)+")}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=")+"-("+ cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]=unwrap?")":")}})";
                     return parts;
                 }else{
                     throw new SyntaxError("unsupported type for -:"+inType);
                 }
             case FLIP:
                 if(inType instanceof Type.Numeric&&!((Type.Numeric)outType).isFloat){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=~("+ cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)inType)+")}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=")+"~("+ cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]=unwrap?")":")}})";
                     return parts;
                 }else{
                     throw new SyntaxError("unsupported type for ~:"+inType);
                 }
             case NOT:
                 if(inType == Type.Primitive.BOOL){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool=!(";
-                    parts[1]="[0].asBool)}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=")+"!("+ cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]=unwrap?")":")}})";
                     return parts;
                 }
                 throw new SyntaxError("unsupported type for !:"+inType);
@@ -879,7 +891,7 @@ public class CompileToC {
         throw new RuntimeException("Unreachable");
     }
 
-    private String[] binOpParts(BinOp op) {
+    private String[] binOpParts(BinOp op,boolean unwrap) {
         String[] parts=new String[3];
         Type lType=op.left.expectedType();
         Type rType=op.right.expectedType();
@@ -887,50 +899,55 @@ public class CompileToC {
         switch (op.op){
             case PLUS:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))+(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="+";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case MINUS:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))-(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="-";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case MULT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))*(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="*";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case DIV:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))/(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    if((((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
+                        parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                                "=((")+cTypeName((Type.Numeric)outType)+")(";
+                        parts[1]="/";
+                        parts[2]=unwrap?"))":"))}})";
+                    }else{
+                        //TODO different handling for int/int
+                        throw new UnsupportedOperationException("unimplemented");
+                    }
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case MOD:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))%(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="%";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -940,10 +957,10 @@ public class CompileToC {
                     if((((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
                         throw new UnsupportedOperationException("unimplemented");
                     }else{
-                        parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                                "=(("+cTypeName((Type.Numeric)outType)+")(";
-                        parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))/(("+cTypeName((Type.Numeric)outType)+")(";
-                        parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                        parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                                "=((")+cTypeName((Type.Numeric)outType)+")(";
+                        parts[1]="/";
+                        parts[2]=unwrap?"))":"))}})";
                         return parts;
                     }
                 }else{
@@ -954,10 +971,10 @@ public class CompileToC {
             case AND:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                     !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))&(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="&";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -965,10 +982,10 @@ public class CompileToC {
             case OR:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                         !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))|(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="|";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -976,10 +993,10 @@ public class CompileToC {
             case XOR:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                         !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))^(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="^";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -987,10 +1004,10 @@ public class CompileToC {
             case LSHIFT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                         !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))<<(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="<<";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -998,51 +1015,73 @@ public class CompileToC {
             case RSHIFT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                         !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"))>>(("+cTypeName((Type.Numeric)outType)+")(";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"))}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]=">>";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case FAST_AND://addLater own handling of fastAnd if(cond1){res=cond2}else{res=false}
             case FAST_OR://addLater own handling of fastOr if(cond1){res=true}else{res=cond2}
-            case NE:
-            case EQ:
                 throw new UnsupportedOperationException("unimplemented:"+op.op);
+            case NE:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="==";
+                    parts[2]=unwrap?"))":"))}})";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
+            case EQ:
+                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="!=";
+                    parts[2]=unwrap?"))":"))}})";
+                    return parts;
+                }else{
+                    throw new UnsupportedOperationException("unimplemented");
+                }
             case GT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool=";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+">";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]=">";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case GE:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool=";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+">=";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]=">=";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case LT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool=";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"<";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="<";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case LE:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool=";
-                    parts[1]="[0]."+ typeFieldName((Type.Numeric)lType)+"<=";
-                    parts[2]="[0]."+ typeFieldName((Type.Numeric)rType)+"}})";
+                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "=((")+cTypeName((Type.Numeric)outType)+")(";
+                    parts[1]="<=";
+                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -1054,41 +1093,78 @@ public class CompileToC {
         }
         throw new RuntimeException("Unreachable");
     }
-    private String[] typecastParts(Type to, Type from) {
+    private String[] typecastParts(Type to, Type from,boolean unwrap) {
         String[] parts=new String[2];
         if(from instanceof Type.Numeric&&to instanceof Type.Numeric){
-            parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)to)+"=("+cTypeName((Type.Numeric)to)+")(";
-            parts[1]="[0]."+ typeFieldName((Type.Numeric)from)+")}})";
+            if(unwrap){
+                parts[0]="(("+cTypeName((Type.Numeric)to)+")(";
+                parts[1]="))";
+            }else{
+                parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)to)+"=("+cTypeName((Type.Numeric)to)+")(";
+                parts[1]="[0]."+ typeFieldName((Type.Numeric)from)+")}})";
+            }
             return parts;
         }else if(to instanceof Type.Optional&&from.blockCount==1){
+            if(unwrap){
+                throw new RuntimeException("cannot unwrap Optional");
+            }
             parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool="+(from!=Type.NONE_TYPE)+"},(";
             parts[1]=")[0]})";
             return parts;
         }else if(to == Type.ANY&&from.blockCount==1){
+            if(unwrap){
+                throw new RuntimeException("cannot unwrap Any");
+            }
             parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asType="+typeSignature(from)+"},(";
             parts[1]=")[0]})";
             return parts;
         }else if(to== Type.Primitive.BOOL &&from instanceof Type.Optional){
-            parts[0]="(";
-            parts[1]=")";
+            if(unwrap){
+                parts[0]="((";
+                parts[1]=")."+typeFieldName(Type.Primitive.BOOL)+")";
+            }else{
+                parts[0]="(";
+                parts[1]=")";
+            }
             return parts;
         }else{
             throw new UnsupportedOperationException("Cast from "+from+" to "+to+" is currently not implemented");
         }
     }
 
-    private int writeExpression(String indent, ArrayList<String> initLines, StringBuilder line, Expression expr, int tmpCount, String procName, String[] varNames){
+    private String unwrapSuffix(Type type){
+        if(type instanceof Type.Primitive){
+            return "."+typeFieldName((Type.Primitive) type);
+        }else{
+            throw new RuntimeException("Cannot unwrap "+type);
+        }
+    }
+
+    private int writeExpression(String indent, ArrayList<String> initLines, StringBuilder line, Expression expr,
+                                boolean unwrap,int tmpCount, String procName, String[] varNames){
         if(expr instanceof VarExpression){
             line.append(varNames[((VarExpression)expr).varId]);
+            if(unwrap){
+                line.append(unwrapSuffix(expr.expectedType()));
+            }
             return tmpCount;
         }else if(expr instanceof ThisExpr){
+            if(unwrap){
+                throw new RuntimeException("Cannot unwrap procedures");
+            }
             line.append(CAST_BLOCK+"{.asProc=&" + PROC_PREFIX).append(procName).append("}");
             return tmpCount;
         }else if(expr instanceof ValueExpression){
             if(((ValueExpression) expr).constId!=null){
                 line.append(CONST_PREFIX).append(asciify(((ValueExpression) expr).constId));
+                if(unwrap){
+                    line.append(unwrapSuffix(expr.expectedType()));
+                }
                 return tmpCount;
             }else if(expr.expectedType().varSize){
+                if(unwrap){
+                    throw new RuntimeException("Cannot unwrap "+expr.expectedType());
+                }
                 int blockCount=expr.expectedType().blockCount;
                 DataOut data=new DataOut("data={",0,"tmp");//TODO handle data
                 StringBuilder tmp;
@@ -1104,53 +1180,71 @@ public class CompileToC {
                 line.append("tmp").append(tmpCount);
                 return tmpCount+1;
             }else{
-                line.append("(("+VALUE_BLOCK_NAME+"[]){");
-                writeConstValueAsUnion(line,((ValueExpression)expr).getValue(),null,true, false,true);
-                line.append("})");
+                if(unwrap){
+                    if(!(expr.expectedType() instanceof Type.Primitive)){
+                        throw new RuntimeException("Cannot unwrap "+expr.expectedType());
+                    }
+                    line.append("((").append(cTypeName((Type.Primitive)expr.expectedType())).append(")(")
+                            .append(((ValueExpression)expr).getValue().stringValue()).append("))");
+                }else{
+                    line.append("(("+VALUE_BLOCK_NAME+"[]){");
+                    writeConstValueAsUnion(line,((ValueExpression)expr).getValue(),null,true, false,true);
+                    line.append("})");
+                }
                 return tmpCount;
             }
         }else if(expr instanceof BinOp){
-            String[] parts=binOpParts(((BinOp) expr));
+            String[] parts=binOpParts(((BinOp) expr),unwrap);
             line.append(parts[0]);
-            tmpCount=writeExpression(indent,initLines,line,((BinOp)expr).left,tmpCount, procName, varNames);
+            tmpCount=writeExpression(indent,initLines,line,((BinOp)expr).left,true,tmpCount, procName, varNames);
             line.append(parts[1]);
-            tmpCount=writeExpression(indent,initLines,line,((BinOp)expr).right,tmpCount, procName, varNames);
+            tmpCount=writeExpression(indent,initLines,line,((BinOp)expr).right,true,tmpCount, procName, varNames);
             line.append(parts[2]);
             return tmpCount;
         }else if(expr instanceof LeftUnaryOp){
-            String[] parts=unOpParts(((LeftUnaryOp) expr));
-            line.append(parts[0]);
-            tmpCount=writeExpression(indent,initLines,line,((LeftUnaryOp)expr).expr,tmpCount, procName, varNames);
-            line.append(parts[1]);
+            String[] parts=unOpParts(((LeftUnaryOp) expr),unwrap);
+            if(parts!=null){
+                line.append(parts[0]);
+                tmpCount=writeExpression(indent,initLines,line,((LeftUnaryOp)expr).expr,true,tmpCount, procName, varNames);
+                line.append(parts[1]);
+            }else{
+                tmpCount=writeExpression(indent,initLines,line,((LeftUnaryOp)expr).expr,unwrap,tmpCount, procName, varNames);
+            }
             return tmpCount;
         }else if(expr instanceof TypeCast){
-            String[] parts=typecastParts(((TypeCast) expr).type,((TypeCast) expr).value.expectedType());
+            String[] parts=typecastParts(((TypeCast) expr).type,((TypeCast) expr).value.expectedType(),unwrap);
             line.append(parts[0]);
-            tmpCount=writeExpression(indent,initLines,line,((TypeCast)expr).value,tmpCount, procName, varNames);
+            tmpCount=writeExpression(indent,initLines,line,((TypeCast)expr).value,((TypeCast)expr).value.expectedType() instanceof Type.Primitive,
+                    tmpCount, procName, varNames);
             line.append(parts[1]);
             return tmpCount;
         }else if(expr instanceof IfExpr){
-            //addLater use ?: if both arguments can be inlined
-            int blockCount = expr.expectedType().blockCount;
-            initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
-            int prevTmp=tmpCount++;
-            initLines.add(indent+"{");
-            StringBuilder tmp=new StringBuilder(indent+"  if(");
-            tmpCount=writeExpression(indent+"    ",initLines,tmp,((IfExpr)expr).cond,tmpCount, procName, varNames);
-            initLines.add(tmp.append("[0].asBool){").toString());
-            tmp = new StringBuilder(indent + "    memcpy(tmp" + prevTmp + ",");
-            tmpCount=writeExpression(indent,initLines,tmp,((IfExpr)expr).ifVal,tmpCount, procName, varNames);
-            tmp.append(",").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"))");
-            initLines.add(tmp.append(";").toString());
-            initLines.add(indent+"  }else{");
-            tmp = new StringBuilder(indent + "    memcpy(tmp" + prevTmp + ",");
-            writeExpression(indent+"    ",initLines,tmp,((IfExpr)expr).elseVal,tmpCount, procName, varNames);
-            tmp.append(",").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"))");
-            initLines.add(tmp.append(";").toString());
-            initLines.add(indent+"  }");
-            initLines.add(indent+"}");
-            line.append("tmp").append(prevTmp);
-            return prevTmp;
+            if(unwrap){
+                //TODO handle unwrapping of if-expressions
+                throw new UnsupportedOperationException("Unwrapping of IfExpr is currently not supported");
+            }else{
+                //addLater use ?: if both arguments can be inlined
+                int blockCount = expr.expectedType().blockCount;
+                initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
+                int prevTmp=tmpCount++;
+                initLines.add(indent+"{");
+                StringBuilder tmp=new StringBuilder(indent+"  if(");
+                tmpCount=writeExpression(indent+"    ",initLines,tmp,((IfExpr)expr).cond,true,tmpCount, procName, varNames);
+                initLines.add(tmp.append("){").toString());
+                tmp = new StringBuilder(indent + "    memcpy(tmp" + prevTmp + ",");
+                tmpCount=writeExpression(indent,initLines,tmp,((IfExpr)expr).ifVal,false, tmpCount,procName, varNames);
+                tmp.append(",").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"))");
+                initLines.add(tmp.append(";").toString());
+                initLines.add(indent+"  }else{");
+                tmp = new StringBuilder(indent + "    memcpy(tmp" + prevTmp + ",");
+                writeExpression(indent+"    ",initLines,tmp,((IfExpr)expr).elseVal,false, tmpCount, procName, varNames);
+                tmp.append(",").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"))");
+                initLines.add(tmp.append(";").toString());
+                initLines.add(indent+"  }");
+                initLines.add(indent+"}");
+                line.append("tmp").append(prevTmp);
+                return prevTmp;
+            }
         }else if(expr instanceof GetField){
             if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_TYPE)){
                 if(((GetField) expr).value.expectedType()== Type.ANY){
@@ -1158,20 +1252,29 @@ public class CompileToC {
                     throw new UnsupportedOperationException("\"any.type\" is currently not supported");
                 }else{
                     line.append(CAST_BLOCK + "{.asType=").append(typeSignature(((GetField) expr).value.expectedType())).append('}');
+                    if(unwrap){
+                        line.append(unwrapSuffix(expr.expectedType()));
+                    }
                     return tmpCount;
                 }
             }else if(((GetField) expr).value.expectedType() instanceof Type.Array&&
                     ((GetField) expr).fieldName.equals(Type.FIELD_NAME_LENGTH)){
                 line.append('(');
-                writeExpression(indent,initLines,line, ((GetField) expr).value, tmpCount,procName,varNames);
+                writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
                 line.append(")");//array.length
+                if(unwrap){
+                    line.append(unwrapSuffix(expr.expectedType()));
+                }
                 return tmpCount;
             }else if(((GetField) expr).value.expectedType() instanceof Type.Optional&&
                     ((GetField) expr).fieldName.equals(Type.FIELD_NAME_VALUE)){
                 //TODO check value before access, dereference pointers
                 line.append('(');
-                writeExpression(indent,initLines,line, ((GetField) expr).value, tmpCount,procName,varNames);
+                writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
                 line.append(")+1");//optional.length
+                if(unwrap){
+                    line.append(unwrapSuffix(expr.expectedType()));
+                }
                 return tmpCount;
             }else{
                 throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");

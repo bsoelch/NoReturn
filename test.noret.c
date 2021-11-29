@@ -311,11 +311,11 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   // var0:(argsIn+0)
   Value var1 [1];// (Type:int32)
   {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    memcpy(var1,((Value[]){(Value){.asI32=((int32_t)(((Value[]){(Value){.asI32=1}})[0].asI32))+((int32_t)(((Value[]){(Value){.asI32=(int32_t)(((argsIn+0))[0].asU64)}})[0].asI32))}}),1*sizeof(Value));
+    memcpy(var1,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(1))+((int32_t)(((argsIn+0)).asU64))))}}),1*sizeof(Value));
   }
   Value var2 [1];// (Type:int32)
   {// Initialize: BinOp{BinOp{VarExpression{1} MULT VarExpression{1}} MINUS BinOp{VarExpression{1} INT_DIV ValueExpression{2}}}
-    memcpy(var2,((Value[]){(Value){.asI32=((int32_t)(((Value[]){(Value){.asI32=((int32_t)(var1[0].asI32))*((int32_t)(var1[0].asI32))}})[0].asI32))-((int32_t)(((Value[]){(Value){.asI32=((int32_t)(var1[0].asI32))/((int32_t)(((Value[]){(Value){.asI32=2}})[0].asI32))}})[0].asI32))}}),1*sizeof(Value));
+    memcpy(var2,((Value[]){(Value){.asI32=((int32_t)((var1.asI32*var1.asI32))-(var1.asI32/((int32_t)(2))))))}}),1*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{2}}
     logValue(DEFAULT,false,TYPE_SIG_I32,var2);
@@ -338,7 +338,7 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   }
   Value var4 [2];// (Type:int32?)
   {// Initialize: TypeCast{Type:int32?:ValueExpression{4}}
-    memcpy(var4,((Value[]){(Value){.asBool=true},(((Value[]){(Value){.asI32=4}}))[0]}),2*sizeof(Value));
+    memcpy(var4,((Value[]){(Value){.asBool=true},(((int32_t)(4)))[0]}),2*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{4}}
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var4);
@@ -346,8 +346,8 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{4}}?TypeCast{Type:int32?:GetField{VarExpression{4}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
     Value tmp0 [2];
     {
-      if((var4)[0].asBool){
-        memcpy(tmp0,((Value[]){(Value){.asBool=true},((var4)+1)[0]}),2*sizeof(Value));
+      if(((var4).asBool)){
+        memcpy(tmp0,((Value[]){(Value){.asBool=true},((var4)+1.asI32)[0]}),2*sizeof(Value));
       }else{
         memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asBool=false/*none*/}}))[0]}),2*sizeof(Value));
       }
