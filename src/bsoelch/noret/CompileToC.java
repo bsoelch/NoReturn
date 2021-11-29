@@ -10,16 +10,6 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 
-/* TODO data storage:
-1. Arrays/Strings
-[start], start -> [ref-count,off,cap,len,data[0],...,data[off],....,data[len],...,data[cap-1]}
-2. any
-[type,data], data -> raw | [ref-count,len,cap,data[0],...,data[len-1],...,data[cap-1]]
-3. optional:
-[hasData,data], data -> raw | [ref-count,data[0],...,data[N]]
-4. reference:
-[ptr], ptr->[ref-count,data[0],...,data[N]]
-* */
 
 public class CompileToC {
     public static final String VALUE_BLOCK_NAME = "Value";
@@ -32,24 +22,31 @@ public class CompileToC {
     private static final String CONST_DATA_NAME = "constData";
     private static final String CONST_DATA_SIGNATURE = VALUE_BLOCK_NAME + " " +CONST_DATA_NAME+" []";
 
-    private static final long LEN_MASK_IN_PLACE = 0x0000000000000000L;
-    private static final long LEN_MASK_CONST    = 0x8000000000000000L;
-    private static final long LEN_MASK_LOCAL    = 0x4000000000000000L;
-    private static final long LEN_MASK_TMP      = 0xC000000000000000L;
     public static final String PROC_PREFIX = "proc_";
     public static final String CONST_PREFIX = "const_";
     public static final String PROCEDURE_TYPE = "Procedure";
 
+    /* TODO rewrite DataOut
+        constant memory may keep the original approach
+        local/reference memory will be stored in malloced-memory sections:
+            1. Arrays/Strings
+            [start], start -> [ref-count,off,cap,len,data[0],...,data[off],....,data[len],...,data[cap-1]}
+            2. any
+            [type,data], data -> raw | [ref-count,len,cap,data[0],...,data[len-1],...,data[cap-1]]
+            3. optional:
+            [hasData,data], data -> raw | [ref-count,data[0],...,data[N]]
+            4. reference:
+            [ptr], ptr->[ref-count,data[0],...,data[N]]
+    * */
     private static class DataOut {
         final StringBuilder build;
         long off;
         final String name;
-        final long mask;
-        private DataOut(String prefix,long off,String name,long mask){
+        @Deprecated
+        private DataOut(String prefix,long off,String name){
             build=new StringBuilder(prefix);
             this.off=off;
             this.name=name;
-            this.mask=mask;
         }
     }
 
@@ -135,7 +132,7 @@ public class CompileToC {
             return "TYPE_SIG_TYPE";
         }else if(t==Type.Primitive.NONE_TYPE){
             return "TYPE_SIG_NONE";
-        }else if(t==Type.Primitive.ANY){
+        }else if(t==Type.ANY){
             return "TYPE_SIG_ANY";
         }else if(t instanceof Type.Optional){
             typeSignature(((Type.Optional) t).content);//ensure type-signature exists
@@ -195,11 +192,6 @@ public class CompileToC {
         out.newLine();
         writeLine("#define MAX_ARG_SIZE       0x"+Long.toHexString(maxArgSize));
         writeLine("#define ARG_DATA_INIT_SIZE 0x1000");
-        out.newLine();
-        writeLine("#define LEN_MASK_IN_PLACE 0x"+Long.toHexString(LEN_MASK_IN_PLACE));
-        writeLine("#define LEN_MASK_CONST    0x"+Long.toHexString(LEN_MASK_CONST));
-        writeLine("#define LEN_MASK_LOCAL    0x"+Long.toHexString(LEN_MASK_LOCAL));
-        writeLine("#define LEN_MASK_TMP      0x"+Long.toHexString(LEN_MASK_TMP));
         out.newLine();
         //Type enum
         comment("Type Definitions");
@@ -355,7 +347,7 @@ public class CompileToC {
         writeLine("      fputs(\""+escapeStr(Type.NONE_TYPE)+"\",log);");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_ANY:");
-        writeLine("      fputs(\""+escapeStr(Type.Primitive.ANY)+"\",log);");
+        writeLine("      fputs(\""+escapeStr(Type.ANY)+"\",log);");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_OPTIONAL:");
         writeLine("      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);");
@@ -491,12 +483,11 @@ public class CompileToC {
     }
 
     /**Writes a value as a array of union declarations*/
-    private void writeConstValueAsUnion(StringBuilder out, Value v, DataOut dataOut, boolean isFirst, boolean inPlaceValues,
-                                        boolean incOff,boolean prefix){
+    private void writeConstValueAsUnion(StringBuilder out, Value v, DataOut dataOut, boolean isFirst,boolean incOff, boolean prefix){
         if(!isFirst){
             out.append(',');
         }
-        if(v.getType()== Type.Primitive.ANY){
+        if(v.getType()== Type.ANY){
             Type contentType = ((Value.AnyValue) v).content.getType();
             if(prefix){out.append(CAST_BLOCK); }
             out.append("{.asType=").append(typeSignature(contentType)).append("}");
@@ -510,10 +501,10 @@ public class CompileToC {
                     out.append(CAST_BLOCK);
                 }
                 out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
-                writeConstValueAsUnion(dataOut.build, ((Value.AnyValue) v).content, dataOut, dataOut.off == 0, true, true, prefix);
+                writeConstValueAsUnion(dataOut.build, ((Value.AnyValue) v).content, dataOut, dataOut.off == 0, true, prefix);
                 out.append(',');
             }else{
-                writeConstValueAsUnion(out,((Value.AnyValue) v).content,dataOut,false,false,incOff,prefix);
+                writeConstValueAsUnion(out,((Value.AnyValue) v).content,dataOut,false, incOff,prefix);
             }
         }else if(v.getType() == Type.Primitive.BOOL){
             if(prefix){out.append(CAST_BLOCK); }
@@ -527,150 +518,103 @@ public class CompileToC {
                 dataOut.off++;}
         }else if(v.getType() instanceof Type.Numeric){
             writeNumber(out, v, dataOut, incOff,prefix);
-        }else if(v.getType()== Type.NoRetString.STRING8){
+        }else if(v.getType()== Type.NoRetString.STRING8){//FIXME adjust arrays to new storage structure
             byte[] bytes=((Value.StringValue) v).utf8Bytes();
-            if(inPlaceValues){
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
-                        .append("=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|bytes.length)).append("}");
-                if(incOff){
-                    dataOut.off++;}
-                out.append(',');
-            }else{
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
-                        .append("=0x").append(Long.toHexString(dataOut.mask|bytes.length)).append("}");
-                if(incOff){
-                    dataOut.off++;}
-                if(incOff){
-                    dataOut.off++;}//increment before store
-                out.append(',');
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
-                out= dataOut.build;
-                incOff=true;
-                if(dataOut.off>0){
-                    out.append(',');
-                }
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
+                    .append("=0x").append(Long.toHexString(bytes.length)).append("}");
+            if(incOff){
+                dataOut.off++;}
+            if(incOff){
+                dataOut.off++;}//increment before store
+            out.append(',');
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
+            if(dataOut.off>0){
+                dataOut.build.append(',');
             }
             for(int i=0;i< bytes.length;i+=8){
-                if(i>0){out.append(','); }
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.raw8={");
+                if(i>0){dataOut.build.append(','); }
+                if(prefix){dataOut.build.append(CAST_BLOCK); }
+                dataOut.build.append("{.raw8={");
                 for(int j=0;j<8;j++){
                     if(j>0){
-                        out.append(',');
+                        dataOut.build.append(',');
                     }
-                    out.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "0");
+                    dataOut.build.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "0");
                 }
-                out.append("}}");
-                if(incOff){ dataOut.off++;}
+                dataOut.build.append("}}");
+                dataOut.off++;
             }
         }else if(v.getType()== Type.NoRetString.STRING16){
             char[] chars=((Value.StringValue) v).chars();
-            if(inPlaceValues){
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
-                        .append("=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|chars.length)).append("}");
-                if(incOff){
-                    dataOut.off++;}
-                out.append(',');
-            }else{
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
-                        .append("=0x").append(Long.toHexString(dataOut.mask|chars.length)).append("}");
-                if(incOff){
-                    dataOut.off++;}
-                if(incOff){
-                    dataOut.off++;}//increment before store
-                out.append(',');
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
-                out= dataOut.build;
-                incOff=true;
-                if(dataOut.off>0){
-                    out.append(',');
-                }
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
+                    .append("=0x").append(Long.toHexString(chars.length)).append("}");
+            if(incOff){
+                dataOut.off++;}
+            if(incOff){
+                dataOut.off++;}//increment before store
+            out.append(',');
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
+            if(dataOut.off>0){
+                dataOut.build.append(',');
             }
             for(int i=0;i< chars.length;i+=4){
-                if(i>0){out.append(','); }
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.raw16={");
+                if(i>0){dataOut.build.append(','); }
+                if(prefix){dataOut.build.append(CAST_BLOCK); }
+                dataOut.build.append("{.raw16={");
                 for(int j=0;j<4;j++){
                     if(j>0){
-                        out.append(',');
+                        dataOut.build.append(',');
                     }
-                    out.append("0x").append((i + j < chars.length) ? Integer.toHexString(chars[i + j] & 0xffff) : "0");
+                    dataOut.build.append("0x").append((i + j < chars.length) ? Integer.toHexString(chars[i + j] & 0xffff) : "0");
                 }
-                out.append("}}");
-                if(incOff){
-                    dataOut.off++;}
+                dataOut.build.append("}}");
+                dataOut.off++;
             }
         }else if(v.getType()== Type.NoRetString.STRING32){
             int[] codePoints=((Value.StringValue) v).codePoints();
-            if(inPlaceValues){
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
-                        .append("=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|codePoints.length)).append("}");
-                if(incOff){
-                    dataOut.off++;}
-                out.append(',');
-            }else{
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
-                        .append("=0x").append(Long.toHexString(dataOut.mask|codePoints.length)).append("}");
-                if(incOff){
-                    dataOut.off++;}
-                if(incOff){
-                    dataOut.off++;}//increment before store
-                out.append(',');
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
-                out= dataOut.build;
-                incOff=true;
-                if(dataOut.off>0){
-                    out.append(',');
-                }
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
+                    .append("=0x").append(Long.toHexString(codePoints.length)).append("}");
+            if(incOff){
+                dataOut.off++;}
+            if(incOff){
+                dataOut.off++;}//increment before store
+            out.append(',');
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
+            if(dataOut.off>0){
+                dataOut.build.append(',');
             }
             for(int i=0;i< codePoints.length;i+=2){
-                if(i>0){out.append(','); }
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.raw32={");
+                if(i>0){dataOut.build.append(','); }
+                if(prefix){dataOut.build.append(CAST_BLOCK); }
+                dataOut.build.append("{.raw32={");
                 for(int j=0;j<2;j++){
                     if(j>0){
-                        out.append(',');
+                        dataOut.build.append(',');
                     }
-                    out.append("0x").append((i + j < codePoints.length) ? Integer.toHexString(codePoints[i + j]) : "0");
+                    dataOut.build.append("0x").append((i + j < codePoints.length) ? Integer.toHexString(codePoints[i + j]) : "0");
                 }
-                out.append("}}");
-                if(incOff){
-                    dataOut.off++;}
+                dataOut.build.append("}}");
+                dataOut.off++;
             }
         }else if(v instanceof Value.ArrayOrTuple){
-            if(inPlaceValues) {
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.").append(typeFieldName(Type.Numeric.UINT64))
-                        .append("=0x").append(Long.toHexString(LEN_MASK_IN_PLACE|((Value.ArrayOrTuple) v).elements().length)).append("}");
-                if(incOff){
-                    dataOut.off++;}
-                //ensure constant block-size (1 for bool,float[N],[u]int[N],reference  2 for string, array, any, optional)
-                for (Value elt : ((Value.ArrayOrTuple) v).elements()) {
-                    writeConstValueAsUnion(out, elt, dataOut, false, false, incOff,prefix);
-                }
-            }else{
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=0x")
-                        .append(Long.toHexString(dataOut.mask|((Value.ArrayOrTuple) v).elements().length)).append("}");
-                if(incOff){
-                    dataOut.off++;}
-                if(incOff){
-                    dataOut.off++;}//increment before write
-                out.append(',');
-                if(prefix){out.append(CAST_BLOCK); }
-                out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
-                for (Value elt : ((Value.ArrayOrTuple) v).elements()) {
-                    writeConstValueAsUnion(dataOut.build,elt, dataOut, dataOut.off==0, true, true,prefix);
-                }
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=0x")
+                    .append(Long.toHexString(((Value.ArrayOrTuple) v).elements().length)).append("}");
+            if(incOff){
+                dataOut.off++;}
+            if(incOff){
+                dataOut.off++;}//increment before write
+            out.append(',');
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.asPtr=(").append(dataOut.name).append("+").append(dataOut.off).append(")}");
+            for (Value elt : ((Value.ArrayOrTuple) v).elements()) {
+                writeConstValueAsUnion(dataOut.build,elt, dataOut, dataOut.off==0, true,prefix);
             }
         }else if(v instanceof Value.Struct){
             throw new UnsupportedOperationException("structs are currently not supported");
@@ -690,7 +634,7 @@ public class CompileToC {
         out.write("const " + VALUE_BLOCK_NAME + " " + CONST_PREFIX +asciify(name));
         out.write(" []={");
         StringBuilder tmp=new StringBuilder();
-        writeConstValueAsUnion(tmp, value, constData, true, true, false,false);
+        writeConstValueAsUnion(tmp, value, constData, true, false,false);
         writeLine(tmp.append("};").toString());
     }
     private void writeProcSignature(String name, Procedure proc) throws IOException{
@@ -873,6 +817,7 @@ public class CompileToC {
         out.newLine();
     }
 
+    //TODO "raw" mode for primitive operations (write values without wrapping in Value[])
     private String[] unOpParts(LeftUnaryOp op) {
         String[] parts=new String[2];
         Type inType=op.expr.expectedType();
@@ -1119,7 +1064,7 @@ public class CompileToC {
             parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool="+(from!=Type.NONE_TYPE)+"},(";
             parts[1]=")[0]})";
             return parts;
-        }else if(to == Type.Primitive.ANY&&from.blockCount==1){
+        }else if(to == Type.ANY&&from.blockCount==1){
             parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asType="+typeSignature(from)+"},(";
             parts[1]=")[0]})";
             return parts;
@@ -1145,11 +1090,11 @@ public class CompileToC {
                 return tmpCount;
             }else if(expr.expectedType().varSize){
                 int blockCount=expr.expectedType().blockCount;
-                DataOut data=new DataOut("data={",0,"tmp",LEN_MASK_TMP);//TODO handle data
+                DataOut data=new DataOut("data={",0,"tmp");//TODO handle data
                 StringBuilder tmp;
                 initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
                 tmp=new StringBuilder("  memcpy(tmp"+tmpCount+",("+VALUE_BLOCK_NAME+"[]){");
-                writeConstValueAsUnion(tmp,((ValueExpression)expr).getValue(),data,true,false,false,true);
+                writeConstValueAsUnion(tmp,((ValueExpression)expr).getValue(),data,true, false,true);
                 tmp.append("},").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"));");
                 initLines.add(indent+"{");
                 initLines.add(indent+tmp);
@@ -1160,7 +1105,7 @@ public class CompileToC {
                 return tmpCount+1;
             }else{
                 line.append("(("+VALUE_BLOCK_NAME+"[]){");
-                writeConstValueAsUnion(line,((ValueExpression)expr).getValue(),null,true,false,false,true);
+                writeConstValueAsUnion(line,((ValueExpression)expr).getValue(),null,true, false,true);
                 line.append("})");
                 return tmpCount;
             }
@@ -1208,7 +1153,7 @@ public class CompileToC {
             return prevTmp;
         }else if(expr instanceof GetField){
             if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_TYPE)){
-                if(((GetField) expr).value.expectedType()== Type.Primitive.ANY){
+                if(((GetField) expr).value.expectedType()== Type.ANY){
                     //TODO read type from any
                     throw new UnsupportedOperationException("\"any.type\" is currently not supported");
                 }else{
@@ -1300,13 +1245,13 @@ public class CompileToC {
         if(hasArgs){
             comment("  ","prepare program Arguments");
             comment("  ","!!! currently only UTF-8 encoding is supported !!!");//addLater support for other encodings of argv
-            writeLine("  initArgs[0]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=LEN_MASK_LOCAL|(argc-1)};");
+            writeLine("  initArgs[0]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1)};");
             writeLine("  initArgs[1]="+CAST_BLOCK+"{.asPtr=argData+"+2+"};");//addLater constant: header size
             comment("  off=2*(argc-1)+"+2+";","off start of next data section arg-len + header-size");
             writeLine("  for(int i=1;i<argc;i++){");//skip first argument
             writeLine("    int l=strlen(argv[i]);");
             //store lengths of arguments
-            writeLine("    argData[2*(i-1)+"+2+"]   = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=LEN_MASK_LOCAL|l};");
+            writeLine("    argData[2*(i-1)+"+2+"]   = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=l};");
             writeLine("    argData[2*(i-1)+1+"+2+"] = "+CAST_BLOCK+"{.asPtr=argData+off};");//pointer to data
             writeLine("    for(int j=0,k=0;j+k<l;j++){");
             writeLine("      if(j==8){");
@@ -1329,7 +1274,7 @@ public class CompileToC {
 
     public void compile(Parser.ParserContext context) throws IOException {
         writeFileHeader(context.maxArgSize());
-        DataOut constData=new DataOut(CONST_DATA_SIGNATURE + "={",0,CONST_DATA_NAME,LEN_MASK_CONST);
+        DataOut constData=new DataOut(CONST_DATA_SIGNATURE + "={",0,CONST_DATA_NAME);
         writeLine(CONST_DATA_SIGNATURE+";");
         for(Map.Entry<String, Value> e:context.constants.entrySet()){
             writeConstant(e.getKey(),e.getValue(),constData);

@@ -494,8 +494,6 @@ public class Parser {
                                     throw new SyntaxError("A char-literal must contain exactly one character");
                                 }
                             }else{
-
-                                //TODO fixed type string literals u8"..."  u16"..." u32"..."
                                 String value = buffer.toString();
                                 Type.NoRetString sType;
                                 switch (stringType){
@@ -516,7 +514,7 @@ public class Parser {
                                     default:
                                         throw new RuntimeException("unreachable");
                                 }
-                                tokenBuffer.addLast(new ExprToken(Value.createPrimitive( sType, value), null, currentPos()));
+                                tokenBuffer.addLast(new ExprToken(Value.createString(sType, value), null, currentPos()));
                             }
                             buffer.setLength(0);
                             state=WordState.ROOT;
@@ -890,7 +888,7 @@ public class Parser {
     */
     public Parser(Reader in) throws IOException {
         context=new ParserContext();
-        Type.addPrimitives(context.typeNames);
+        Type.addAtomics(context.typeNames);
         Native.addProcsTo(context);
         parse(in);
     }
@@ -922,7 +920,7 @@ public class Parser {
     private Type typeFromTokens(ParserContext context, ArrayList<ParserToken> tokens, String structName) {
         if(structName!=null&&tokens.get(0).tokenType!=ParserTokenType.STRUCT_DEFINITION){
             //addLater allow top-level structs containing optionals/arrays/references to themselves
-            throw new RuntimeException("structName shoudl only be non-null if the current call is a struct definition");
+            throw new RuntimeException("structName should only be non-null if the current call is a struct definition");
         }
         //1. parse primitives to TYPE
         // <Primitive> | <typedef Type>

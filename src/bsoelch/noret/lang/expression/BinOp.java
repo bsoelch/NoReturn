@@ -15,11 +15,109 @@ public class BinOp implements Expression {
     final Type expectedOutput;
 
     public static Expression create(Expression left, OperatorType op, Expression right){
-        Type type=typeCheck(left, op, right);
-        if(left instanceof ValueExpression&&right instanceof ValueExpression){//fold constants
-            return ValueExpression.create(evaluate(((ValueExpression) left).value,op,()->((ValueExpression) right).value), null);
+        Type lType = left.expectedType();
+        Type rType = right.expectedType();
+        if(lType instanceof Type.Primitive&&rType instanceof Type.Primitive){
+            Type type=typeCheck((Type.Primitive) lType, op, (Type.Primitive) rType);
+            if(left instanceof ValueExpression&&right instanceof ValueExpression){//fold constants
+                return ValueExpression.create(evaluate(((ValueExpression) left).value,op,()->((ValueExpression) right).value), null);
+            }
+            return new BinOp(left, op, right,type);
+        }else{
+            switch (op) {
+                case LSHIFT:
+                    if (lType instanceof Type.NoRetString) {
+                        return StringConcat.appendEnd(left,right);
+                    } else if (lType instanceof Type.Tuple || lType instanceof Type.Array) {
+                        return TupleConcat.pushEnd(left,right);
+                    }
+                    break;
+                case RSHIFT:
+                    if (rType instanceof Type.NoRetString) {
+                        return StringConcat.appendStart(left,right);
+                    } else if (rType instanceof Type.Tuple || rType instanceof Type.Array) {
+                        return TupleConcat.pushStart(left,right);
+                    }
+                    break;
+                case PLUS:
+                    if (lType instanceof Type.NoRetString || rType instanceof Type.NoRetString) {
+                        return StringConcat.concat(left,right);
+                    } else if ((lType instanceof Type.Tuple || lType instanceof Type.Array) &&
+                            (rType instanceof Type.Tuple || rType instanceof Type.Array)) {
+                        return TupleConcat.concat(left,right);
+                    }
+                    break;
+                case EQ:
+                case NE://eq functions for any expressions
+                    if (lType instanceof Type.NoRetString && rType instanceof Type.NoRetString) {
+                        return StringCompare.create(left,op,right);
+                    }else{
+                        //TODO equals for general values
+                        throw new UnsupportedOperationException("unimplemented");
+                    }
+                case GT:
+                case GE:
+                case LE:
+                case LT:
+                    if (lType instanceof Type.NoRetString && rType instanceof Type.NoRetString) {
+                        return StringCompare.create(left,op,right);
+                    }
+                    break;
+            }
+            throw new TypeError("Unsupported types for "+op+":"+lType+", "+rType);
         }
-        return new BinOp(left, op, right,type);
+    }
+    private static Type typeCheck(Type.Primitive lType,OperatorType op,Type.Primitive rType) {
+        switch (op){
+            case PLUS:
+                return Operations.typeCalc("+", lType, rType);
+            case MINUS:
+                return Operations.typeCalc("-",lType,rType);
+            case MULT:
+                return Operations.typeCalc("*",lType,rType);
+            case MOD:
+                return Operations.typeCalc("%",lType,rType);
+            case DIV:
+                return Operations.typeDiv(lType,rType);
+            case INT_DIV:
+                return Operations.typeCalc("//",lType,rType);
+            case POW:
+                return Operations.typePow(lType,rType);
+            case LSHIFT:
+                return Operations.typeBiIntOp("<<",lType,rType);
+            case RSHIFT:
+                return Operations.typeBiIntOp(">>",lType,rType);
+            case AND:
+                return Operations.typeBiIntOp("&",lType,rType);
+            case OR:
+                return Operations.typeBiIntOp("|",lType,rType);
+            case XOR:
+                return Operations.typeBiIntOp("^",lType,rType);
+            case FAST_AND:
+            case FAST_OR:
+                if(Type.canAssign(Type.Primitive.BOOL,lType,null)&&
+                        Type.canAssign(Type.Primitive.BOOL,rType,null)){
+                    return Type.Primitive.BOOL;
+                }else{
+                    throw new TypeError("invalid arguments for "+(op==OperatorType.FAST_AND?"&&":"||")+": "+lType+", "+rType);
+                }
+            case EQ:
+            case NE://eq functions for any expressions
+                return Type.Primitive.BOOL;
+            case GT:
+            case GE:
+            case LE:
+            case LT:
+                if(!Operations.typeCheckCompare(lType,rType)){
+                    throw new TypeError(lType+" and "+rType+" are not comparable");
+                }
+                return Type.Primitive.BOOL;
+            case IF:
+            case NOT:
+            case FLIP:
+                throw new SyntaxError(op+" is no binary operator");
+        }
+        return null;
     }
 
     private BinOp(Expression left, OperatorType op, Expression right,Type expectedOutput) {
@@ -103,60 +201,6 @@ public class BinOp implements Expression {
         return expectedOutput;
     }
 
-    private static Type typeCheck(Expression left,OperatorType op,Expression right) {
-        Type lType=left.expectedType();
-        Type rType=right.expectedType();
-        switch (op){
-            case PLUS:
-                return Operations.typePlus(lType,rType);
-            case MINUS:
-                return Operations.typeCalc("-",lType,rType);
-            case MULT:
-                return Operations.typeCalc("*",lType,rType);
-            case MOD:
-                return Operations.typeCalc("%",lType,rType);
-            case DIV:
-                return Operations.typeDiv(lType,rType);
-            case INT_DIV:
-                return Operations.typeCalc("//",lType,rType);
-            case POW:
-                return Operations.typePow(lType,rType);
-            case LSHIFT:
-                return Operations.typeLShift(lType,rType);
-            case RSHIFT:
-                return Operations.typeRShift(lType,rType);
-            case AND:
-                return Operations.typeBiIntOp("&",lType,rType);
-            case OR:
-                return Operations.typeBiIntOp("|",lType,rType);
-            case XOR:
-                return Operations.typeBiIntOp("^",lType,rType);
-            case FAST_AND:
-            case FAST_OR:
-                if(Type.canAssign(Type.Primitive.BOOL,lType,null)&&
-                        Type.canAssign(Type.Primitive.BOOL,rType,null)){
-                    return Type.Primitive.BOOL;
-                }else{
-                    throw new TypeError("invalid arguments for "+(op==OperatorType.FAST_AND?"&&":"||")+": "+lType+", "+rType);
-                }
-            case EQ:
-            case NE://eq functions for any expressions
-                return Type.Primitive.BOOL;
-            case GT:
-            case GE:
-            case LE:
-            case LT:
-                if(!Operations.typeCheckCompare(lType,rType)){
-                    throw new TypeError(lType+" and "+rType+" are not comparable");
-                }
-                return Type.Primitive.BOOL;
-            case IF:
-            case NOT:
-            case FLIP:
-                throw new SyntaxError(op+" is no binary operator");
-        }
-        return null;
-    }
 
     @Override
     public String toString() {

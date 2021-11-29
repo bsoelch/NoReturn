@@ -15,7 +15,7 @@ public abstract class Value{
     public static class AnyValue extends Value{
         public final Value content;
         public AnyValue(Value content) {
-            super(Type.Primitive.ANY);
+            super(Type.ANY);
             this.content=content;
         }
 
@@ -120,8 +120,8 @@ public abstract class Value{
     public Value castTo(Type t) {
         if(t==type){
             return this;
-        }else if(t== Type.Primitive.ANY||t instanceof Type.Generic){
-            return type==Type.Primitive.ANY?this:new AnyValue(this);
+        }else if(t== Type.ANY||t instanceof Type.Generic){
+            return type==Type.ANY?this:new AnyValue(this);
         }else if(t instanceof Type.Optional&&Type.canCast(((Type.Optional) t).content,type,null)){
             return new Optional((Type.Optional)t,castTo(((Type.Optional) t).content));
         }else if(t instanceof Type.Union){
@@ -183,17 +183,10 @@ public abstract class Value{
 
     public static Value createPrimitive(Type.Primitive type, Object value){
         //addLater? typeCheck value
-        if(type== Type.Primitive.ANY){
-            throw new TypeError("Cannot create instances of Type \""+Type.Primitive.ANY+"\"");
+        if(type== Type.ANY){
+            throw new TypeError("Cannot create instances of Type \""+Type.ANY+"\"");
         }
-        if(type instanceof Type.NoRetString){
-            if(value instanceof String) {
-                return new StringValue((Type.NoRetString) type,(String) value);
-            }else{
-                //TODO addLater: string from byte[],char[],int[]
-                throw new UnsupportedOperationException("Unimplemented");
-            }
-        }else if(type instanceof Type.Numeric){
+        if(type instanceof Type.Numeric){
             return new NumericValue((Type.Numeric) type,value);
         }else{
             return new Primitive(type,value);
@@ -283,6 +276,9 @@ public abstract class Value{
             return Objects.hash(type,value);
         }
     }
+    public static StringValue createString(Type.NoRetString stringType,String value){
+        return new StringValue(stringType, value);
+    }
     public static class StringValue extends Value implements Comparable<StringValue>{
         final byte[] utf8Bytes;
         final String utf16String;
@@ -306,7 +302,7 @@ public abstract class Value{
 
         @Override
         public Value independentCopy(){
-            return createPrimitive((Type.NoRetString)type, new String(utf8Bytes,StandardCharsets.UTF_8));
+            return new StringValue((Type.NoRetString)type, new String(utf8Bytes,StandardCharsets.UTF_8));
         }
         @Override
         public Value castTo(Type t) {

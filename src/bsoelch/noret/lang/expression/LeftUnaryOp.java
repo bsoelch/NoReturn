@@ -13,7 +13,11 @@ public class LeftUnaryOp implements Expression {
     final Type expectedOutput;
 
     public static Expression create(OperatorType op, Expression expr){
-        Type expectedOut=typeCheck(op,expr.expectedType());
+        Type type = expr.expectedType();
+        if(!(type instanceof Type.Primitive)){
+            throw new SyntaxError("Unsupported type for unary operation "+op+" : "+type);
+        }
+        Type expectedOut=typeCheck(op,(Type.Primitive) type);
         if(expr instanceof ValueExpression){//constant folding
             return ValueExpression.create(evaluate(op,((ValueExpression) expr).value), null);
         }
@@ -74,7 +78,7 @@ public class LeftUnaryOp implements Expression {
         return expectedOutput;
     }
 
-    private static Type typeCheck(OperatorType op,Type argType) {
+    private static Type typeCheck(OperatorType op,Type.Primitive argType) {
         switch (op){
             case PLUS:
             case MINUS:

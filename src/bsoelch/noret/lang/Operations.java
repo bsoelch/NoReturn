@@ -32,7 +32,7 @@ public class Operations {
                 Type.Numeric.UINT64, l);
     }
 
-
+    //TODO move array operations to different class
     public static <T> T performBinaryOperation(String opName, Value l, Value r,
                                                BiFunction<Byte,Byte,Function<Boolean,T>> i8Op,
                                                BiFunction<Short,Short,Function<Boolean,T>> i16Op,
@@ -126,11 +126,11 @@ public class Operations {
                     }
                     String s1=lVal.stringValue();
                     String s2=rVal.stringValue();
-                    return Value.createPrimitive(sType,s1+s2);
+                    return Value.createString(sType,s1+s2);
                 }else if(rVal.type instanceof Type.NoRetString){
                     String s1=lVal.stringValue();
                     String s2=rVal.stringValue();
-                    return Value.createPrimitive((Type.NoRetString)rVal.type,s1+s2);
+                    return Value.createString((Type.NoRetString)rVal.type,s1+s2);
                 }else if(lVal.type instanceof Type.Array&&rVal.type instanceof Type.Array){
                     Value[] newArray=new Value[((Value.ArrayOrTuple)lVal).elements.length+
                             ((Value.ArrayOrTuple)rVal).elements.length];
@@ -436,21 +436,7 @@ public class Operations {
     }
 
 
-    public static Type typePlus(Type lType, Type rType) {
-        //String + ... => String
-        if(lType instanceof Type.NoRetString){
-            return rType instanceof Type.NoRetString?Type.NoRetString.sumType((Type.NoRetString) lType,(Type.NoRetString) rType):lType;
-        }else if(rType instanceof Type.NoRetString){
-            return rType;
-        }else if(lType instanceof Type.Array&&rType instanceof Type.Array){
-            return new Type.Array(Type.commonSupertype(((Type.Array) lType).content,
-                    ((Type.Array) rType).content));
-        }else{
-            return typeCalc("+", lType, rType);
-        }
-    }
-
-    public static Type.Numeric typeCalc(String opName,Type lType, Type rType) {
+    public static Type.Numeric typeCalc(String opName,Type.Primitive lType, Type.Primitive rType) {
         if(lType instanceof Type.Numeric &&rType instanceof Type.Numeric){
             int level= Math.max(((Type.Numeric) lType).level,((Type.Numeric) rType).level);
             boolean isFloat=((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat;
@@ -485,29 +471,15 @@ public class Operations {
         }
     }
 
-    public static Type typeBiIntOp(String opName,Type lType, Type rType){
+    public static Type typeBiIntOp(String opName,Type.Primitive lType, Type.Primitive rType){
         Type.Numeric t=typeCalc(opName, lType, rType);
         if(t.isFloat){
             throw new TypeError("Unsupported types for operation"+opName+": "+lType+", "+rType);
         }
         return t;
     }
-    public static Type typeLShift(Type lType, Type rType) {
-        if(lType instanceof Type.Array){//pushLast
-            return Type.commonSupertype(((Type.Array) lType).content,rType);
-        }else{
-            return typeBiIntOp("<<",lType,rType);
-        }
-    }
-    public static Type typeRShift(Type lType, Type rType) {
-        if(rType instanceof Type.Array){//pushFirst
-            return Type.commonSupertype(((Type.Array) rType).content,lType);
-        }else{
-            return typeBiIntOp(">>",lType,rType);
-        }
-    }
 
-    public static Type typeDiv(Type lType, Type rType) {
+    public static Type typeDiv(Type.Primitive lType, Type.Primitive rType) {
         Type.Numeric calc=typeCalc("/",lType,rType);
         if(calc.isFloat){
             return calc;
@@ -525,7 +497,7 @@ public class Operations {
         }
     }
 
-    public static Type typePow(Type lType, Type rType) {
+    public static Type typePow(Type.Primitive lType, Type.Primitive rType) {
         if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
             return Type.Numeric.FLOAT64;
         }else{
@@ -534,11 +506,8 @@ public class Operations {
     }
 
 
-    public static boolean typeCheckCompare(Type lType, Type rType) {
-        //addLater? more comparable types
-        if(lType instanceof Type.Numeric &&rType instanceof Type.Numeric){
-            return true;
-        }else return lType instanceof Type.NoRetString && rType instanceof Type.NoRetString;
+    public static boolean typeCheckCompare(Type.Primitive lType, Type.Primitive rType) {
+        return lType instanceof Type.Numeric &&rType instanceof Type.Numeric;
     }
 
 }

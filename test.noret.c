@@ -10,11 +10,6 @@
 #define MAX_ARG_SIZE       0x3
 #define ARG_DATA_INIT_SIZE 0x1000
 
-#define LEN_MASK_IN_PLACE 0x0
-#define LEN_MASK_CONST    0x8000000000000000
-#define LEN_MASK_LOCAL    0x4000000000000000
-#define LEN_MASK_TMP      0xc000000000000000
-
 // Type Definitions
 typedef uint64_t Type;
 #define TYPE_SIG_MASK       0xff
@@ -296,13 +291,13 @@ const Value const_constant []={{.asI8=42}};
 // const Type:any : array_test = {{1,2,3},{4,5},{6}}
 const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT)},{.asPtr=(constData+0)},};
 // const Type:string8[] : str_test = {"str1","str2"}
-const Value const_str__test []={{.asU64=0x2},{.asU64=0x8000000000000004},{.asPtr=(constData+13)},{.asU64=0x8000000000000004},{.asPtr=(constData+14)}};
+const Value const_str__test []={{.asU64=0x2},{.asPtr=(constData+14)}};
 // const Type:int32[] : y = {2112454933,2,3}
-const Value const_y []={{.asU64=0x3},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
+const Value const_y []={{.asU64=0x3},{.asPtr=(constData+20)}};
 // const Type:(((int32[])[])?)[] : type_sig_test = {}
-const Value const_type__sig__test []={{.asU64=0x0}};
+const Value const_type__sig__test []={{.asU64=0x0},{.asPtr=(constData+23)}};
 // data for values used in constants
-Value constData []={{.asU64=0x3},{.asU64=0x8000000000000003},{.asPtr=(constData+3)},{.asI32=1},{.asI32=2},{.asI32=3},{.asU64=0x8000000000000002},{.asPtr=(constData+8)},{.asI32=4},{.asI32=5},{.asU64=0x8000000000000001},{.asPtr=(constData+12)},{.asI32=6},{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}},{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}}};
+Value constData []={{.asU64=0x3},{.asPtr=(constData+2)},{.asU64=0x3},{.asPtr=(constData+4)},{.asI32=1},{.asI32=2},{.asI32=3},{.asU64=0x2},{.asPtr=(constData+9)},{.asI32=4},{.asI32=5},{.asU64=0x1},{.asPtr=(constData+13)},{.asI32=6},{.asU64=0x4},{.asPtr=(constData+16)},{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}},{.asU64=0x4},{.asPtr=(constData+19)},{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
 
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut,Value** argData);
@@ -418,12 +413,12 @@ int main(int argc,char** argv){
   off+=sizeof(Value*);
   // prepare program Arguments
   // !!! currently only UTF-8 encoding is supported !!!
-  initArgs[0]=(Value){.asU64=LEN_MASK_LOCAL|(argc-1)};
+  initArgs[0]=(Value){.asU64=(argc-1)};
   initArgs[1]=(Value){.asPtr=argData+2};
   off=2*(argc-1)+2;// off start of next data section arg-len + header-size
   for(int i=1;i<argc;i++){
     int l=strlen(argv[i]);
-    argData[2*(i-1)+2]   = (Value){.asU64=LEN_MASK_LOCAL|l};
+    argData[2*(i-1)+2]   = (Value){.asU64=l};
     argData[2*(i-1)+1+2] = (Value){.asPtr=argData+off};
     for(int j=0,k=0;j+k<l;j++){
       if(j==8){

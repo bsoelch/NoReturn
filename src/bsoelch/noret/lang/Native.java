@@ -10,7 +10,7 @@ public class Native {//TODO? make part of compiler
         Type.Generic genericA = new Type.Generic("a");
         procNames.declareProcedure("readLine",new NativeProcedure(
                 new Type.Proc(new Type[]{genericA,new Type.Proc(new Type[]{Type.NoRetString.STRING8,genericA})}),
-                (queue,params)-> queue.push(new Value[]{Value.createPrimitive(Type.NoRetString.STRING8,new Scanner(System.in).nextLine())
+                (queue,params)-> queue.push(new Value[]{Value.createString(Type.NoRetString.STRING8,new Scanner(System.in).nextLine())
                         ,params[0]},(Procedure) params[1]),3));
         //addLater modifier-procedures for log targets
     }

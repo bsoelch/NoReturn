@@ -39,16 +39,16 @@ public class Type {
     public static final Type NONE_TYPE = new Type("\"none\"", 1, false);
     /**Value type for empty Arrays, assignable to any other type*/
     public static final Type EMPTY_TYPE  = new Type("\"empty\"", 1, false);
+    /**Value type that can hold values of any other type*/
+    public static final Type ANY  = new Type("any", 2, true);
 
     public static class Primitive extends Type{
         private static final HashMap<String,Type> primitives=new HashMap<>();
-        //addLater move any to own class (any is no primitive)
-        public static final Primitive ANY       = new Primitive("any",2,true);
 
-        public static final Primitive BOOL      = new Primitive("bool",1,false);
+        public static final Primitive BOOL      = new Primitive("bool",false);
 
-        private Primitive(String name,int blockCount,boolean varSize){
-            super(name, blockCount, varSize);
+        private Primitive(String name,boolean varSize){
+            super(name, 1, varSize);
             if(primitives.put(name,this)!=null){
                 throw new RuntimeException("The primitive \""+name+"\" already exists");
             }
@@ -56,35 +56,11 @@ public class Type {
         }
         void initFields(){}
     }
-    public static class NoRetString extends Primitive{
-        //addLater? nativeString (string with native encoding) ? nonUnicodeStrings
-        /**UTF-8 string*/
-        public static final NoRetString STRING8=new NoRetString(8);
-        /**UTF-16 string*/
-        public static final NoRetString STRING16=new NoRetString(16);
-        /**UTF-32 string*/
-        public static final NoRetString STRING32=new NoRetString(32);
-
-        private final int charSize;
-
-        /**method for ensuring this class (with all NoRetString-Type constants) is loaded*/
-        static void ensureInitialized(){}
-
-        private NoRetString(int charSize) {
-            super("string"+charSize,2,true);
-            this.charSize=charSize;
-            fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
-        }
-
-        public static NoRetString sumType(NoRetString lType, NoRetString rType) {
-            return lType.charSize>=rType.charSize?lType:rType;
-        }
-    }
     public static class Numeric extends Primitive{
         private static final ArrayList<Numeric> numberTypes=new ArrayList<>();
         public final int level;
         public final boolean signed,isFloat;
-        //addLater u?int[32|64].bitsAsFloat, float[32|64].bitsAsInt
+
         public static final Numeric INT8      = new Numeric("int8",0,true,false);
         public static final Numeric UINT8     = new Numeric("uint8",0,false,false);
         public static final Numeric INT16     = new Numeric("int16",1,true,false);
@@ -93,7 +69,11 @@ public class Type {
         public static final Numeric UINT32    = new Numeric("uint32",2,false,false);
         public static final Numeric INT64     = new Numeric("int64",3,true,false);
         public static final Numeric UINT64    = new Numeric("uint64",3,false,false);
-
+        /* TODO introduce char-types (type-aliases for uint8,uint16,uint32 that are converted to their respective character on toString)
+        public static final Numeric CHAR8     = new Numeric("char8",0,false,false);
+        public static final Numeric CHAR16    = new Numeric("char16",1,false,false);
+        public static final Numeric CHAR32    = new Numeric("char32",2,false,false);
+        */
         public static final Numeric FLOAT32   = new Numeric("float32",2,true,true);
         public static final Numeric FLOAT64   = new Numeric("float64",3,true,true);
 
@@ -101,7 +81,7 @@ public class Type {
         static void ensureInitialized(){}
 
         private Numeric(String name,int level,boolean signed,boolean isFloat) {
-            super(name,1,false);
+            super(name,false);
             this.level=level;
             this.signed=signed;
             this.isFloat=isFloat;
@@ -116,10 +96,34 @@ public class Type {
             return numberTypes;
         }
     }
-    public static void addPrimitives(Map<String,Type> typeNames) {
+    public static class NoRetString extends Type{
+        private static final HashMap<String,Type> stringTypes=new HashMap<>();
+        //addLater? nativeString (string with native encoding) ? nonUnicodeStrings
+        /**UTF-8 string*/
+        public static final NoRetString STRING8=new NoRetString(8);
+        /**UTF-16 string*/
+        public static final NoRetString STRING16=new NoRetString(16);
+        /**UTF-32 string*/
+        public static final NoRetString STRING32=new NoRetString(32);
+
+        private final int charSize;
+
+        private NoRetString(int charSize) {
+            super("string"+charSize,2,true);
+            this.charSize=charSize;
+            fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
+            stringTypes.put(name,this);
+        }
+
+        public static NoRetString sumType(NoRetString lType, NoRetString rType) {
+            return lType.charSize>=rType.charSize?lType:rType;
+        }
+    }
+    public static void addAtomics(Map<String,Type> typeNames) {
         Numeric.ensureInitialized();
-        NoRetString.ensureInitialized();
+        typeNames.put(ANY.name,ANY);
         typeNames.putAll(Primitive.primitives);
+        typeNames.putAll(NoRetString.stringTypes);
     }
 
     final String name;
@@ -171,16 +175,16 @@ public class Type {
                 return new Optional(t1);
             }
         }
-        //addLater better calculation for common supertype
-        return Primitive.ANY;
+        //addLater better calculation for common supertype ? use union
+        return ANY;
     }
 
     private static boolean canAssign(Type to, Type from, boolean allowCast, HashMap<String, GenericBound> generics){
         if(to==from||to.equals(from))
             return true;
-        if(from==EMPTY_TYPE||to==Primitive.ANY)
+        if(from==EMPTY_TYPE||to==ANY)
             return true;
-        if(allowCast&&from==Primitive.ANY){
+        if(allowCast&&from==ANY){
             return true;
         }
         if(from instanceof Numeric&&to instanceof Numeric){
@@ -257,7 +261,7 @@ public class Type {
             }else if(generics!=null){
                 GenericBound prev=generics.get(to.name);
                 if(prev==null){
-                    generics.put(to.name,new GenericBound(from,Primitive.ANY));
+                    generics.put(to.name,new GenericBound(from,ANY));
                     return true;
                 }else{
                     prev.assignableFrom=commonSupertype(prev.assignableFrom,from);
@@ -494,11 +498,10 @@ public class Type {
 
     }
 
-    /**Generics types in NoRet are designed to allow value read operations
-     * without losing the function context, the intended use is syntax like the following
-     * read($a,($a,string)=>?)
+    /** Generics types in NoRet allow forcing the calle of a procedure to use the same type for two different arguments,
+     *      * they allow signatures like ($a,($a)=>?)=>? that make it easier to call a restricted function
      * */
-    public static class Generic extends Type{//TODO replace generics with any after type checking / merge generic and Any
+    public static class Generic extends Type{//TODO allow handling of generics in compile mode, generics should be replaceable by any value without side-effects
         public Generic(String name) {
             super("$"+name, 2, true);
         }
