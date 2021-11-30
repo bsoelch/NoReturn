@@ -285,19 +285,26 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
   prevType=logType;
 }
 
-Value constData [];
 // const Type:int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
 // const Type:any : array_test = {{1,2,3},{4,5},{6}}
-const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT)},{.asPtr=(constData+0)},};
+const Value tmp_const_array__test2[]={{.asI32=1},{.asI32=2},{.asI32=3}}
+const Value tmp_const_array__test3[]={{.asI32=4},{.asI32=5}}
+const Value tmp_const_array__test4[]={{.asI32=6}}
+const Value tmp_const_array__test1[]={{.asPtr=(tmp_const_array__test2)},{.asPtr=(tmp_const_array__test3)},{.asPtr=(tmp_const_array__test4)}}
+const Value tmp_const_array__test0[]={{.asPtr=(tmp_const_array__test1)}}
+const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT)}{.asPtr=(tmp_const_array__test0)}};
 // const Type:string8[] : str_test = {"str1","str2"}
-const Value const_str__test []={{.asU64=0x2},{.asPtr=(constData+14)}};
+const Value tmp_const_str__test1[]={{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}}}
+const Value tmp_const_str__test2[]={{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}}}
+const Value tmp_const_str__test0[]={{.asPtr=(tmp_const_str__test1)},{.asPtr=(tmp_const_str__test2)}}
+const Value const_str__test []={{.asPtr=(tmp_const_str__test0)}};
 // const Type:int32[] : y = {2112454933,2,3}
-const Value const_y []={{.asU64=0x3},{.asPtr=(constData+20)}};
+const Value tmp_const_y0[]={{.asI32=2112454933},{.asI32=2},{.asI32=3}}
+const Value const_y []={{.asPtr=(tmp_const_y0)}};
 // const Type:(((int32[])[])?)[] : type_sig_test = {}
-const Value const_type__sig__test []={{.asU64=0x0},{.asPtr=(constData+23)}};
-// data for values used in constants
-Value constData []={{.asU64=0x3},{.asPtr=(constData+2)},{.asU64=0x3},{.asPtr=(constData+4)},{.asI32=1},{.asI32=2},{.asI32=3},{.asU64=0x2},{.asPtr=(constData+9)},{.asI32=4},{.asI32=5},{.asU64=0x1},{.asPtr=(constData+13)},{.asI32=6},{.asU64=0x4},{.asPtr=(constData+16)},{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}},{.asU64=0x4},{.asPtr=(constData+19)},{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
+const Value tmp_const_type__sig__test0[]={}
+const Value const_type__sig__test []={{.asPtr=(tmp_const_type__sig__test0)}};
 
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut,Value** argData);
@@ -349,7 +356,7 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
       if(((var4).asBool)){
         memcpy(tmp0,((Value[]){(Value){.asBool=true},((var4)+1.asI32)[0]}),2*sizeof(Value));
       }else{
-        memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asBool=false/*none*/}}))[0]}),2*sizeof(Value));
+        memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asU64=0/*none*/}}))[0]}),2*sizeof(Value));
       }
     }
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),tmp0);

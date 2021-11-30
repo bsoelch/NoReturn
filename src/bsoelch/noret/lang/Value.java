@@ -8,11 +8,16 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public abstract class Value{
 
-    public static class AnyValue extends Value{
+    public interface ContainerValue extends Iterable<Value>{
+
+    }
+
+    public static class AnyValue extends Value implements ContainerValue{
         public final Value content;
         public AnyValue(Value content) {
             super(Type.ANY);
@@ -36,6 +41,11 @@ public abstract class Value{
             }else{
                 return super.castTo(t);
             }
+        }
+
+        @Override
+        public Iterator<Value> iterator() {
+            return Stream.of(content).iterator();
         }
 
         @Override
@@ -279,7 +289,7 @@ public abstract class Value{
     public static StringValue createString(Type.NoRetString stringType,String value){
         return new StringValue(stringType, value);
     }
-    public static class StringValue extends Value implements Comparable<StringValue>{
+    public static class StringValue extends Value implements Comparable<StringValue>,ContainerValue{
         final byte[] utf8Bytes;
         final String utf16String;
         final int[]  utf32Codepoints;
@@ -386,9 +396,23 @@ public abstract class Value{
         public int[] codePoints() {
             return Arrays.copyOf(utf32Codepoints,utf32Codepoints.length);
         }
+
+        @Override
+        public Iterator<Value> iterator() {
+            if(type== Type.NoRetString.STRING8){
+                return IntStream.range(0, utf8Bytes.length).mapToObj(i->createPrimitive(Type.Numeric.UINT8,utf8Bytes[i])).iterator();
+            }else if(type== Type.NoRetString.STRING16){
+                return IntStream.range(0, utf16String.length()).mapToObj(i->createPrimitive(Type.Numeric.UINT16,utf16String.charAt(i))).iterator();
+            }else if(type== Type.NoRetString.STRING32){
+                return Arrays.stream(utf32Codepoints).mapToObj(i->createPrimitive(Type.Numeric.UINT32,i)).iterator();
+            }else{
+                assert false;//"Unreachable"
+                throw new RuntimeException("Unreachable");
+            }
+        }
     }
 
-    public static class Optional extends Value{
+    public static class Optional extends Value implements ContainerValue{
         public final Value content;
 
         public Optional(Type.Optional type,Value content) {
@@ -435,6 +459,11 @@ public abstract class Value{
         }
 
         @Override
+        public Iterator<Value> iterator() {
+            return Stream.of(content).iterator();
+        }
+
+        @Override
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
@@ -448,7 +477,7 @@ public abstract class Value{
     }
 
     /**stores either an array or a tuple*/
-    public static class ArrayOrTuple extends Value{
+    public static class ArrayOrTuple extends Value implements ContainerValue{
         final Value[] elements;
         private static Type typeFromElements(Value[] elements,boolean asArray) {
             if(asArray){
@@ -512,6 +541,12 @@ public abstract class Value{
             //addLater? Array -> String (utf8,utf16,utf32)
             return super.castTo(t);
         }
+
+        @Override
+        public Iterator<Value> iterator() {
+            return Stream.of(elements).iterator();
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -578,8 +613,8 @@ public abstract class Value{
             return elements;
         }
     }
-    //TODO implement Union
-    public static class Struct extends Value{
+
+    public static class Struct extends Value implements ContainerValue{
         final HashMap<String,Value> elements;
         private Struct(Type.Struct type,HashMap<String,Value> elements) {
             super(type);
@@ -642,6 +677,12 @@ public abstract class Value{
                 return super.castTo(t);
             }
         }
+
+        @Override
+        public Iterator<Value> iterator() {
+            return Arrays.stream(((Type.Struct)type).fieldNames).map(elements::get).iterator();
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -669,7 +710,7 @@ public abstract class Value{
         public boolean isMutable() {return true;}
     }
 
-    public static class Union extends Value{
+    public static class Union extends Value implements ContainerValue{
         Value content;
 
         public Union(Type.Union type,Value content) {
@@ -705,6 +746,11 @@ public abstract class Value{
         @Override
         public Value independentCopy(){
             return new Union((Type.Union) type, content);
+        }
+
+        @Override
+        public Iterator<Value> iterator() {
+            return Stream.of(content).iterator();
         }
 
         @Override
