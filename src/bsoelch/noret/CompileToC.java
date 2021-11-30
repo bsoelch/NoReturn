@@ -12,8 +12,8 @@ public class CompileToC {
     public static final String VALUE_BLOCK_NAME = "Value";
     public static final String CAST_BLOCK = "("+VALUE_BLOCK_NAME+")";
 
-    private static final String[] procedureArgs     ={VALUE_BLOCK_NAME + "*", VALUE_BLOCK_NAME+"*", VALUE_BLOCK_NAME + "**"};
-    private static final String[] procedureArgNames ={"argsIn",               "argsOut",            "argData"};
+    private static final String[] procedureArgs     ={VALUE_BLOCK_NAME + "*", VALUE_BLOCK_NAME+"*"};
+    private static final String[] procedureArgNames ={"argsIn",               "argsOut"};
     private static final String procedureOut="void*";
 
     public static final String PROC_PREFIX = "proc_";
@@ -47,17 +47,40 @@ public class CompileToC {
         }
         public void addValueBuilder(StringBuilder builder, Type type,int elementCount){
             if(constant){
-                prefixLines.add(builder.append("}").toString());
+                prefixLines.add(builder.append("};").toString());
             }else{
                 //TODO handle non-constant data
                 throw new UnsupportedOperationException("unimplemented");
             }
         }
-        public StringBuilder newValueBuilder(String name, Type type,int elementCount) {
+        public StringBuilder newValueBuilder(String name, Type type,int elementCount,boolean prefix) {
+            StringBuilder sb;
             if(constant){
-                return new StringBuilder("const "+VALUE_BLOCK_NAME+" "+name+"[]={");
+                sb=new StringBuilder("static "+VALUE_BLOCK_NAME+" "+name+"[]={");
+                if(type instanceof Type.Array||type instanceof Type.Tuple||type instanceof Type.NoRetString){
+                    //off
+                    if(prefix) {sb.append(CAST_BLOCK);}
+                    sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=0/*off*/},");
+                    //cap addLater compressed storage of primitive array
+                    if(prefix) {sb.append(CAST_BLOCK);}
+                    if(type instanceof Type.Array){//Array
+                        sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=")
+                                .append(elementCount*((Type.Array) type).content.blockCount).append("/*cap*/},");
+                    }else if(type instanceof Type.Tuple){//Tuple
+                        sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=")
+                                .append(type.blockCount).append("/*cap*/},");
+                    }else {//String
+                        sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=")
+                                .append((((((Type.NoRetString)type).charSize+7)/8)*elementCount+7)/8).append("/*cap*/},");
+                    }
+                    //len
+                    if(prefix) {sb.append(CAST_BLOCK);}
+                    sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=").append(elementCount).append("/*len*/}");
+                }
+                return sb;
             }else{
                 throw new UnsupportedOperationException("unimplemented");
+                //sb.append(CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0}");
             }
         }
     }
@@ -519,7 +542,7 @@ public class CompileToC {
                 }
                 String loc=dataOut.nextName();
                 out.append("{.asPtr=(").append(loc).append(")}");
-                StringBuilder content=dataOut.newValueBuilder(loc,((Value.AnyValue) v).content.getType(),1);
+                StringBuilder content=dataOut.newValueBuilder(loc,((Value.AnyValue) v).content.getType(),1,prefix);
                 writeConstValueAsUnion(content, ((Value.AnyValue) v).content, dataOut,  true, prefix);
                 dataOut.addValueBuilder(content,((Value.AnyValue) v).content.getType(),1);
             }else{
@@ -538,9 +561,9 @@ public class CompileToC {
             if(prefix){out.append(CAST_BLOCK); }
             String loc=dataOut.nextName();
             out.append("{.asPtr=(").append(loc).append(")}");
-            StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING8,bytes.length);
+            StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING8,bytes.length,prefix);
             for(int i=0;i< bytes.length;i+=8){
-                if(i>0){content.append(','); }
+                content.append(',');
                 if(prefix){content.append(CAST_BLOCK); }
                 content.append("{.raw8={");
                 for(int j=0;j<8;j++){
@@ -557,9 +580,9 @@ public class CompileToC {
             if(prefix){out.append(CAST_BLOCK); }
             String loc=dataOut.nextName();
             out.append("{.asPtr=(").append(loc).append(")}");
-            StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING16,chars.length);
+            StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING16,chars.length,prefix);
             for(int i=0;i< chars.length;i+=4){
-                if(i>0){content.append(','); }
+                content.append(',');
                 if(prefix){content.append(CAST_BLOCK); }
                 content.append("{.raw16={");
                 for(int j=0;j<4;j++){
@@ -576,9 +599,9 @@ public class CompileToC {
             if(prefix){out.append(CAST_BLOCK); }
             String loc=dataOut.nextName();
             out.append("{.asPtr=(").append(loc).append(")}");
-            StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING32,codePoints.length);
+            StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING32,codePoints.length,prefix);
             for(int i=0;i< codePoints.length;i+=2){
-                if(i>0){content.append(','); }
+                content.append(',');
                 if(prefix){content.append(CAST_BLOCK); }
                 content.append("{.raw32={");
                 for(int j=0;j<2;j++){
@@ -594,11 +617,9 @@ public class CompileToC {
             if(prefix){out.append(CAST_BLOCK); }
             String loc=dataOut.nextName();
             out.append("{.asPtr=(").append(loc).append(")}");
-            StringBuilder content=dataOut.newValueBuilder(loc,v.getType(),((Value.ArrayOrTuple) v).elements().length);
-            isFirst=true;
+            StringBuilder content=dataOut.newValueBuilder(loc,v.getType(),((Value.ArrayOrTuple) v).elements().length,prefix);
             for (Value elt : ((Value.ArrayOrTuple) v).elements()) {
-                writeConstValueAsUnion(content,elt, dataOut, isFirst, prefix);
-                isFirst=false;
+                writeConstValueAsUnion(content,elt, dataOut, false, prefix);
             }
             dataOut.addValueBuilder(content,v.getType(),((Value.ArrayOrTuple) v).elements().length);
         }else if(v instanceof Value.Struct){
@@ -777,7 +798,7 @@ public class CompileToC {
                 if(firstStatic instanceof Procedure.StaticProcChild){
                     writeLine("  return &"+PROC_PREFIX+asciify(((Procedure.StaticProcChild) firstStatic).name)+";");
                 }else{
-                    writeLine("  return "+argNames[((Procedure.DynamicProcChild)firstStatic).varId]+".asProc");
+                    writeLine("  return "+argNames[((Procedure.DynamicProcChild)firstStatic).varId]+"[0].asProc");
                 }
             }else{
                 //all children are optional
@@ -821,8 +842,8 @@ public class CompileToC {
                 }
             case MINUS:
                 if(inType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=")+"-("+ cTypeName((Type.Numeric)outType)+")(";
+                    parts[0]=(unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "="))+"-("+ cTypeName((Type.Numeric)outType)+")(";
                     parts[1]=unwrap?")":")}})";
                     return parts;
                 }else{
@@ -830,8 +851,8 @@ public class CompileToC {
                 }
             case FLIP:
                 if(inType instanceof Type.Numeric&&!((Type.Numeric)outType).isFloat){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=")+"~("+ cTypeName((Type.Numeric)outType)+")(";
+                    parts[0]=(unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "="))+"~("+ cTypeName((Type.Numeric)outType)+")(";
                     parts[1]=unwrap?")":")}})";
                     return parts;
                 }else{
@@ -839,8 +860,8 @@ public class CompileToC {
                 }
             case NOT:
                 if(inType == Type.Primitive.BOOL){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=")+"!("+ cTypeName((Type.Numeric)outType)+")(";
+                    parts[0]=(unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                            "="))+"!("+ cTypeName((Type.Numeric)outType)+")(";
                     parts[1]=unwrap?")":")}})";
                     return parts;
                 }
@@ -874,33 +895,28 @@ public class CompileToC {
         Type lType=op.left.expectedType();
         Type rType=op.right.expectedType();
         Type outType=op.expectedType();
+        //default values, this values are correct for most bin-ops
+        parts[0]=(unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
+                "=("))+"("+cTypeName((Type.Numeric)outType)+")(";
+        parts[2]=unwrap?"))":"))}})";
         switch (op.op){
             case PLUS:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="+";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case MINUS:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="-";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case MULT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="*";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -908,10 +924,7 @@ public class CompileToC {
             case DIV:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
                     if((((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                        parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                                "=((")+cTypeName((Type.Numeric)outType)+")(";
                         parts[1]="/";
-                        parts[2]=unwrap?"))":"))}})";
                     }else{
                         //TODO different handling for int/int
                         throw new UnsupportedOperationException("unimplemented");
@@ -922,10 +935,7 @@ public class CompileToC {
                 }
             case MOD:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="%";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -935,10 +945,7 @@ public class CompileToC {
                     if((((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
                         throw new UnsupportedOperationException("unimplemented");
                     }else{
-                        parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                                "=((")+cTypeName((Type.Numeric)outType)+")(";
                         parts[1]="/";
-                        parts[2]=unwrap?"))":"))}})";
                         return parts;
                     }
                 }else{
@@ -949,10 +956,7 @@ public class CompileToC {
             case AND:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                     !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="&";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -960,10 +964,7 @@ public class CompileToC {
             case OR:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                         !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="|";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -971,10 +972,7 @@ public class CompileToC {
             case XOR:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                         !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="^";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -982,10 +980,7 @@ public class CompileToC {
             case LSHIFT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                         !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="<<";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -993,10 +988,7 @@ public class CompileToC {
             case RSHIFT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
                         !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]=">>";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -1006,60 +998,42 @@ public class CompileToC {
                 throw new UnsupportedOperationException("unimplemented:"+op.op);
             case NE:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="==";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case EQ:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="!=";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case GT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]=">";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case GE:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]=">=";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case LT:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="<";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case LE:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
-                    parts[0]=unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                            "=((")+cTypeName((Type.Numeric)outType)+")(";
                     parts[1]="<=";
-                    parts[2]=unwrap?"))":"))}})";
                     return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
@@ -1086,8 +1060,15 @@ public class CompileToC {
             if(unwrap){
                 throw new RuntimeException("cannot unwrap Optional");
             }
-            parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asBool="+(from!=Type.NONE_TYPE)+"},(";
-            parts[1]=")[0]})";
+            if(from instanceof Type.Primitive){
+                parts[0] = "((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{."+typeFieldName(Type.Primitive.BOOL)+"="
+                        + (from != Type.NONE_TYPE) + "}," + CAST_BLOCK + "{."+typeFieldName((Type.Primitive) from)+"=";
+                parts[1] = "}})";
+            }else {
+                parts[0] = "((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{."+typeFieldName(Type.Primitive.BOOL)+"="
+                        + (from != Type.NONE_TYPE) + "},(";
+                parts[1] = ")[0]})";
+            }
             return parts;
         }else if(to == Type.ANY&&from.blockCount==1){
             if(unwrap){
@@ -1099,7 +1080,7 @@ public class CompileToC {
         }else if(to== Type.Primitive.BOOL &&from instanceof Type.Optional){
             if(unwrap){
                 parts[0]="((";
-                parts[1]=")."+typeFieldName(Type.Primitive.BOOL)+")";
+                parts[1]=")[0]."+typeFieldName(Type.Primitive.BOOL)+")";
             }else{
                 parts[0]="(";
                 parts[1]=")";
@@ -1112,7 +1093,7 @@ public class CompileToC {
 
     private String unwrapSuffix(Type type){
         if(type instanceof Type.Primitive){
-            return "."+typeFieldName((Type.Primitive) type);
+            return "[0]."+typeFieldName((Type.Primitive) type);
         }else{
             throw new RuntimeException("Cannot unwrap "+type);
         }
@@ -1234,11 +1215,12 @@ public class CompileToC {
                     }
                     return tmpCount;
                 }
-            }else if(((GetField) expr).value.expectedType() instanceof Type.Array&&
-                    ((GetField) expr).fieldName.equals(Type.FIELD_NAME_LENGTH)){
+            }else if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_LENGTH)&&
+                    (((GetField) expr).value.expectedType() instanceof Type.Array||((GetField) expr).value.expectedType() instanceof Type.Tuple||
+                            ((GetField) expr).value.expectedType() instanceof Type.NoRetString)){
                 line.append('(');
                 writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
-                line.append(")");//array.length
+                line.append("[0].asPtr+2)");//array.length
                 if(unwrap){
                     line.append(unwrapSuffix(expr.expectedType()));
                 }
@@ -1246,9 +1228,9 @@ public class CompileToC {
             }else if(((GetField) expr).value.expectedType() instanceof Type.Optional&&
                     ((GetField) expr).fieldName.equals(Type.FIELD_NAME_VALUE)){
                 //TODO check value before access, dereference pointers
-                line.append('(');
+                line.append("((");
                 writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
-                line.append(")+1");//optional.length
+                line.append(")+1)");//optional.length
                 if(unwrap){
                     line.append(unwrapSuffix(expr.expectedType()));
                 }
@@ -1280,15 +1262,13 @@ public class CompileToC {
         writeLine("    initState+=sizeof(" + PROCEDURE_TYPE + ");");
         writeLine("    " + VALUE_BLOCK_NAME + "* argsI=*(("+VALUE_BLOCK_NAME+"**)initState);");
         writeLine("    initState+=sizeof(" + VALUE_BLOCK_NAME + "*);");
-        writeLine("    " + VALUE_BLOCK_NAME + "* argData=*(("+VALUE_BLOCK_NAME+"**)initState);");
-        writeLine("    initState+=sizeof(" + VALUE_BLOCK_NAME + "*);");
         writeLine("    " + VALUE_BLOCK_NAME + "* argsO=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
         writeLine("    " + VALUE_BLOCK_NAME + "* argsTmp;");
         writeLine("    if(argsO==NULL){");
         writeLine("        return (void*)-1;");//addLater useful handling of return codes
         writeLine("    }");
         writeLine("    do{");
-        writeLine("        f=(" + PROCEDURE_TYPE + ")f(argsI,argsO,&argData);");
+        writeLine("        f=(" + PROCEDURE_TYPE + ")f(argsI,argsO);");
         comment("        ","swap args");
         writeLine("        argsTmp=argsI;");
         writeLine("        argsI=argsO;");
@@ -1316,34 +1296,41 @@ public class CompileToC {
         writeLine("  }");
         writeLine("  *((" + VALUE_BLOCK_NAME + "**)(init+off))=initArgs;");
         writeLine("  off+=sizeof(" + VALUE_BLOCK_NAME + "*);");
-        writeLine("  " + VALUE_BLOCK_NAME + "* argData=malloc(ARG_DATA_INIT_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
-        writeLine("  if(argData==NULL){");
-        writeLine("    return -1;");//addLater useful handling of return codes
-        writeLine("  }");
-        writeLine("  *((" + VALUE_BLOCK_NAME + "**)(init+off))=argData;");
-        writeLine("  off+=sizeof(" + VALUE_BLOCK_NAME + "*);");
         if(hasArgs){
             comment("  ","prepare program Arguments");
             comment("  ","!!! currently only UTF-8 encoding is supported !!!");//addLater support for other encodings of argv
-            writeLine("  initArgs[0]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1)};");
-            writeLine("  initArgs[1]="+CAST_BLOCK+"{.asPtr=argData+"+2+"};");//addLater constant: header size
-            comment("  off=2*(argc-1)+"+2+";","off start of next data section arg-len + header-size");
+            writeLine("  "+VALUE_BLOCK_NAME+"* argArray=malloc(((argc-1)+"+3+")*sizeof("+VALUE_BLOCK_NAME+"));");//addLater constant: header size
+            writeLine("  if(argArray==NULL){");
+            writeLine("    fputs(\"out of memory\\n\",stderr);");
+            writeLine("    exit(1);");
+            writeLine("  }");
+            writeLine("  argArray[0] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0 /*off*/};");
+            writeLine("  argArray[1] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1) /*cap*/};");
+            writeLine("  argArray[2] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1) /*len*/};");
+            writeLine("  initArgs[0] = "+CAST_BLOCK+"{.asPtr=argArray};");
             writeLine("  for(int i=1;i<argc;i++){");//skip first argument
             writeLine("    int l=strlen(argv[i]);");
+            writeLine("    "+VALUE_BLOCK_NAME+"* tmp=malloc(((l+7)/8+"+3+")*sizeof("+VALUE_BLOCK_NAME+"));");
+            writeLine("    if(tmp==NULL){");
+            writeLine("      fputs(\"out of memory\\n\",stderr);");
+            writeLine("      exit(1);");
+            writeLine("    }");
+            writeLine("    tmp[0] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0/*off*/};");
+            writeLine("    tmp[1] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(l+7)/8 /*cap*/};");
+            writeLine("    tmp[2] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=l /*len*/};");
             //store lengths of arguments
-            writeLine("    argData[2*(i-1)+"+2+"]   = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=l};");
-            writeLine("    argData[2*(i-1)+1+"+2+"] = "+CAST_BLOCK+"{.asPtr=argData+off};");//pointer to data
+            writeLine("    argArray[i+"+(3-1)+"] = "+CAST_BLOCK+"{.asPtr=tmp};");//pointer to data
+            comment("    off="+3+";","reuse off variable");
             writeLine("    for(int j=0,k=0;j+k<l;j++){");
             writeLine("      if(j==8){");
             writeLine("        j=0;");
             writeLine("        k+=8;");
             writeLine("        off++;");
             writeLine("      }");
-            writeLine("      argData[off].raw8[j]=argv[i][j+k];");
+            writeLine("      tmp[off].raw8[j]=argv[i][j+k];");
             writeLine("    }");
             writeLine("    off++;");
             writeLine("  }");
-            comment("  argData[1]= "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=off};","store length in argData[1]");
         }
         writeLine("  initLogStreams();");
         writeLine("  run(init);");

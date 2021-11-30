@@ -106,10 +106,10 @@ public class Type {
         /**UTF-32 string*/
         public static final NoRetString STRING32=new NoRetString(32);
 
-        private final int charSize;
+        public final int charSize;
 
         private NoRetString(int charSize) {
-            super("string"+charSize,2,true);
+            super("string"+charSize,1,true);
             this.charSize=charSize;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
             stringTypes.put(name,this);
@@ -343,7 +343,7 @@ public class Type {
     public static class Array extends Type{
         public final Type content;
         public Array(Type content) {
-            super(content.wrappedName()+"[]", 2, true);
+            super(content.wrappedName()+"[]", 1, true);
             this.content=content;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
         }

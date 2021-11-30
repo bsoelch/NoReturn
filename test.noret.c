@@ -48,7 +48,7 @@ Type typeData [];
 // value-block type
 typedef union ValueImpl Value;
 // procedure type (the return-type is void* instead of Procedure* to avoid a recursive type definition)
-typedef void*(*Procedure)(Value*,Value*,Value**);
+typedef void*(*Procedure)(Value*,Value*);
 // float types
 typedef float float32_t;
 typedef double float64_t;
@@ -288,41 +288,40 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
 // const Type:int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
 // const Type:any : array_test = {{1,2,3},{4,5},{6}}
-const Value tmp_const_array__test2[]={{.asI32=1},{.asI32=2},{.asI32=3}}
-const Value tmp_const_array__test3[]={{.asI32=4},{.asI32=5}}
-const Value tmp_const_array__test4[]={{.asI32=6}}
-const Value tmp_const_array__test1[]={{.asPtr=(tmp_const_array__test2)},{.asPtr=(tmp_const_array__test3)},{.asPtr=(tmp_const_array__test4)}}
-const Value tmp_const_array__test0[]={{.asPtr=(tmp_const_array__test1)}}
-const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT)}{.asPtr=(tmp_const_array__test0)}};
+static Value tmp_const_array__test1[]={{.asU64=0/*off*/},{.asU64=3/*cap*/},{.asU64=3/*len*/},{.asI32=1},{.asI32=2},{.asI32=3}};
+static Value tmp_const_array__test2[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU64=2/*len*/},{.asI32=4},{.asI32=5}};
+static Value tmp_const_array__test3[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=1/*len*/},{.asI32=6}};
+static Value tmp_const_array__test0[]={{.asU64=0/*off*/},{.asU64=3/*cap*/},{.asU64=3/*len*/},{.asPtr=(tmp_const_array__test1)},{.asPtr=(tmp_const_array__test2)},{.asPtr=(tmp_const_array__test3)}};
+const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT)},{.asPtr=(tmp_const_array__test0)}};
 // const Type:string8[] : str_test = {"str1","str2"}
-const Value tmp_const_str__test1[]={{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}}}
-const Value tmp_const_str__test2[]={{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}}}
-const Value tmp_const_str__test0[]={{.asPtr=(tmp_const_str__test1)},{.asPtr=(tmp_const_str__test2)}}
+static Value tmp_const_str__test1[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=4/*len*/},{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}}};
+static Value tmp_const_str__test2[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=4/*len*/},{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}}};
+static Value tmp_const_str__test0[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU64=2/*len*/},{.asPtr=(tmp_const_str__test1)},{.asPtr=(tmp_const_str__test2)}};
 const Value const_str__test []={{.asPtr=(tmp_const_str__test0)}};
 // const Type:int32[] : y = {2112454933,2,3}
-const Value tmp_const_y0[]={{.asI32=2112454933},{.asI32=2},{.asI32=3}}
+static Value tmp_const_y0[]={{.asU64=0/*off*/},{.asU64=3/*cap*/},{.asU64=3/*len*/},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
 const Value const_y []={{.asPtr=(tmp_const_y0)}};
 // const Type:(((int32[])[])?)[] : type_sig_test = {}
-const Value tmp_const_type__sig__test0[]={}
+static Value tmp_const_type__sig__test0[]={{.asU64=0/*off*/},{.asU64=0/*cap*/},{.asU64=0/*len*/}};
 const Value const_type__sig__test []={{.asPtr=(tmp_const_type__sig__test0)}};
 
 // start(Type:string8[])
-void* proc_start(Value* argsIn,Value* argsOut,Value** argData);
+void* proc_start(Value* argsIn,Value* argsOut);
 // readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
-void* proc_readLine(Value* argsIn,Value* argsOut,Value** argData);
+void* proc_readLine(Value* argsIn,Value* argsOut);
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* run(void* initState);
 
 // start(Type:string8[])
-void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
+void* proc_start(Value* argsIn,Value* argsOut){
   // var0:(argsIn+0)
   Value var1 [1];// (Type:int32)
   {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    memcpy(var1,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(1))+((int32_t)(((argsIn+0)).asU64))))}}),1*sizeof(Value));
+    memcpy(var1,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(1))+((int32_t)(((argsIn+0)[0].asPtr+2)[0].asU64))))}}),1*sizeof(Value));
   }
   Value var2 [1];// (Type:int32)
   {// Initialize: BinOp{BinOp{VarExpression{1} MULT VarExpression{1}} MINUS BinOp{VarExpression{1} INT_DIV ValueExpression{2}}}
-    memcpy(var2,((Value[]){(Value){.asI32=((int32_t)((var1.asI32*var1.asI32))-(var1.asI32/((int32_t)(2))))))}}),1*sizeof(Value));
+    memcpy(var2,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(var1[0].asI32*var1[0].asI32))-((int32_t)(var1[0].asI32/((int32_t)(2))))))}}),1*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{2}}
     logValue(DEFAULT,false,TYPE_SIG_I32,var2);
@@ -345,7 +344,7 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   }
   Value var4 [2];// (Type:int32?)
   {// Initialize: TypeCast{Type:int32?:ValueExpression{4}}
-    memcpy(var4,((Value[]){(Value){.asBool=true},(((int32_t)(4)))[0]}),2*sizeof(Value));
+    memcpy(var4,((Value[]){(Value){.asBool=true},(Value){.asI32=((int32_t)(4))}}),2*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{4}}
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var4);
@@ -353,8 +352,8 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
   {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{4}}?TypeCast{Type:int32?:GetField{VarExpression{4}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
     Value tmp0 [2];
     {
-      if(((var4).asBool)){
-        memcpy(tmp0,((Value[]){(Value){.asBool=true},((var4)+1.asI32)[0]}),2*sizeof(Value));
+      if(((var4)[0].asBool)){
+        memcpy(tmp0,((Value[]){(Value){.asBool=true},(Value){.asI32=((var4)+1)[0].asI32}}),2*sizeof(Value));
       }else{
         memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asU64=0/*none*/}}))[0]}),2*sizeof(Value));
       }
@@ -366,7 +365,7 @@ void* proc_start(Value* argsIn,Value* argsOut,Value** argData){
 }
 
 // readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
-void* proc_readLine(Value* argsIn,Value* argsOut,Value** argData){
+void* proc_readLine(Value* argsIn,Value* argsOut){
   // var0:(argsIn+0)
   // var1:(argsIn+2)
   // Native
@@ -381,15 +380,13 @@ void* run(void* initState){
     initState+=sizeof(Procedure);
     Value* argsI=*((Value**)initState);
     initState+=sizeof(Value*);
-    Value* argData=*((Value**)initState);
-    initState+=sizeof(Value*);
     Value* argsO=malloc(MAX_ARG_SIZE*sizeof(Value));
     Value* argsTmp;
     if(argsO==NULL){
         return (void*)-1;
     }
     do{
-        f=(Procedure)f(argsI,argsO,&argData);
+        f=(Procedure)f(argsI,argsO);
         // swap args
         argsTmp=argsI;
         argsI=argsO;
@@ -412,32 +409,39 @@ int main(int argc,char** argv){
   }
   *((Value**)(init+off))=initArgs;
   off+=sizeof(Value*);
-  Value* argData=malloc(ARG_DATA_INIT_SIZE*sizeof(Value));
-  if(argData==NULL){
-    return -1;
-  }
-  *((Value**)(init+off))=argData;
-  off+=sizeof(Value*);
   // prepare program Arguments
   // !!! currently only UTF-8 encoding is supported !!!
-  initArgs[0]=(Value){.asU64=(argc-1)};
-  initArgs[1]=(Value){.asPtr=argData+2};
-  off=2*(argc-1)+2;// off start of next data section arg-len + header-size
+  Value* argArray=malloc(((argc-1)+3)*sizeof(Value));
+  if(argArray==NULL){
+    fputs("out of memory\n",stderr);
+    exit(1);
+  }
+  argArray[0] = (Value){.asU64=0 /*off*/};
+  argArray[1] = (Value){.asU64=(argc-1) /*cap*/};
+  argArray[2] = (Value){.asU64=(argc-1) /*len*/};
+  initArgs[0] = (Value){.asPtr=argArray};
   for(int i=1;i<argc;i++){
     int l=strlen(argv[i]);
-    argData[2*(i-1)+2]   = (Value){.asU64=l};
-    argData[2*(i-1)+1+2] = (Value){.asPtr=argData+off};
+    Value* tmp=malloc(((l+7)/8+3)*sizeof(Value));
+    if(tmp==NULL){
+      fputs("out of memory\n",stderr);
+      exit(1);
+    }
+    tmp[0] = (Value){.asU64=0/*off*/};
+    tmp[1] = (Value){.asU64=(l+7)/8 /*cap*/};
+    tmp[2] = (Value){.asU64=l /*len*/};
+    argArray[i+2] = (Value){.asPtr=tmp};
+    off=3;// reuse off variable
     for(int j=0,k=0;j+k<l;j++){
       if(j==8){
         j=0;
         k+=8;
         off++;
       }
-      argData[off].raw8[j]=argv[i][j+k];
+      tmp[off].raw8[j]=argv[i][j+k];
     }
     off++;
   }
-  argData[1]= (Value){.asU64=off};// store length in argData[1]
   initLogStreams();
   run(init);
   puts("");// finish last line in stdout
