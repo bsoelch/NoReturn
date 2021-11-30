@@ -91,7 +91,7 @@ public class CompileToC {
                 prefixLines.add(name+"[0]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0}; /*off*/");//TODO padding
                 prefixLines.add(name+"[1]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"="+getMinCap(type, elementCount)+"}; /*cap*/");
                 prefixLines.add(name+"[2]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"="+elementCount+"}; /*len*/");
-                prefixLines.add(builder.append("},").append(getMinCap(type, elementCount)).append(");").toString());
+                prefixLines.add(builder.append("},(").append(getMinCap(type, elementCount)).append(")*sizeof("+VALUE_BLOCK_NAME+"));").toString());
             }
         }
     }
@@ -476,6 +476,9 @@ public class CompileToC {
         writeLine("      fputs(\"\\\"none\\\"\",log);");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_STRING8:");
+        writeLine("      fprintf(log,\"%.*s\",(int)(value->asPtr[2]."+typeFieldName(Type.Numeric.UINT64)+")"+
+                ",(char*)(value->asPtr+"+ARRAY_HEADER+"/*header*/+value->asPtr[0].asU64/*off*/));");//addLater constant for len
+        writeLine("      break;");
         writeLine("    case TYPE_SIG_STRING16:");
         writeLine("    case TYPE_SIG_STRING32:");
         //TODO print strings
