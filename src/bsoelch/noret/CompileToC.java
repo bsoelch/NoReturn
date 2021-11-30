@@ -26,15 +26,15 @@ public class CompileToC {
         constant memory may keep the original approach
         local/reference memory will be stored in malloced-memory sections:
             1. Arrays/Strings
-            [start], start -> [ref-count,off,cap,len,data[0],...,data[off],....,data[len],...,data[cap-1]}
+            [start], start -> [off,cap,len,data[0],...,data[off],....,data[len],...,data[cap-1]}
             2. any
-            [type,data], data -> raw | [ref-count,len,cap,data[0],...,data[len-1],...,data[cap-1]]
+            [type,data], data -> raw | [cap,len,data[0],...,data[len-1],...,data[cap-1]]
             3. optional:
-            [hasData,data], data -> raw | [ref-count,data[0],...,data[N]]
+            [hasData,data], data -> raw | [data[0],...,data[N]]
             4. reference:
-            [ptr], ptr->[ref-count,data[0],...,data[N]]
-    * */
-    private static class DataOut {//TODO different subclasses for constant/dynamic values
+            [ptr], ptr->[data[0],...,data[N]]
+    */
+    private static class DataOut {
         final String prefix;
         final ArrayDeque<String> prefixLines=new ArrayDeque<>();
         int tmpCount;
@@ -48,7 +48,7 @@ public class CompileToC {
             return prefix+(tmpCount++);
         }
 
-        //addLater compressed storage of primitive array
+        //addLater compressed storage of primitive arrays
         private int getMinCap(Type type,int elementCount){
             if(type instanceof Type.Array){//Array
                 return elementCount*((Type.Array) type).content.blockCount;
@@ -339,8 +339,8 @@ public class CompileToC {
         writeLine("}LogType;");
         comment("previously used logType");
         writeLine("static LogType prevType = null;");
-        comment("definition of NEW_LINE character");//addLater choose system line separator
-        writeLine("#define NEW_LINE \"\\n\"");
+        comment("definition of NEW_LINE character");
+        writeLine("#define NEW_LINE \"\\n\"");//addLater set to system line separator
         for(LogType.Type t:LogType.Type.values()){
             writeLine("FILE* log_"+t+";");
         }
@@ -350,7 +350,7 @@ public class CompileToC {
             writeLine("  log_"+t+" = "+(t== LogType.Type.ERR?"stderr":"stdout")+";");
         }
         writeLine("}");
-        comment("recursive printing of types");//addLater surround types with brackets when printing
+        comment("recursive printing of types");//addLater surround composite-types with brackets when printing
         writeLine("void printType(const Type type,FILE* log){");
         writeLine("  switch(type&TYPE_SIG_MASK){");
         writeLine("    case TYPE_SIG_EMPTY:");
@@ -742,7 +742,7 @@ public class CompileToC {
                     comment("  {","Assign: "+a);
                     line.setLength(0);
                     line.append("    ");
-                    //prepare target TODO writeMutableExpression mode, that stores all expressions as pointer to their location
+                    //prepare target
                     writeExpression("    ",initLines,line,((Assignment) a).target,false,0, name, argNames);
                     line.append(" = ");
                     //preform assignment
@@ -771,6 +771,7 @@ public class CompileToC {
                     throw new UnsupportedOperationException("Unsupported ActionType: "+a.getClass().getSimpleName());
                 }
             }
+            //TODO cleanup memory
             Procedure.ProcChild firstStatic=null;
             Expression[] firstArgs=null;
             ArrayList<Procedure.ProcChild> children= proc.children();
@@ -796,7 +797,11 @@ public class CompileToC {
                     if(c instanceof Procedure.StaticProcChild||
                             (c instanceof Procedure.DynamicProcChild&&!((Procedure.DynamicProcChild) c).isOptional)){
                         writeLine("  {");
-                        writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");//TODO check pointer
+                        writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
+                        writeLine("    if(newArgs==NULL){");//check pointer
+                        writeLine("      fputs(\"out of memory\\n\",stderr);");
+                        writeLine("      exit(1);");
+                        writeLine("    }");
                         writeArgs("    ",childArgs.get(i),initLines,line,name,argNames,"newArgs");
                         //addLater call function (via pthreads)
                         writeLine("    assert(false && \"unimplemented\");");
@@ -805,7 +810,11 @@ public class CompileToC {
                         break;
                     }else{
                         writeLine("  if("+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[0].asBool){");
-                        writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");//TODO check pointer
+                        writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
+                        writeLine("    if(newArgs==NULL){");//check pointer
+                        writeLine("      fputs(\"out of memory\\n\",stderr);");
+                        writeLine("      exit(1);");
+                        writeLine("    }");
                         writeArgs("    ",childArgs.get(i),initLines,line,name,argNames,"newArgs");
                         //addLater call function (via pthreads)
                         writeLine("      assert(false && \"unimplemented\");");
@@ -829,7 +838,11 @@ public class CompileToC {
                     writeArgs("      ",childArgs.get(i), initLines, line, name, argNames, "argsOut");
                     writeLine("      ret="+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[1].asProc;");
                     writeLine("    }else{");
-                    writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");//TODO check pointer
+                    writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
+                    writeLine("    if(newArgs==NULL){");//check pointer
+                    writeLine("      fputs(\"out of memory\\n\",stderr);");
+                    writeLine("      exit(1);");
+                    writeLine("    }");
                     writeArgs("    ",childArgs.get(i),initLines,line,name,argNames,"newArgs");
                     //addLater call function (via pthreads)
                     writeLine("      assert(false && \"unimplemented\");");
@@ -847,7 +860,6 @@ public class CompileToC {
         out.newLine();
     }
 
-    //TODO "raw" mode for primitive operations (write values without wrapping in Value[])
     private String[] unOpParts(LeftUnaryOp op,boolean unwrap) {
         String[] parts=new String[2];
         Type inType=op.expr.expectedType();
@@ -962,6 +974,7 @@ public class CompileToC {
             case INT_DIV:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
                     if((((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
+                        //TODO different handling for float/float
                         throw new UnsupportedOperationException("unimplemented");
                     }else{
                         parts[1]="/";
@@ -977,6 +990,9 @@ public class CompileToC {
                     !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
                     parts[1]="&";
                     return parts;
+                }else if(lType== Type.Primitive.BOOL&&rType== Type.Primitive.BOOL){
+                    parts[1]="&&";
+                    return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
@@ -985,12 +1001,16 @@ public class CompileToC {
                         !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
                     parts[1]="|";
                     return parts;
+                }else if(lType== Type.Primitive.BOOL&&rType== Type.Primitive.BOOL){
+                    parts[1]="||";
+                    return parts;
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
             case XOR:
-                if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
-                        !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat)){
+                if((lType instanceof Type.Numeric&&rType instanceof Type.Numeric&&
+                        !(((Type.Numeric) lType).isFloat||((Type.Numeric) rType).isFloat))||
+                        (lType== Type.Primitive.BOOL&&rType== Type.Primitive.BOOL)){
                     parts[1]="^";
                     return parts;
                 }else{
@@ -1012,9 +1032,20 @@ public class CompileToC {
                 }else{
                     throw new UnsupportedOperationException("unimplemented");
                 }
-            case FAST_AND://addLater own handling of fastAnd if(cond1){res=cond2}else{res=false}
-            case FAST_OR://addLater own handling of fastOr if(cond1){res=true}else{res=cond2}
-                throw new UnsupportedOperationException("unimplemented:"+op.op);
+            case FAST_AND://addLater separate handling of fastAnd if(cond1){res=cond2}else{res=false}
+                if(lType== Type.Primitive.BOOL&&rType== Type.Primitive.BOOL){
+                    parts[1]="&&";
+                    return parts;
+                }else{
+                    throw new SyntaxError(OperatorType.FAST_AND+" only exists for "+ Type.Primitive.BOOL);
+                }
+            case FAST_OR://addLater separate handling of fastOr if(cond1){res=true}else{res=cond2}
+                if(lType== Type.Primitive.BOOL&&rType== Type.Primitive.BOOL){
+                    parts[1]="||";
+                    return parts;
+                }else{
+                    throw new SyntaxError(OperatorType.FAST_OR+" only exists for "+ Type.Primitive.BOOL);
+                }
             case NE:
                 if(lType instanceof Type.Numeric&&rType instanceof Type.Numeric){
                     parts[1]="==";
@@ -1259,7 +1290,6 @@ public class CompileToC {
             }else{
                 throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
             }
-            //return tmpCount;
         }else {
             //TODO other expressions
             throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
