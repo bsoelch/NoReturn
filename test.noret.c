@@ -287,6 +287,43 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
   prevType=logType;
 }
 
+// read an element from an Array
+Value* getElement(Value* array,uint64_t index,uint64_t width){
+  if(index<array[2].asU64){
+    return (array+array[0].asU64+3)+index*width;
+  }else{
+    fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
+    exit(1);
+  }
+}
+// read a raw-element of with 8 from an Array
+uint8_t* getRawElement8(Value* array,uint64_t index){
+  if(index<array[2].asU64){
+    return ((uint8_t*)(array+3))+array[0].asU64+index;
+  }else{
+    fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
+    exit(1);
+  }
+}
+// read a raw-element of with 16 from an Array
+uint16_t* getRawElement16(Value* array,uint64_t index){
+  if(index<array[2].asU64){
+    return ((uint16_t*)(array+3))+array[0].asU64+index;
+  }else{
+    fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
+    exit(1);
+  }
+}
+// read a raw-element of with 32 from an Array
+uint32_t* getRawElement32(Value* array,uint64_t index){
+  if(index<array[2].asU64){
+    return ((uint32_t*)(array+3))+array[0].asU64+index;
+  }else{
+    fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
+    exit(1);
+  }
+}
+
 // const Type:int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
 // const Type:any : array_test = {{1,2,3},{4,5},{6}}
@@ -317,15 +354,23 @@ void* run(void* initState);
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut){
   // var0:(argsIn+0)
-  {// Log: Log[DEFAULT]{ValueExpression{"Hello World!"}}
+  {// Log: Log[DEFAULT]{IfExpr{BinOp{GetField{VarExpression{0}.length} GT ValueExpression{0}}?GetIndex{VarExpression{0}[ValueExpression{0}]}:ValueExpression{"No Arguments Provided"}}}
     Value tmp0 [1];
     {
-      Value* tmp1=malloc((5)*sizeof(Value));
-      tmp1[0]=(Value){.asU64=0}; /*off*/
-      tmp1[1]=(Value){.asU64=2}; /*cap*/
-      tmp1[2]=(Value){.asU64=12}; /*len*/
-      memcpy(tmp1+3,(Value[]){(Value){.raw8={0x48,0x65,0x6c,0x6c,0x6f,0x20,0x57,0x6f}},(Value){.raw8={0x72,0x6c,0x64,0x21,0x0,0x0,0x0,0x0}}},(2)*sizeof(Value));
-      memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
+      if(((bool)(((argsIn+0)[0].asPtr+2)[0].asU64>((int32_t)(0))))){
+        memcpy(tmp0,getElement((argsIn+0)->asPtr,((int32_t)(0)),1),1*sizeof(Value));
+      }else{
+        Value tmp1 [1];
+        {
+          Value* tmp2=malloc((6)*sizeof(Value));
+          tmp2[0]=(Value){.asU64=0}; /*off*/
+          tmp2[1]=(Value){.asU64=3}; /*cap*/
+          tmp2[2]=(Value){.asU64=21}; /*len*/
+          memcpy(tmp2+3,(Value[]){(Value){.raw8={0x4e,0x6f,0x20,0x41,0x72,0x67,0x75,0x6d}},(Value){.raw8={0x65,0x6e,0x74,0x73,0x20,0x50,0x72,0x6f}},(Value){.raw8={0x76,0x69,0x64,0x65,0x64,0x0,0x0,0x0}}},(3)*sizeof(Value));
+          memcpy(tmp1,(Value[]){(Value){.asPtr=(tmp2)}},1*sizeof(Value));
+        }
+        memcpy(tmp0,tmp1,1*sizeof(Value));
+      }
     }
     logValue(DEFAULT,false,TYPE_SIG_STRING8,tmp0);
   }
@@ -385,6 +430,9 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{VarExpression{5}}
     logValue(DEFAULT,false,TYPE_SIG_I32,var5);
   }
+  {// Log: Log[DEFAULT]{ValueExpression{2112454933}}
+    logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=2112454933}}));
+  }
   {// Log: Log[DEFAULT]{ValueExpression{Type:int32[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}}));
   }
@@ -398,21 +446,40 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{VarExpression{6}}
     logValue(DEFAULT,false,TYPE_SIG_U64,var6);
   }
+  Value var7 [1];// (Type:int32[])
+  {// Initialize: ValueExpression{{1,2,3,42}}
+    Value tmp0 [1];
+    {
+      Value* tmp1=malloc((7)*sizeof(Value));
+      tmp1[0]=(Value){.asU64=0}; /*off*/
+      tmp1[1]=(Value){.asU64=4}; /*cap*/
+      tmp1[2]=(Value){.asU64=4}; /*len*/
+      memcpy(tmp1+3,(Value[]){(Value){.asI32=1},(Value){.asI32=2},(Value){.asI32=3},(Value){.asI32=42}},(4)*sizeof(Value));
+      memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
+    }
+    memcpy(var7,tmp0,1*sizeof(Value));
+  }
+  {// Assign: Assignment:{GetIndex{VarExpression{7}[ValueExpression{0}]}=ValueExpression{123456789}}
+    memcpy(getElement(var7->asPtr,((int32_t)(0)),1), ((Value[]){(Value){.asI32=123456789}}), 1*sizeof(Value));
+  }
+  {// Log: Log[DEFAULT]{GetIndex{VarExpression{7}[ValueExpression{0}]}}
+    logValue(DEFAULT,false,TYPE_SIG_I32,getElement(var7->asPtr,((int32_t)(0)),1));
+  }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_NONE}}));
   }
-  Value var7 [2];// (Type:int32?)
+  Value var8 [2];// (Type:int32?)
   {// Initialize: TypeCast{Type:int32?:ValueExpression{4}}
-    memcpy(var7,((Value[]){(Value){.asBool=true},(Value){.asI32=((int32_t)(4))}}),2*sizeof(Value));
+    memcpy(var8,((Value[]){(Value){.asBool=true},(Value){.asI32=((int32_t)(4))}}),2*sizeof(Value));
   }
-  {// Log: Log[DEFAULT]{VarExpression{7}}
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var7);
+  {// Log: Log[DEFAULT]{VarExpression{8}}
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var8);
   }
-  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{7}}?TypeCast{Type:int32?:GetField{VarExpression{7}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
+  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{8}}?TypeCast{Type:int32?:GetField{VarExpression{8}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
     Value tmp0 [2];
     {
-      if(((var7)[0].asBool)){
-        memcpy(tmp0,((Value[]){(Value){.asBool=true},(Value){.asI32=((var7)+1)[0].asI32}}),2*sizeof(Value));
+      if(((var8)[0].asBool)){
+        memcpy(tmp0,((Value[]){(Value){.asBool=true},(Value){.asI32=((var8)+1)[0].asI32}}),2*sizeof(Value));
       }else{
         memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asU64=0/*none*/}}))[0]}),2*sizeof(Value));
       }

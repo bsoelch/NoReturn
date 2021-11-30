@@ -21,6 +21,7 @@ public class CompileToC {
     public static final String PROCEDURE_TYPE = "Procedure";
 
     public static final int ARRAY_HEADER = 3;
+    public static final int ARRAY_LEN_OFFSET = 2;
 
     /* TODO rewrite DataOut
         constant memory may keep the original approach
@@ -90,7 +91,7 @@ public class CompileToC {
                         ")*sizeof("+VALUE_BLOCK_NAME+"));");
                 prefixLines.add(name+"[0]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0}; /*off*/");//TODO padding
                 prefixLines.add(name+"[1]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"="+getMinCap(type, elementCount)+"}; /*cap*/");
-                prefixLines.add(name+"[2]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"="+elementCount+"}; /*len*/");
+                prefixLines.add(name+"["+ARRAY_LEN_OFFSET+"]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"="+elementCount+"}; /*len*/");
                 prefixLines.add(builder.append("},(").append(getMinCap(type, elementCount)).append(")*sizeof("+VALUE_BLOCK_NAME+"));").toString());
             }
         }
@@ -230,7 +231,7 @@ public class CompileToC {
                 return (((Type.Numeric)type).signed?"int":"uint")+ ((Type.Numeric)type).bitSize()+"_t";
             }
         }else if(type == Type.Primitive.BOOL){
-            return "asBool";
+            return "bool";
         }else{
             throw new RuntimeException("unexpected primitive: "+type);
         }
@@ -475,9 +476,9 @@ public class CompileToC {
         writeLine("    case TYPE_SIG_NONE:");
         writeLine("      fputs(\"\\\"none\\\"\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_STRING8:");
-        writeLine("      fprintf(log,\"%.*s\",(int)(value->asPtr[2]."+typeFieldName(Type.Numeric.UINT64)+")"+
-                ",(char*)(value->asPtr+"+ARRAY_HEADER+"/*header*/+value->asPtr[0].asU64/*off*/));");//addLater constant for len
+        writeLine("    case TYPE_SIG_STRING8:");//!!! this implementation assumes that the system encoding is UTF8
+        writeLine("      fprintf(log,\"%.*s\",(int)(value->asPtr["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+")"+
+                ",(char*)(value->asPtr+"+ARRAY_HEADER+"/*header*/+value->asPtr[0].asU64/*off*/));");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_STRING16:");
         writeLine("    case TYPE_SIG_STRING32:");
@@ -514,6 +515,27 @@ public class CompileToC {
         writeLine("  }");
         writeLine("  prevType=logType;");
         writeLine("}");
+        out.newLine();
+        comment("read an element from an Array");
+        writeLine(VALUE_BLOCK_NAME+"* getElement("+VALUE_BLOCK_NAME+"* array,uint64_t index,uint64_t width){");
+        writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"].asU64){");
+        writeLine("    return (array+array[0].asU64+"+ARRAY_HEADER+")+index*width;");
+        writeLine("  }else{");
+        writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index,array["+ARRAY_LEN_OFFSET+"].asU64);");
+        writeLine("    exit(1);");
+        writeLine("  }");
+        writeLine("}");
+        for(int i=8;i<64;i*=2){
+            comment("read a raw-element of with "+i+" from an Array");
+            writeLine("uint"+i+"_t* getRawElement"+i+"("+VALUE_BLOCK_NAME+"* array,uint64_t index){");
+            writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"].asU64){");
+            writeLine("    return ((uint"+i+"_t*)(array+"+ARRAY_HEADER+"))+array[0].asU64+index;");
+            writeLine("  }else{");
+            writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index,array["+ARRAY_LEN_OFFSET+"].asU64);");
+            writeLine("    exit(1);");
+            writeLine("  }");
+            writeLine("}");
+        }
         out.newLine();
     }
 
@@ -744,12 +766,14 @@ public class CompileToC {
                 }else if(a instanceof Assignment){
                     comment("  {","Assign: "+a);
                     line.setLength(0);
-                    line.append("    ");
+                    line.append("    memcpy(");
+                    //addLater raw assignment of primitive
                     //prepare target
                     writeExpression("    ",initLines,line,((Assignment) a).target,false,0, name, argNames);
-                    line.append(" = ");
+                    line.append(", ");
                     //preform assignment
                     writeExpression("    ",initLines,line,((Assignment) a).expr,false,0, name, argNames);
+                    line.append(", ").append(((Assignment) a).expr.expectedType().blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"))");
                     for(String l:initLines){
                         writeLine(l);
                     }
@@ -930,8 +954,8 @@ public class CompileToC {
         Type rType=op.right.expectedType();
         Type outType=op.expectedType();
         //default values, this values are correct for most bin-ops
-        parts[0]=(unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Numeric)outType)+
-                "=("))+"("+cTypeName((Type.Numeric)outType)+")(";
+        parts[0]=(unwrap?"(":("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{."+ typeFieldName((Type.Primitive)outType)+
+                "=("))+"("+cTypeName((Type.Primitive)outType)+")(";
         parts[2]=unwrap?"))":"))}})";
         switch (op.op){
             case PLUS:
@@ -1275,7 +1299,7 @@ public class CompileToC {
                             ((GetField) expr).value.expectedType() instanceof Type.NoRetString)){
                 line.append('(');
                 writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
-                line.append("[0].asPtr+2)");//array.length
+                line.append("[0].asPtr+"+ARRAY_LEN_OFFSET+")");//array.length
                 if(unwrap){
                     line.append(unwrapSuffix(expr.expectedType()));
                 }
@@ -1293,6 +1317,18 @@ public class CompileToC {
             }else{
                 throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
             }
+        }else if(expr instanceof GetIndex){
+            if(((GetIndex)expr).value.expectedType() instanceof Type.Array){
+                //addLater handle compressed primitive arrays
+                line.append("getElement(");
+                tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).value,false,tmpCount,procName,varNames);
+                line.append("->asPtr,");
+                tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).index,true, tmpCount,procName,varNames);
+                line.append(",").append(((GetIndex) expr).value.expectedType().blockCount).append(")");
+                return tmpCount;
+            }
+            throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
+            //return tmpCount;
         }else {
             //TODO other expressions
             throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
@@ -1361,7 +1397,7 @@ public class CompileToC {
             writeLine("  }");
             writeLine("  argArray[0] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0 /*off*/};");
             writeLine("  argArray[1] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1) /*cap*/};");
-            writeLine("  argArray[2] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1) /*len*/};");
+            writeLine("  argArray["+ARRAY_LEN_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1) /*len*/};");
             writeLine("  initArgs[0] = "+CAST_BLOCK+"{.asPtr=argArray};");
             writeLine("  for(int i=1;i<argc;i++){");//skip first argument
             writeLine("    int l=strlen(argv[i]);");
@@ -1372,7 +1408,7 @@ public class CompileToC {
             writeLine("    }");
             writeLine("    tmp[0] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0/*off*/};");
             writeLine("    tmp[1] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(l+7)/8 /*cap*/};");
-            writeLine("    tmp[2] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=l /*len*/};");
+            writeLine("    tmp["+ARRAY_LEN_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=l /*len*/};");
             //store lengths of arguments
             writeLine("    argArray[i+"+(ARRAY_HEADER-1)+"] = "+CAST_BLOCK+"{.asPtr=tmp};");//pointer to data
             comment("    off="+ARRAY_HEADER+";","reuse off variable");

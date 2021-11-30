@@ -6,8 +6,8 @@ import bsoelch.noret.lang.*;
 import java.util.ArrayList;
 
 public class GetIndex implements Expression{
-    final Expression value;
-    final Expression index;
+    public final Expression value;
+    public final Expression index;
     final Type type;
 
     public static Expression create(Expression value, Expression index){

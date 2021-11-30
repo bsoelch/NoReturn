@@ -7,6 +7,7 @@ const int32[][]?[]:type_sig_test={};
 ## struct struct_test{tuple{int32,int64}:a,union{int32:c,float64:d}:b};
 
 start(string8[]):(args)=>{
+    log args.length>0?args[0]:"No Arguments Provided";
     ## struct_test:aStruct={.a={0,1},.b=0};
     ## log aStruct;
     ## log aStruct.type;
@@ -21,13 +22,14 @@ start(string8[]):(args)=>{
     int:mathTest=add*add-add//2;
     log mathTest;
     ## log y;
-    ## log y[0];
+    log y[0];
     log y.type;
     log type_sig_test.type;
     uint64:y_len=y.length;
     log y_len;
-    ## int32[]:x={1,2,3,constant};
-    ## x[0]=123456789;
+    int32[]:x=(int32[]:){1,2,3,constant};
+    x[0]=123456789;
+    log x[0];
     ## log x;
     log none.type;
     ## log {}.type;
