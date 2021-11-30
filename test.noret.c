@@ -315,16 +315,58 @@ void* run(void* initState);
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut){
   // var0:(argsIn+0)
-  Value var1 [1];// (Type:int32)
+  Value var1 [1];// (Type:string8)
+  {// Initialize: ValueExpression{"UTF8-String"}
+    Value tmp0 [1];
+    {
+      Value* tmp1=malloc(5*sizeof(Value));
+      tmp1[0]=(Value){.asU64=0}; /*off*/
+      tmp1[1]=(Value){.asU64=2}; /*cap*/
+      tmp1[2]=(Value){.asU64=11}; /*len*/
+      memcpy(tmp1+3,(Value[]){(Value){.raw8={0x55,0x54,0x46,0x38,0x2d,0x53,0x74,0x72}},(Value){.raw8={0x69,0x6e,0x67,0x0,0x0,0x0,0x0,0x0}}},2);
+      memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
+    }
+    memcpy(var1,tmp0,1*sizeof(Value));
+  }
+  Value var2 [1];// (Type:string16)
+  {// Initialize: ValueExpression{"UTF16-String"}
+    Value tmp0 [1];
+    {
+      Value* tmp1=malloc(6*sizeof(Value));
+      tmp1[0]=(Value){.asU64=0}; /*off*/
+      tmp1[1]=(Value){.asU64=3}; /*cap*/
+      tmp1[2]=(Value){.asU64=12}; /*len*/
+      memcpy(tmp1+3,(Value[]){(Value){.raw16={0x55,0x54,0x46,0x31}},(Value){.raw16={0x36,0x2d,0x53,0x74}},(Value){.raw16={0x72,0x69,0x6e,0x67}}},3);
+      memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
+    }
+    memcpy(var2,tmp0,1*sizeof(Value));
+  }
+  Value var3 [1];// (Type:string32)
+  {// Initialize: ValueExpression{"UTF32-String"}
+    Value tmp0 [1];
+    {
+      Value* tmp1=malloc(9*sizeof(Value));
+      tmp1[0]=(Value){.asU64=0}; /*off*/
+      tmp1[1]=(Value){.asU64=6}; /*cap*/
+      tmp1[2]=(Value){.asU64=12}; /*len*/
+      memcpy(tmp1+3,(Value[]){(Value){.raw32={0x55,0x54}},(Value){.raw32={0x46,0x33}},(Value){.raw32={0x32,0x2d}},(Value){.raw32={0x53,0x74}},(Value){.raw32={0x72,0x69}},(Value){.raw32={0x6e,0x67}}},6);
+      memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
+    }
+    memcpy(var3,tmp0,1*sizeof(Value));
+  }
+  {// Log: Log[DEFAULT]{GetField{VarExpression{1}.length}}
+    logValue(DEFAULT,false,TYPE_SIG_U64,(var1[0].asPtr+2));
+  }
+  Value var4 [1];// (Type:int32)
   {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    memcpy(var1,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(1))+((int32_t)(((argsIn+0)[0].asPtr+2)[0].asU64))))}}),1*sizeof(Value));
+    memcpy(var4,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(1))+((int32_t)(((argsIn+0)[0].asPtr+2)[0].asU64))))}}),1*sizeof(Value));
   }
-  Value var2 [1];// (Type:int32)
-  {// Initialize: BinOp{BinOp{VarExpression{1} MULT VarExpression{1}} MINUS BinOp{VarExpression{1} INT_DIV ValueExpression{2}}}
-    memcpy(var2,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(var1[0].asI32*var1[0].asI32))-((int32_t)(var1[0].asI32/((int32_t)(2))))))}}),1*sizeof(Value));
+  Value var5 [1];// (Type:int32)
+  {// Initialize: BinOp{BinOp{VarExpression{4} MULT VarExpression{4}} MINUS BinOp{VarExpression{4} INT_DIV ValueExpression{2}}}
+    memcpy(var5,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(var4[0].asI32*var4[0].asI32))-((int32_t)(var4[0].asI32/((int32_t)(2))))))}}),1*sizeof(Value));
   }
-  {// Log: Log[DEFAULT]{VarExpression{2}}
-    logValue(DEFAULT,false,TYPE_SIG_I32,var2);
+  {// Log: Log[DEFAULT]{VarExpression{5}}
+    logValue(DEFAULT,false,TYPE_SIG_I32,var5);
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:int32[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}}));
@@ -332,28 +374,28 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(3<<TYPE_CONTENT_SHIFT)}}));
   }
-  Value var3 [1];// (Type:uint64)
+  Value var6 [1];// (Type:uint64)
   {// Initialize: ValueExpression{3}
-    memcpy(var3,((Value[]){(Value){.asU64=3}}),1*sizeof(Value));
+    memcpy(var6,((Value[]){(Value){.asU64=3}}),1*sizeof(Value));
   }
-  {// Log: Log[DEFAULT]{VarExpression{3}}
-    logValue(DEFAULT,false,TYPE_SIG_U64,var3);
+  {// Log: Log[DEFAULT]{VarExpression{6}}
+    logValue(DEFAULT,false,TYPE_SIG_U64,var6);
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_NONE}}));
   }
-  Value var4 [2];// (Type:int32?)
+  Value var7 [2];// (Type:int32?)
   {// Initialize: TypeCast{Type:int32?:ValueExpression{4}}
-    memcpy(var4,((Value[]){(Value){.asBool=true},(Value){.asI32=((int32_t)(4))}}),2*sizeof(Value));
+    memcpy(var7,((Value[]){(Value){.asBool=true},(Value){.asI32=((int32_t)(4))}}),2*sizeof(Value));
   }
-  {// Log: Log[DEFAULT]{VarExpression{4}}
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var4);
+  {// Log: Log[DEFAULT]{VarExpression{7}}
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var7);
   }
-  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{4}}?TypeCast{Type:int32?:GetField{VarExpression{4}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
+  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{7}}?TypeCast{Type:int32?:GetField{VarExpression{7}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
     Value tmp0 [2];
     {
-      if(((var4)[0].asBool)){
-        memcpy(tmp0,((Value[]){(Value){.asBool=true},(Value){.asI32=((var4)+1)[0].asI32}}),2*sizeof(Value));
+      if(((var7)[0].asBool)){
+        memcpy(tmp0,((Value[]){(Value){.asBool=true},(Value){.asI32=((var7)+1)[0].asI32}}),2*sizeof(Value));
       }else{
         memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asU64=0/*none*/}}))[0]}),2*sizeof(Value));
       }
@@ -405,7 +447,8 @@ int main(int argc,char** argv){
   off+=sizeof(Procedure);
   Value* initArgs=malloc(MAX_ARG_SIZE*sizeof(Value));
   if(initArgs==NULL){
-    return -1;
+    fputs("out of memory\n",stderr);
+    return 1;
   }
   *((Value**)(init+off))=initArgs;
   off+=sizeof(Value*);
@@ -414,7 +457,7 @@ int main(int argc,char** argv){
   Value* argArray=malloc(((argc-1)+3)*sizeof(Value));
   if(argArray==NULL){
     fputs("out of memory\n",stderr);
-    exit(1);
+    return 1;
   }
   argArray[0] = (Value){.asU64=0 /*off*/};
   argArray[1] = (Value){.asU64=(argc-1) /*cap*/};
@@ -425,7 +468,7 @@ int main(int argc,char** argv){
     Value* tmp=malloc(((l+7)/8+3)*sizeof(Value));
     if(tmp==NULL){
       fputs("out of memory\n",stderr);
-      exit(1);
+      return 1;
     }
     tmp[0] = (Value){.asU64=0/*off*/};
     tmp[1] = (Value){.asU64=(l+7)/8 /*cap*/};

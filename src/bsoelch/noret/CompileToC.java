@@ -20,6 +20,8 @@ public class CompileToC {
     public static final String CONST_PREFIX = "const_";
     public static final String PROCEDURE_TYPE = "Procedure";
 
+    public static final int ARRAY_HEADER = 3;
+
     /* TODO rewrite DataOut
         constant memory may keep the original approach
         local/reference memory will be stored in malloced-memory sections:
@@ -45,42 +47,51 @@ public class CompileToC {
         public String nextName(){
             return prefix+(tmpCount++);
         }
-        public void addValueBuilder(StringBuilder builder, Type type,int elementCount){
-            if(constant){
-                prefixLines.add(builder.append("};").toString());
-            }else{
-                //TODO handle non-constant data
-                throw new UnsupportedOperationException("unimplemented");
+
+        //addLater compressed storage of primitive array
+        private int getMinCap(Type type,int elementCount){
+            if(type instanceof Type.Array){//Array
+                return elementCount*((Type.Array) type).content.blockCount;
+            }else if(type instanceof Type.Tuple){//Tuple
+                return type.blockCount;
+            }else {//String
+                return (((((Type.NoRetString)type).charSize+7)/8)*elementCount+7)/8;
             }
         }
         public StringBuilder newValueBuilder(String name, Type type,int elementCount,boolean prefix) {
-            StringBuilder sb;
             if(constant){
-                sb=new StringBuilder("static "+VALUE_BLOCK_NAME+" "+name+"[]={");
+                StringBuilder sb=new StringBuilder("static "+VALUE_BLOCK_NAME+" "+name+"[]={");
                 if(type instanceof Type.Array||type instanceof Type.Tuple||type instanceof Type.NoRetString){
                     //off
                     if(prefix) {sb.append(CAST_BLOCK);}
                     sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=0/*off*/},");
-                    //cap addLater compressed storage of primitive array
+                    //cap
                     if(prefix) {sb.append(CAST_BLOCK);}
-                    if(type instanceof Type.Array){//Array
-                        sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=")
-                                .append(elementCount*((Type.Array) type).content.blockCount).append("/*cap*/},");
-                    }else if(type instanceof Type.Tuple){//Tuple
-                        sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=")
-                                .append(type.blockCount).append("/*cap*/},");
-                    }else {//String
-                        sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=")
-                                .append((((((Type.NoRetString)type).charSize+7)/8)*elementCount+7)/8).append("/*cap*/},");
-                    }
+                    sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=")
+                            .append(getMinCap(type,elementCount)).append("/*cap*/},");
                     //len
                     if(prefix) {sb.append(CAST_BLOCK);}
                     sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=").append(elementCount).append("/*len*/}");
+                }else{
+                    //TODO implement storage of other value-types
+                    throw new UnsupportedOperationException("unimplemented");
                 }
                 return sb;
             }else{
-                throw new UnsupportedOperationException("unimplemented");
-                //sb.append(CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0}");
+                //TODO padding
+               return new StringBuilder("memcpy("+name+"+"+ARRAY_HEADER+",("+VALUE_BLOCK_NAME+"[]){");
+            }
+        }
+        public void addValueBuilder(String name,StringBuilder builder, Type type,int elementCount){
+            if(constant){
+                prefixLines.add(builder.append("};").toString());
+            }else{
+                prefixLines.add(VALUE_BLOCK_NAME+"* "+name+"=malloc(("+(getMinCap(type, elementCount)+ARRAY_HEADER)+
+                        ")*sizeof("+VALUE_BLOCK_NAME+"));");
+                prefixLines.add(name+"[0]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0}; /*off*/");//TODO padding
+                prefixLines.add(name+"[1]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"="+getMinCap(type, elementCount)+"}; /*cap*/");
+                prefixLines.add(name+"[2]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"="+elementCount+"}; /*len*/");
+                prefixLines.add(builder.append("},").append(getMinCap(type, elementCount)).append(");").toString());
             }
         }
     }
@@ -543,8 +554,8 @@ public class CompileToC {
                 String loc=dataOut.nextName();
                 out.append("{.asPtr=(").append(loc).append(")}");
                 StringBuilder content=dataOut.newValueBuilder(loc,((Value.AnyValue) v).content.getType(),1,prefix);
-                writeConstValueAsUnion(content, ((Value.AnyValue) v).content, dataOut,  true, prefix);
-                dataOut.addValueBuilder(content,((Value.AnyValue) v).content.getType(),1);
+                writeConstValueAsUnion(content, ((Value.AnyValue) v).content, dataOut, !dataOut.constant, prefix);
+                dataOut.addValueBuilder(loc,content,((Value.AnyValue) v).content.getType(),1);
             }else{
                 writeConstValueAsUnion(out,((Value.AnyValue) v).content,dataOut,false, prefix);
             }
@@ -563,7 +574,9 @@ public class CompileToC {
             out.append("{.asPtr=(").append(loc).append(")}");
             StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING8,bytes.length,prefix);
             for(int i=0;i< bytes.length;i+=8){
-                content.append(',');
+                if(i>0|| dataOut.constant) {
+                    content.append(',');
+                }
                 if(prefix){content.append(CAST_BLOCK); }
                 content.append("{.raw8={");
                 for(int j=0;j<8;j++){
@@ -574,7 +587,7 @@ public class CompileToC {
                 }
                 content.append("}}");
             }
-            dataOut.addValueBuilder(content,Type.NoRetString.STRING8,bytes.length);
+            dataOut.addValueBuilder(loc,content,Type.NoRetString.STRING8,bytes.length);
         }else if(v.getType()== Type.NoRetString.STRING16){
             char[] chars=((Value.StringValue) v).chars();
             if(prefix){out.append(CAST_BLOCK); }
@@ -582,7 +595,9 @@ public class CompileToC {
             out.append("{.asPtr=(").append(loc).append(")}");
             StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING16,chars.length,prefix);
             for(int i=0;i< chars.length;i+=4){
-                content.append(',');
+                if(i>0|| dataOut.constant) {
+                    content.append(',');
+                }
                 if(prefix){content.append(CAST_BLOCK); }
                 content.append("{.raw16={");
                 for(int j=0;j<4;j++){
@@ -593,7 +608,7 @@ public class CompileToC {
                 }
                 content.append("}}");
             }
-            dataOut.addValueBuilder(content,Type.NoRetString.STRING16,chars.length);
+            dataOut.addValueBuilder(loc,content,Type.NoRetString.STRING16,chars.length);
         }else if(v.getType()== Type.NoRetString.STRING32){
             int[] codePoints=((Value.StringValue) v).codePoints();
             if(prefix){out.append(CAST_BLOCK); }
@@ -601,7 +616,9 @@ public class CompileToC {
             out.append("{.asPtr=(").append(loc).append(")}");
             StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING32,codePoints.length,prefix);
             for(int i=0;i< codePoints.length;i+=2){
-                content.append(',');
+                if(i>0|| dataOut.constant) {
+                    content.append(',');
+                }
                 if(prefix){content.append(CAST_BLOCK); }
                 content.append("{.raw32={");
                 for(int j=0;j<2;j++){
@@ -612,16 +629,18 @@ public class CompileToC {
                 }
                 content.append("}}");
             }
-            dataOut.addValueBuilder(content,Type.NoRetString.STRING32,codePoints.length);
+            dataOut.addValueBuilder(loc,content,Type.NoRetString.STRING32,codePoints.length);
         }else if(v instanceof Value.ArrayOrTuple){
             if(prefix){out.append(CAST_BLOCK); }
             String loc=dataOut.nextName();
             out.append("{.asPtr=(").append(loc).append(")}");
             StringBuilder content=dataOut.newValueBuilder(loc,v.getType(),((Value.ArrayOrTuple) v).elements().length,prefix);
+            isFirst=!dataOut.constant;
             for (Value elt : ((Value.ArrayOrTuple) v).elements()) {
-                writeConstValueAsUnion(content,elt, dataOut, false, prefix);
+                writeConstValueAsUnion(content,elt, dataOut, isFirst, prefix);
+                isFirst=false;
             }
-            dataOut.addValueBuilder(content,v.getType(),((Value.ArrayOrTuple) v).elements().length);
+            dataOut.addValueBuilder(loc,content,v.getType(),((Value.ArrayOrTuple) v).elements().length);
         }else if(v instanceof Value.Struct){
             throw new UnsupportedOperationException("structs are currently not supported");
             //write fields one by one
@@ -1132,7 +1151,9 @@ public class CompileToC {
                 writeConstValueAsUnion(tmp,((ValueExpression)expr).getValue(),data,true, true);
                 tmp.append("},").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"));");
                 initLines.add(indent+"{");
-                initLines.addAll(data.prefixLines);
+                for(String l:data.prefixLines){
+                    initLines.add(indent+"  "+l);
+                }
                 initLines.add(indent+tmp);
                 initLines.add(indent+"}");
                 line.append("tmp").append(tmpCount);
@@ -1286,23 +1307,24 @@ public class CompileToC {
             writeLine("int main(){");
         }
         comment("  ","[proc_ptr,args_ptr,arg_data]");
-        writeLine("  char init[sizeof(" + PROCEDURE_TYPE + ")+2*sizeof("+VALUE_BLOCK_NAME+"*)];");//TODO replace malloc with local array
+        writeLine("  char init[sizeof(" + PROCEDURE_TYPE + ")+2*sizeof("+VALUE_BLOCK_NAME+"*)];");
         writeLine("  size_t off=0;");
         writeLine("  *((" + PROCEDURE_TYPE + "*)init)=&" + PROC_PREFIX + "start;");
         writeLine("  off+=sizeof(" + PROCEDURE_TYPE + ");");
         writeLine("  " + VALUE_BLOCK_NAME + "* initArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
         writeLine("  if(initArgs==NULL){");
-        writeLine("    return -1;");//addLater useful handling of return codes
+        writeLine("    fputs(\"out of memory\\n\",stderr);");
+        writeLine("    return 1;");
         writeLine("  }");
         writeLine("  *((" + VALUE_BLOCK_NAME + "**)(init+off))=initArgs;");
         writeLine("  off+=sizeof(" + VALUE_BLOCK_NAME + "*);");
         if(hasArgs){
             comment("  ","prepare program Arguments");
             comment("  ","!!! currently only UTF-8 encoding is supported !!!");//addLater support for other encodings of argv
-            writeLine("  "+VALUE_BLOCK_NAME+"* argArray=malloc(((argc-1)+"+3+")*sizeof("+VALUE_BLOCK_NAME+"));");//addLater constant: header size
+            writeLine("  "+VALUE_BLOCK_NAME+"* argArray=malloc(((argc-1)+"+ARRAY_HEADER+")*sizeof("+VALUE_BLOCK_NAME+"));");//addLater constant: header size
             writeLine("  if(argArray==NULL){");
             writeLine("    fputs(\"out of memory\\n\",stderr);");
-            writeLine("    exit(1);");
+            writeLine("    return 1;");
             writeLine("  }");
             writeLine("  argArray[0] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0 /*off*/};");
             writeLine("  argArray[1] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1) /*cap*/};");
@@ -1310,17 +1332,17 @@ public class CompileToC {
             writeLine("  initArgs[0] = "+CAST_BLOCK+"{.asPtr=argArray};");
             writeLine("  for(int i=1;i<argc;i++){");//skip first argument
             writeLine("    int l=strlen(argv[i]);");
-            writeLine("    "+VALUE_BLOCK_NAME+"* tmp=malloc(((l+7)/8+"+3+")*sizeof("+VALUE_BLOCK_NAME+"));");
+            writeLine("    "+VALUE_BLOCK_NAME+"* tmp=malloc(((l+7)/8+"+ARRAY_HEADER+")*sizeof("+VALUE_BLOCK_NAME+"));");
             writeLine("    if(tmp==NULL){");
             writeLine("      fputs(\"out of memory\\n\",stderr);");
-            writeLine("      exit(1);");
+            writeLine("      return 1;");
             writeLine("    }");
             writeLine("    tmp[0] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0/*off*/};");
             writeLine("    tmp[1] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(l+7)/8 /*cap*/};");
             writeLine("    tmp[2] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=l /*len*/};");
             //store lengths of arguments
-            writeLine("    argArray[i+"+(3-1)+"] = "+CAST_BLOCK+"{.asPtr=tmp};");//pointer to data
-            comment("    off="+3+";","reuse off variable");
+            writeLine("    argArray[i+"+(ARRAY_HEADER-1)+"] = "+CAST_BLOCK+"{.asPtr=tmp};");//pointer to data
+            comment("    off="+ARRAY_HEADER+";","reuse off variable");
             writeLine("    for(int j=0,k=0;j+k<l;j++){");
             writeLine("      if(j==8){");
             writeLine("        j=0;");
