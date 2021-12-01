@@ -24,6 +24,11 @@ public class CompileToC {
     public static final int ARRAY_LEN_OFFSET = 2;
     public static final String PRINT_TYPE_NAME = "printType";
 
+    public static final int ERR_NONE  = 0;
+    public static final int ERR_MEM   = 1;
+    public static final int ERR_INDEX = 2;
+    public static final int ERR_TYPE  = 3;
+
     /* TODO rewrite DataOut
         constant memory may keep the original approach
         local/reference memory will be stored in malloced-memory sections:
@@ -441,7 +446,7 @@ public class CompileToC {
         writeLine("  switch(type&TYPE_SIG_MASK){");
         writeLine("    case TYPE_SIG_EMPTY:");
         writeLine("      fputs(\"unexpected Value-Type in log: \\\"EMPTY\\\"\",log_"+LogType.Type.ERR+");");
-        writeLine("      exit(-1);");//addLater error code-handling
+        writeLine("      exit("+ERR_TYPE+");");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_BOOL:");
         writeLine("      fputs(value->asBool?\"true\":\"false\",log);");
@@ -514,7 +519,7 @@ public class CompileToC {
         writeLine("    return (array+"+ARRAY_HEADER+")+(array[0].asU64+index)*width;");
         writeLine("  }else{");
         writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index,array["+ARRAY_LEN_OFFSET+"].asU64);");
-        writeLine("    exit(1);");
+        writeLine("    exit("+ERR_INDEX+");");
         writeLine("  }");
         writeLine("}");
         comment("read a raw-element with width byteWidth from an Array");
@@ -523,7 +528,7 @@ public class CompileToC {
         writeLine("    return ((void*)(array+"+ARRAY_HEADER+"))+(array[0].asU64+index)*byteWidth;");
         writeLine("  }else{");
         writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index,array["+ARRAY_LEN_OFFSET+"].asU64);");
-        writeLine("    exit(1);");
+        writeLine("    exit("+ERR_INDEX+");");
         writeLine("  }");
         writeLine("}");
         out.newLine();
@@ -847,7 +852,7 @@ public class CompileToC {
                         writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
                         writeLine("    if(newArgs==NULL){");//check pointer
                         writeLine("      fputs(\"out of memory\\n\",stderr);");
-                        writeLine("      exit(1);");
+                        writeLine("      exit("+ERR_MEM+");");
                         writeLine("    }");
                         writeArgs("    ",childArgs.get(i),initLines,line,name,argNames,"newArgs");
                         //addLater call function (via pthreads)
@@ -860,7 +865,7 @@ public class CompileToC {
                         writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
                         writeLine("    if(newArgs==NULL){");//check pointer
                         writeLine("      fputs(\"out of memory\\n\",stderr);");
-                        writeLine("      exit(1);");
+                        writeLine("      exit("+ERR_MEM+");");
                         writeLine("    }");
                         writeArgs("    ",childArgs.get(i),initLines,line,name,argNames,"newArgs");
                         //addLater call function (via pthreads)
@@ -888,7 +893,7 @@ public class CompileToC {
                     writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
                     writeLine("    if(newArgs==NULL){");//check pointer
                     writeLine("      fputs(\"out of memory\\n\",stderr);");
-                    writeLine("      exit(1);");
+                    writeLine("      exit("+ERR_MEM+");");
                     writeLine("    }");
                     writeArgs("    ",childArgs.get(i),initLines,line,name,argNames,"newArgs");
                     //addLater call function (via pthreads)
@@ -1404,7 +1409,7 @@ public class CompileToC {
         writeRunSignature();
         writeLine(";");
     }
-    //addLater exit with error specific value
+
     /**writes an integrated interpreted that runs the NoRet C-Representation as a C-Program*/
     private void writeMain(boolean hasArgs) throws IOException {
         writeRunSignature();writeLine("{");
@@ -1416,7 +1421,7 @@ public class CompileToC {
         writeLine("    " + VALUE_BLOCK_NAME + "* argsTmp;");
         writeLine("    if(argsO==NULL){");
         writeLine("      fputs(\"out of memory\\n\",stderr);");
-        writeLine("      exit(1);");
+        writeLine("      exit("+ERR_MEM+");");
         writeLine("    }");
         writeLine("    do{");
         writeLine("        f=(" + PROCEDURE_TYPE + ")f(argsI,argsO);");
@@ -1425,7 +1430,7 @@ public class CompileToC {
         writeLine("        argsI=argsO;");
         writeLine("        argsO=argsTmp;");
         writeLine("    }while(f!=NULL);");
-        writeLine("    return (void*)0;");
+        writeLine("    return (void*)"+ERR_NONE+";");
         writeLine("}");
         out.newLine();
         comment("main method of the C representation: ");
@@ -1448,7 +1453,7 @@ public class CompileToC {
         writeLine("  " + VALUE_BLOCK_NAME + "* initArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
         writeLine("  if(initArgs==NULL){");
         writeLine("    fputs(\"out of memory\\n\",stderr);");
-        writeLine("    return 1;");
+        writeLine("    return "+ERR_MEM+";");
         writeLine("  }");
         writeLine("  *((" + VALUE_BLOCK_NAME + "**)(init+off))=initArgs;");
         writeLine("  off+=sizeof(" + VALUE_BLOCK_NAME + "*);");
@@ -1458,7 +1463,7 @@ public class CompileToC {
             writeLine("  "+VALUE_BLOCK_NAME+"* argArray=malloc(((argc-1)+"+ARRAY_HEADER+")*sizeof("+VALUE_BLOCK_NAME+"));");//addLater constant: header size
             writeLine("  if(argArray==NULL){");
             writeLine("    fputs(\"out of memory\\n\",stderr);");
-            writeLine("    return 1;");
+            writeLine("    return "+ERR_MEM+";");
             writeLine("  }");
             writeLine("  argArray[0] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0 /*off*/};");
             writeLine("  argArray[1] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1) /*cap*/};");
@@ -1469,7 +1474,7 @@ public class CompileToC {
             writeLine("    "+VALUE_BLOCK_NAME+"* tmp=malloc(((l+7)/8+"+ARRAY_HEADER+")*sizeof("+VALUE_BLOCK_NAME+"));");
             writeLine("    if(tmp==NULL){");
             writeLine("      fputs(\"out of memory\\n\",stderr);");
-            writeLine("      return 1;");
+            writeLine("      return "+ERR_MEM+";");
             writeLine("    }");
             writeLine("    tmp[0] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0/*off*/};");
             writeLine("    tmp[1] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(l+7)/8 /*cap*/};");
@@ -1491,7 +1496,7 @@ public class CompileToC {
         writeLine("  initLogStreams();");
         writeLine("  run(init);");
         comment("  puts(\"\");","finish last line in stdout");
-        writeLine("  return 0;");
+        writeLine("  return "+ERR_NONE+";");
         writeLine("}");
     }
 
