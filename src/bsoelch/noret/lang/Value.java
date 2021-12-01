@@ -21,6 +21,7 @@ public abstract class Value{
         public final Value content;
         public AnyValue(Value content) {
             super(Type.ANY);
+            getters.replace(Type.FIELD_NAME_TYPE,()->new TypeValue(content.type));
             this.content=content;
         }
 
@@ -103,6 +104,11 @@ public abstract class Value{
         void put(String key,V value){
             if(map.put(key,value)!=null){
                 throw new RuntimeException("element \""+key+"\" already exists");
+            }
+        }
+        public void replace(String key, V newValue) {
+            if(map.put(key,newValue)==null){
+                throw new RuntimeException("element \""+key+"\" does not exists");
             }
         }
     }
@@ -416,16 +422,6 @@ public abstract class Value{
                 assert false;//"Unreachable"
                 throw new RuntimeException("Unreachable");
             }
-        }
-
-        public byte[] utf8Bytes() {
-            return Arrays.copyOf(utf8Bytes,utf8Bytes.length);
-        }
-        public char[] chars() {
-            return utf16String.toCharArray();
-        }
-        public int[] codePoints() {
-            return Arrays.copyOf(utf32Codepoints,utf32Codepoints.length);
         }
 
         @Override

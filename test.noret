@@ -17,6 +17,8 @@ start(string8[]):(args)=>{
     log utf8;
     log utf8[3];
     log utf8.length;
+    any:anAny=3;
+    log anAny.type;
     ## log utf16;
     ## log utf32;
     int:add=1+(int:)(args.length);

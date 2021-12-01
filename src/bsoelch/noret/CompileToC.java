@@ -1171,8 +1171,14 @@ public class CompileToC {
             if(unwrap){
                 throw new RuntimeException("cannot unwrap Any");
             }
-            parts[0]="(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asType="+typeSignature(from)+"},(";
-            parts[1]=")[0]})";
+            parts[0] = "((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{.asType=" + typeSignature(from) + "},";
+            if(from instanceof Type.Primitive){
+                parts[0] += CAST_BLOCK+"{."+typeFieldName((Type.Primitive) from)+"=";
+                parts[1] = "}})";
+            }else {
+                parts[0] +="(";
+                parts[1] = ")[0]})";
+            }
             return parts;
         }else if(to== Type.Primitive.BOOL &&from instanceof Type.Optional){
             if(unwrap){
@@ -1222,7 +1228,7 @@ public class CompileToC {
                     throw new RuntimeException("Cannot unwrap "+expr.expectedType());
                 }
                 int blockCount=expr.expectedType().blockCount;
-                DataOut data= new DataOut("tmp", tmpCount + 1,false);//TODO handle data
+                DataOut data= new DataOut("tmp", tmpCount + 1,false);
                 StringBuilder tmp;
                 initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
                 tmp=new StringBuilder("  memcpy(tmp"+tmpCount+",("+VALUE_BLOCK_NAME+"[]){");
@@ -1281,6 +1287,7 @@ public class CompileToC {
                 throw new UnsupportedOperationException("Unwrapping of IfExpr is currently not supported");
             }else{
                 //addLater use ?: if both arguments can be inlined
+                // handle primitive values
                 int blockCount = expr.expectedType().blockCount;
                 initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
                 int prevTmp=tmpCount++;
@@ -1305,15 +1312,14 @@ public class CompileToC {
         }else if(expr instanceof GetField){
             if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_TYPE)){
                 if(((GetField) expr).value.expectedType()== Type.ANY){
-                    //TODO read type from any
-                    throw new UnsupportedOperationException("\"any.type\" is currently not supported");
+                    tmpCount=writeExpression(indent+"    ",initLines,line,((GetField) expr).value,false,tmpCount, procName, varNames);
                 }else{
                     line.append(CAST_BLOCK + "{.asType=").append(typeSignature(((GetField) expr).value.expectedType())).append('}');
                     if(unwrap){
                         line.append(unwrapSuffix(expr.expectedType()));
                     }
-                    return tmpCount;
                 }
+                return tmpCount;
             }else if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_LENGTH)&&
                     (((GetField) expr).value.expectedType() instanceof Type.Array||((GetField) expr).value.expectedType() instanceof Type.Tuple||
                             ((GetField) expr).value.expectedType() instanceof Type.NoRetString)){
