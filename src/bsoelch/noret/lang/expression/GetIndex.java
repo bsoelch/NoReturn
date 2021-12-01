@@ -16,7 +16,7 @@ public class GetIndex implements Expression{
         Type type;
         if(valType == Type.NoRetString.STRING8){
             if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                type = Type.Numeric.UINT8;//utf8-byte
+                type = Type.Numeric.CHAR8;//utf8-byte
             }else if(Type.canAssign(Type.NoRetString.STRING8, indType,null)){
                 type = Type.Numeric.UINT64;//index of substring
             }else{
@@ -25,7 +25,7 @@ public class GetIndex implements Expression{
             }
         }else if(valType == Type.NoRetString.STRING16){
             if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                type = Type.Numeric.UINT16;//utf16-char
+                type = Type.Numeric.CHAR16;//utf16-char
             }else if(Type.canAssign(Type.NoRetString.STRING16, indType,null)){
                 type = Type.Numeric.UINT64;//index of substring
             }else{
@@ -34,7 +34,7 @@ public class GetIndex implements Expression{
             }
         }else if(valType == Type.NoRetString.STRING32){
             if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                type = Type.Numeric.UINT32;//utf32-codepoint
+                type = Type.Numeric.CHAR32;//utf32-codepoint
             }else if(Type.canAssign(Type.NoRetString.STRING32, indType,null)){
                 type = Type.Numeric.UINT64;//index of substring
             }else{

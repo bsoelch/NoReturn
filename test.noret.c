@@ -23,21 +23,24 @@ typedef uint64_t Type;
 #define TYPE_SIG_U32        0x7
 #define TYPE_SIG_I64        0x8
 #define TYPE_SIG_U64        0x9
-#define TYPE_SIG_F32        0xa
-#define TYPE_SIG_F64        0xb
-#define TYPE_SIG_STRING8    0xc
-#define TYPE_SIG_STRING16   0xd
-#define TYPE_SIG_STRING32   0xe
-#define TYPE_SIG_TYPE       0xf
-#define TYPE_SIG_NONE       0x10
-#define TYPE_SIG_ANY        0x11
-#define TYPE_SIG_OPTIONAL   0x12
-#define TYPE_SIG_REFERENCE  0x13
-#define TYPE_SIG_ARRAY      0x14
-#define TYPE_SIG_TUPLE      0x15
-#define TYPE_SIG_UNION      0x16
-#define TYPE_SIG_STRUCT     0x17
-#define TYPE_SIG_PROC       0x18
+#define TYPE_SIG_C8         0xa
+#define TYPE_SIG_C16        0xb
+#define TYPE_SIG_C32        0xc
+#define TYPE_SIG_F32        0xd
+#define TYPE_SIG_F64        0xe
+#define TYPE_SIG_STRING8    0xf
+#define TYPE_SIG_STRING16   0x10
+#define TYPE_SIG_STRING32   0x11
+#define TYPE_SIG_TYPE       0x12
+#define TYPE_SIG_NONE       0x13
+#define TYPE_SIG_ANY        0x14
+#define TYPE_SIG_OPTIONAL   0x15
+#define TYPE_SIG_REFERENCE  0x16
+#define TYPE_SIG_ARRAY      0x17
+#define TYPE_SIG_TUPLE      0x18
+#define TYPE_SIG_UNION      0x19
+#define TYPE_SIG_STRUCT     0x1a
+#define TYPE_SIG_PROC       0x1b
 #define TYPE_CONTENT_SHIFT  8
 #define TYPE_CONTENT_MASK   0xffffffff
 #define TYPE_COUNT_SHIFT    40
@@ -63,6 +66,9 @@ union ValueImpl{
   uint32_t   asU32;
   int64_t    asI64;
   uint64_t   asU64;
+  uint8_t    asC8;
+  uint16_t   asC16;
+  uint32_t   asC32;
   float32_t  asF32;
   float64_t  asF64;
   Type       asType;
@@ -97,7 +103,7 @@ void initLogStreams(){
   log_INFO = stdout;
 }
 // recursive printing of types
-void printType(const Type type,FILE* log){
+void printType(const Type type,FILE* log,bool recursive){
   switch(type&TYPE_SIG_MASK){
     case TYPE_SIG_EMPTY:
       fputs("Type:\"empty\"",log);
@@ -129,6 +135,15 @@ void printType(const Type type,FILE* log){
     case TYPE_SIG_U64:
       fputs("Type:uint64",log);
       break;
+    case TYPE_SIG_C8:
+      fputs("Type:char8",log);
+      break;
+    case TYPE_SIG_C16:
+      fputs("Type:char16",log);
+      break;
+    case TYPE_SIG_C32:
+      fputs("Type:char32",log);
+      break;
     case TYPE_SIG_F32:
       fputs("Type:float32",log);
       break;
@@ -154,19 +169,24 @@ void printType(const Type type,FILE* log){
       fputs("Type:any",log);
       break;
     case TYPE_SIG_OPTIONAL:
-      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);
-      fputs("?",log);
+      if(recursive){fputs("(",log);}
+      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log,true);
+      fputs(recursive?"?)":"?",log);
       break;
     case TYPE_SIG_REFERENCE:
-      fputs("@",log);
-      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);
+      fputs(recursive?"(@":"@",log);
+      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log,true);
+      if(recursive){fputs(")",log);}
       break;
     case TYPE_SIG_ARRAY:
-      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);
-      fputs("[]",log);
+      if(recursive){fputs("(",log);}
+      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log,true);
+      fputs(recursive?"[])":"[]",log);
       break;
-    case TYPE_SIG_PROC:
+    case TYPE_SIG_TUPLE:
     case TYPE_SIG_STRUCT:
+    case TYPE_SIG_UNION:
+    case TYPE_SIG_PROC:
       assert(false && " unreachable ");
       break;
   }
@@ -250,15 +270,20 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
     case TYPE_SIG_NONE:
       fputs("\"none\"",log);
       break;
+    case TYPE_SIG_C8:
+      fprintf(log,"'%c'",value->asC8);
+      break;
     case TYPE_SIG_STRING8:
       fprintf(log,"%.*s",(int)(value->asPtr[2].asU64),(char*)(value->asPtr+3/*header*/+value->asPtr[0].asU64/*off*/));
       break;
+    case TYPE_SIG_C16:
     case TYPE_SIG_STRING16:
+    case TYPE_SIG_C32:
     case TYPE_SIG_STRING32:
       assert(false && "unimplemented");
       break;
     case TYPE_SIG_TYPE:
-      printType(value->asType,log);
+      printType(value->asType,log,false);
       break;
     case TYPE_SIG_ANY:
        prevType=logType;
@@ -399,7 +424,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_STRING8,var1);
   }
   {// Log: Log[DEFAULT]{GetIndex{VarExpression{1}[ValueExpression{3}]}}
-    logValue(DEFAULT,false,TYPE_SIG_U8,((Value[]){(Value){.asU8=*((uint8_t*)getRawElement(var1->asPtr,((int32_t)(3)),1))}}));
+    logValue(DEFAULT,false,TYPE_SIG_C8,((Value[]){(Value){.asC8=*((uint8_t*)getRawElement(var1->asPtr,((int32_t)(3)),1))}}));
   }
   {// Log: Log[DEFAULT]{GetField{VarExpression{1}.length}}
     logValue(DEFAULT,false,TYPE_SIG_U64,(var1[0].asPtr+2));

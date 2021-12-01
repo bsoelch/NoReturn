@@ -488,8 +488,8 @@ public class Parser {
                                 if(buffer.codePoints().count()==1){
                                     int codePoint = buffer.codePointAt(0);
                                     tokenBuffer.addLast(new ExprToken(Value.createPrimitive(
-                                            codePoint<0x80?Type.Numeric.UINT8:codePoint<0x10000?Type.Numeric.UINT16:
-                                                    Type.Numeric.UINT32, codePoint), null, currentPos()));
+                                            codePoint<0x80?Type.Numeric.CHAR8:codePoint<0x10000?Type.Numeric.CHAR16:
+                                                    Type.Numeric.CHAR32, codePoint), null, currentPos()));
                                 }else{
                                     throw new SyntaxError("A char-literal must contain exactly one character");
                                 }

@@ -60,31 +60,33 @@ public class Type {
         private static final ArrayList<Numeric> numberTypes=new ArrayList<>();
         public final int level;
         public final boolean signed,isFloat;
+        public final boolean isChar;
 
-        public static final Numeric INT8      = new Numeric("int8",0,true,false);
-        public static final Numeric UINT8     = new Numeric("uint8",0,false,false);
-        public static final Numeric INT16     = new Numeric("int16",1,true,false);
-        public static final Numeric UINT16    = new Numeric("uint16",1,false,false);
-        public static final Numeric INT32     = new Numeric("int32",2,true,false);
-        public static final Numeric UINT32    = new Numeric("uint32",2,false,false);
-        public static final Numeric INT64     = new Numeric("int64",3,true,false);
-        public static final Numeric UINT64    = new Numeric("uint64",3,false,false);
-        /* TODO introduce char-types (type-aliases for uint8,uint16,uint32 that are converted to their respective character on toString)
-        public static final Numeric CHAR8     = new Numeric("char8",0,false,false);
-        public static final Numeric CHAR16    = new Numeric("char16",1,false,false);
-        public static final Numeric CHAR32    = new Numeric("char32",2,false,false);
-        */
-        public static final Numeric FLOAT32   = new Numeric("float32",2,true,true);
-        public static final Numeric FLOAT64   = new Numeric("float64",3,true,true);
+        public static final Numeric INT8      = new Numeric("int8",0,true,false,false);
+        public static final Numeric UINT8     = new Numeric("uint8",0,false,false,false);
+        public static final Numeric INT16     = new Numeric("int16",1,true,false,false);
+        public static final Numeric UINT16    = new Numeric("uint16",1,false,false,false);
+        public static final Numeric INT32     = new Numeric("int32",2,true,false,false);
+        public static final Numeric UINT32    = new Numeric("uint32",2,false,false,false);
+        public static final Numeric INT64     = new Numeric("int64",3,true,false,false);
+        public static final Numeric UINT64    = new Numeric("uint64",3,false,false,false);
+
+        public static final Numeric CHAR8     = new Numeric("char8",0,false,false,true);
+        public static final Numeric CHAR16    = new Numeric("char16",1,false,false,true);
+        public static final Numeric CHAR32    = new Numeric("char32",2,false,false,true);
+
+        public static final Numeric FLOAT32   = new Numeric("float32",2,true,true,false);
+        public static final Numeric FLOAT64   = new Numeric("float64",3,true,true,false);
 
         /**method for ensuring this class (with all Numeric-Type constants) is loaded*/
         static void ensureInitialized(){}
 
-        private Numeric(String name,int level,boolean signed,boolean isFloat) {
+        private Numeric(String name,int level,boolean signed,boolean isFloat,boolean isChar) {
             super(name,false);
             this.level=level;
             this.signed=signed;
             this.isFloat=isFloat;
+            this.isChar=isChar;
             numberTypes.add(this);
         }
 
@@ -100,17 +102,19 @@ public class Type {
         private static final HashMap<String,Type> stringTypes=new HashMap<>();
         //addLater? nativeString (string with native encoding) ? nonUnicodeStrings
         /**UTF-8 string*/
-        public static final NoRetString STRING8=new NoRetString(8);
+        public static final NoRetString STRING8=new NoRetString(8,Numeric.CHAR8);
         /**UTF-16 string*/
-        public static final NoRetString STRING16=new NoRetString(16);
+        public static final NoRetString STRING16=new NoRetString(16,Numeric.CHAR16);
         /**UTF-32 string*/
-        public static final NoRetString STRING32=new NoRetString(32);
+        public static final NoRetString STRING32=new NoRetString(32,Numeric.CHAR32);
 
         public final int charSize;
+        public final Type.Numeric charType;
 
-        private NoRetString(int charSize) {
+        private NoRetString(int charSize,Type.Numeric charType) {
             super("string"+charSize,1,true);
             this.charSize=charSize;
+            this.charType=charType;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
             stringTypes.put(name,this);
         }

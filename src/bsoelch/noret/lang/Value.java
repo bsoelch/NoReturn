@@ -273,6 +273,24 @@ public abstract class Value{
                 return super.castTo(t);
             }
         }
+
+        @Override
+        public String stringRepresentation() {
+            if(((Type.Numeric)type).isChar){
+                return "'"+String.valueOf(Character.toChars(((Number)value).intValue()))+"'";
+            }else{
+                return super.stringRepresentation();
+            }
+        }
+        @Override
+        public String stringValue() {
+            if(((Type.Numeric)type).isChar){
+                return String.valueOf(Character.toChars(((Number)value).intValue()));
+            }else{
+                return super.stringValue();
+            }
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
@@ -351,17 +369,17 @@ public abstract class Value{
                 if(lIndex<0||lIndex>= utf8Bytes.length){
                     throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
                 }
-                return Value.createPrimitive(Type.Numeric.UINT8,utf8Bytes[(int)lIndex]);
+                return Value.createPrimitive(Type.Numeric.CHAR8,utf8Bytes[(int)lIndex]);
             }else if(type== Type.NoRetString.STRING16){
                 if(lIndex<0||lIndex>= utf16String.length()){
                     throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
                 }
-                return Value.createPrimitive(Type.Numeric.UINT16,utf16String.charAt((int)lIndex));
+                return Value.createPrimitive(Type.Numeric.CHAR16,utf16String.charAt((int)lIndex));
             }else if(type== Type.NoRetString.STRING32){
                 if(lIndex<0||lIndex>= utf32Codepoints.length){
                     throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
                 }
-                return Value.createPrimitive(Type.Numeric.UINT32,utf32Codepoints[(int)lIndex]);
+                return Value.createPrimitive(Type.Numeric.CHAR32,utf32Codepoints[(int)lIndex]);
             }else{
                 assert false;//"Unreachable"
                 throw new RuntimeException("Unreachable");
@@ -400,11 +418,11 @@ public abstract class Value{
         @Override
         public Iterator<Value> iterator() {
             if(type== Type.NoRetString.STRING8){
-                return IntStream.range(0, utf8Bytes.length).mapToObj(i->createPrimitive(Type.Numeric.UINT8,utf8Bytes[i])).iterator();
+                return IntStream.range(0, utf8Bytes.length).mapToObj(i->createPrimitive(Type.Numeric.CHAR8,utf8Bytes[i])).iterator();
             }else if(type== Type.NoRetString.STRING16){
-                return IntStream.range(0, utf16String.length()).mapToObj(i->createPrimitive(Type.Numeric.UINT16,utf16String.charAt(i))).iterator();
+                return IntStream.range(0, utf16String.length()).mapToObj(i->createPrimitive(Type.Numeric.CHAR16,utf16String.charAt(i))).iterator();
             }else if(type== Type.NoRetString.STRING32){
-                return Arrays.stream(utf32Codepoints).mapToObj(i->createPrimitive(Type.Numeric.UINT32,i)).iterator();
+                return Arrays.stream(utf32Codepoints).mapToObj(i->createPrimitive(Type.Numeric.CHAR32,i)).iterator();
             }else{
                 assert false;//"Unreachable"
                 throw new RuntimeException("Unreachable");

@@ -22,6 +22,7 @@ public class CompileToC {
 
     public static final int ARRAY_HEADER = 3;
     public static final int ARRAY_LEN_OFFSET = 2;
+    public static final String PRINT_TYPE_NAME = "printType";
 
     /* TODO rewrite DataOut
         constant memory may keep the original approach
@@ -149,18 +150,24 @@ public class CompileToC {
             return "TYPE_SIG_EMPTY";
         }else if(t==Type.Primitive.BOOL){
             return "TYPE_SIG_BOOL";
-        }else if(t==Type.Numeric.INT8){
+        }else if(t==Type.Numeric.INT8){//addLater compress with function
             return "TYPE_SIG_I8";
         }else if(t==Type.Numeric.UINT8){
             return "TYPE_SIG_U8";
+        }else if(t==Type.Numeric.CHAR8){
+            return "TYPE_SIG_C8";
         }else if(t==Type.Numeric.INT16){
             return "TYPE_SIG_I16";
         }else if(t==Type.Numeric.UINT16){
             return "TYPE_SIG_U16";
+        }else if(t==Type.Numeric.CHAR16){
+            return "TYPE_SIG_C16";
         }else if(t==Type.Numeric.INT32){
             return "TYPE_SIG_I32";
         }else if(t==Type.Numeric.UINT32){
             return "TYPE_SIG_U32";
+        }else if(t==Type.Numeric.CHAR32){
+            return "TYPE_SIG_C32";
         }else if(t==Type.Numeric.INT64){
             return "TYPE_SIG_I64";
         }else if(t==Type.Numeric.UINT64){
@@ -215,7 +222,8 @@ public class CompileToC {
             if(((Type.Numeric)type).isFloat){
                 return "asF"+ ((Type.Numeric)type).bitSize();
             }else{
-                return "as"+(((Type.Numeric)type).signed?"I":"U")+((Type.Numeric)type).bitSize();
+                return "as"+(((Type.Numeric)type).signed?"I":(((Type.Numeric)type).isChar?"C":"U"))+
+                        ((Type.Numeric)type).bitSize();
             }
         }else if(type== Type.Primitive.BOOL){
             return "asBool";
@@ -257,18 +265,13 @@ public class CompileToC {
         writeLine("typedef uint64_t Type;");
         writeLine("#define TYPE_SIG_MASK       0xff");
         int count=0;
-        writeLine("#define TYPE_SIG_EMPTY      0x"+Integer.toHexString(count++));//addLater compress with function
+        writeLine("#define TYPE_SIG_EMPTY      0x"+Integer.toHexString(count++));
         writeLine("#define TYPE_SIG_BOOL       0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_I8         0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_U8         0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_I16        0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_U16        0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_I32        0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_U32        0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_I64        0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_U64        0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_F32        0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_F64        0x"+Integer.toHexString(count++));
+        for(Type.Numeric t: Type.Numeric.types()){
+            StringBuilder tmp=new StringBuilder(typeSignature(t));
+            while(tmp.length()<19){tmp.append(' ');}
+            writeLine("#define "+tmp+" 0x"+Integer.toHexString(count++));
+        }
         writeLine("#define TYPE_SIG_STRING8    0x"+Integer.toHexString(count++));
         writeLine("#define TYPE_SIG_STRING16   0x"+Integer.toHexString(count++));
         writeLine("#define TYPE_SIG_STRING32   0x"+Integer.toHexString(count++));
@@ -351,8 +354,8 @@ public class CompileToC {
             writeLine("  log_"+t+" = "+(t== LogType.Type.ERR?"stderr":"stdout")+";");
         }
         writeLine("}");
-        comment("recursive printing of types");//addLater surround composite-types with brackets when printing
-        writeLine("void printType(const Type type,FILE* log){");
+        comment("recursive printing of types");
+        writeLine("void " + PRINT_TYPE_NAME + "(const Type type,FILE* log,bool recursive){");
         writeLine("  switch(type&TYPE_SIG_MASK){");
         writeLine("    case TYPE_SIG_EMPTY:");
         writeLine("      fputs(\""+escapeStr(Type.EMPTY_TYPE)+"\",log);");
@@ -360,36 +363,11 @@ public class CompileToC {
         writeLine("    case TYPE_SIG_BOOL:");
         writeLine("      fputs(\""+escapeStr(Type.Primitive.BOOL)+"\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_I8:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.INT8)+"\",log);");
-        writeLine("      break;");
-        writeLine("    case TYPE_SIG_U8:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.UINT8)+"\",log);");
-        writeLine("      break;");
-        writeLine("    case TYPE_SIG_I16:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.INT16)+"\",log);");
-        writeLine("      break;");
-        writeLine("    case TYPE_SIG_U16:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.UINT16)+"\",log);");
-        writeLine("      break;");
-        writeLine("    case TYPE_SIG_I32:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.INT32)+"\",log);");
-        writeLine("      break;");
-        writeLine("    case TYPE_SIG_U32:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.UINT32)+"\",log);");
-        writeLine("      break;");
-        writeLine("    case TYPE_SIG_I64:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.INT64)+"\",log);");
-        writeLine("      break;");
-        writeLine("    case TYPE_SIG_U64:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.UINT64)+"\",log);");
-        writeLine("      break;");
-        writeLine("    case TYPE_SIG_F32:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.FLOAT32)+"\",log);");
-        writeLine("      break;");
-        writeLine("    case TYPE_SIG_F64:");
-        writeLine("      fputs(\""+escapeStr(Type.Numeric.FLOAT64)+"\",log);");
-        writeLine("      break;");
+        for(Type.Numeric t:Type.Numeric.types()){
+            writeLine("    case "+typeSignature(t)+":");
+            writeLine("      fputs(\""+escapeStr(t)+"\",log);");
+            writeLine("      break;");
+        }
         writeLine("    case TYPE_SIG_STRING8:");
         writeLine("      fputs(\""+escapeStr(Type.NoRetString.STRING8)+"\",log);");
         writeLine("      break;");
@@ -409,19 +387,24 @@ public class CompileToC {
         writeLine("      fputs(\""+escapeStr(Type.ANY)+"\",log);");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_OPTIONAL:");
-        writeLine("      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);");
-        writeLine("      fputs(\"?\",log);");
+        writeLine("      if(recursive){fputs(\"(\",log);}");
+        writeLine("      " + PRINT_TYPE_NAME + "(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log,true);");
+        writeLine("      fputs(recursive?\"?)\":\"?\",log);");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_REFERENCE:");
-        writeLine("      fputs(\"@\",log);");
-        writeLine("      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);");
+        writeLine("      fputs(recursive?\"(@\":\"@\",log);");
+        writeLine("      " + PRINT_TYPE_NAME + "(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log,true);");
+        writeLine("      if(recursive){fputs(\")\",log);}");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_ARRAY:");
-        writeLine("      printType(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log);");
-        writeLine("      fputs(\"[]\",log);");
+        writeLine("      if(recursive){fputs(\"(\",log);}");
+        writeLine("      " + PRINT_TYPE_NAME + "(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log,true);");
+        writeLine("      fputs(recursive?\"[])\":\"[]\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_PROC:");
+        writeLine("    case TYPE_SIG_TUPLE:");
         writeLine("    case TYPE_SIG_STRUCT:");
+        writeLine("    case TYPE_SIG_UNION:");
+        writeLine("    case TYPE_SIG_PROC:");
         writeLine("      assert(false && \" unreachable \");");
         writeLine("      break;");
         writeLine("  }");
@@ -476,17 +459,22 @@ public class CompileToC {
         writeLine("    case TYPE_SIG_NONE:");
         writeLine("      fputs(\"\\\"none\\\"\",log);");
         writeLine("      break;");
+        writeLine("    case TYPE_SIG_C8:");
+        writeLine("      fprintf(log,\"'%c'\",value->asC8);");
+        writeLine("      break;");
         writeLine("    case TYPE_SIG_STRING8:");//!!! this implementation assumes that the system encoding is UTF8
         writeLine("      fprintf(log,\"%.*s\",(int)(value->asPtr["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+")"+
                 ",(char*)(value->asPtr+"+ARRAY_HEADER+"/*header*/+value->asPtr[0].asU64/*off*/));");
         writeLine("      break;");
+        writeLine("    case TYPE_SIG_C16:");
         writeLine("    case TYPE_SIG_STRING16:");
+        writeLine("    case TYPE_SIG_C32:");
         writeLine("    case TYPE_SIG_STRING32:");
-        //TODO print strings
+        //TODO print wide strings/chars
         writeLine("      assert(false && \"unimplemented\");");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_TYPE:");
-        writeLine("      printType(value->asType,log);");
+        writeLine("      " + PRINT_TYPE_NAME + "(value->asType,log,false);");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_ANY:");
         writeLine("       prevType=logType;");
@@ -1336,20 +1324,7 @@ public class CompileToC {
                 }
                 return tmpCount;
             }else if(((GetIndex)expr).value.expectedType() instanceof Type.NoRetString){
-                Type.Numeric charType;//addLater? make charType a field of string
-                switch (((Type.NoRetString) ((GetIndex)expr).value.expectedType()).charSize){
-                    case 8:
-                        charType= Type.Numeric.UINT8;
-                        break;
-                    case 16:
-                        charType= Type.Numeric.UINT16;
-                        break;
-                    case 32:
-                        charType= Type.Numeric.UINT32;
-                        break;
-                    default:
-                        throw new UnsupportedOperationException("no char-type for "+((GetIndex)expr).value.expectedType());
-                }
+                Type.Numeric charType=((Type.NoRetString) ((GetIndex)expr).value.expectedType()).charType;
                 if(!unwrap){
                     line.append("((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{.").append(typeFieldName(charType))
                             .append("=");
