@@ -15,6 +15,7 @@ start(string8[]):(args)=>{
     string16:utf16=u16"UTF16-String";
     string32:utf32=u32"UTF32-String";
     log utf8;
+    log utf8[3];
     log utf8.length;
     ## log utf16;
     ## log utf32;

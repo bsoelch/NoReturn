@@ -519,23 +519,21 @@ public class CompileToC {
         comment("read an element from an Array");
         writeLine(VALUE_BLOCK_NAME+"* getElement("+VALUE_BLOCK_NAME+"* array,uint64_t index,uint64_t width){");
         writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"].asU64){");
-        writeLine("    return (array+array[0].asU64+"+ARRAY_HEADER+")+index*width;");
+        writeLine("    return (array+"+ARRAY_HEADER+")+(array[0].asU64+index)*width;");
         writeLine("  }else{");
         writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index,array["+ARRAY_LEN_OFFSET+"].asU64);");
         writeLine("    exit(1);");
         writeLine("  }");
         writeLine("}");
-        for(int i=8;i<64;i*=2){
-            comment("read a raw-element of with "+i+" from an Array");
-            writeLine("uint"+i+"_t* getRawElement"+i+"("+VALUE_BLOCK_NAME+"* array,uint64_t index){");
-            writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"].asU64){");
-            writeLine("    return ((uint"+i+"_t*)(array+"+ARRAY_HEADER+"))+array[0].asU64+index;");
-            writeLine("  }else{");
-            writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index,array["+ARRAY_LEN_OFFSET+"].asU64);");
-            writeLine("    exit(1);");
-            writeLine("  }");
-            writeLine("}");
-        }
+        comment("read a raw-element with width byteWidth from an Array");
+        writeLine("void* getRawElement("+VALUE_BLOCK_NAME+"* array,uint64_t index,int byteWidth){");
+        writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"].asU64){");
+        writeLine("    return ((void*)(array+"+ARRAY_HEADER+"))+(array[0].asU64+index)*byteWidth;");
+        writeLine("  }else{");
+        writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index,array["+ARRAY_LEN_OFFSET+"].asU64);");
+        writeLine("    exit(1);");
+        writeLine("  }");
+        writeLine("}");
         out.newLine();
     }
 
@@ -766,14 +764,21 @@ public class CompileToC {
                 }else if(a instanceof Assignment){
                     comment("  {","Assign: "+a);
                     line.setLength(0);
-                    line.append("    memcpy(");
-                    //addLater raw assignment of primitive
-                    //prepare target
-                    writeExpression("    ",initLines,line,((Assignment) a).target,false,0, name, argNames);
-                    line.append(", ");
-                    //preform assignment
-                    writeExpression("    ",initLines,line,((Assignment) a).expr,false,0, name, argNames);
-                    line.append(", ").append(((Assignment) a).expr.expectedType().blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"))");
+                    if(((Assignment) a).target.expectedType() instanceof Type.Primitive){
+                        line.append("    ");
+                        writeExpression("    ", initLines, line, ((Assignment) a).target, true, 0, name, argNames);
+                        line.append("=");
+                        writeExpression("    ", initLines, line, ((Assignment) a).expr, true, 0, name, argNames);
+                    }else {
+                        line.append("    memcpy(");
+                        //addLater raw assignment of primitive
+                        //prepare target
+                        writeExpression("    ", initLines, line, ((Assignment) a).target, false, 0, name, argNames);
+                        line.append(", ");
+                        //preform assignment
+                        writeExpression("    ", initLines, line, ((Assignment) a).expr, false, 0, name, argNames);
+                        line.append(", ").append(((Assignment) a).expr.expectedType().blockCount).append("*sizeof(" + VALUE_BLOCK_NAME + "))");
+                    }
                     for(String l:initLines){
                         writeLine(l);
                     }
@@ -1325,6 +1330,37 @@ public class CompileToC {
                 line.append("->asPtr,");
                 tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).index,true, tmpCount,procName,varNames);
                 line.append(",").append(((GetIndex) expr).value.expectedType().blockCount).append(")");
+                if(unwrap){
+                    line.append(unwrapSuffix(expr.expectedType()));
+                }
+                return tmpCount;
+            }else if(((GetIndex)expr).value.expectedType() instanceof Type.NoRetString){
+                Type.Numeric charType;//addLater? make charType a field of string
+                switch (((Type.NoRetString) ((GetIndex)expr).value.expectedType()).charSize){
+                    case 8:
+                        charType= Type.Numeric.UINT8;
+                        break;
+                    case 16:
+                        charType= Type.Numeric.UINT16;
+                        break;
+                    case 32:
+                        charType= Type.Numeric.UINT32;
+                        break;
+                    default:
+                        throw new UnsupportedOperationException("no char-type for "+((GetIndex)expr).value.expectedType());
+                }
+                if(!unwrap){
+                    line.append("((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{.").append(typeFieldName(charType))
+                            .append("=");
+                }
+                line.append("*((").append(cTypeName(charType)).append("*)getRawElement(");
+                tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).value,false,tmpCount,procName,varNames);
+                line.append("->asPtr,");
+                tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).index,true, tmpCount,procName,varNames);
+                line.append(",").append((((Type.NoRetString) ((GetIndex)expr).value.expectedType()).charSize+7)/8).append("))");
+                if(!unwrap){
+                    line.append("}})");
+                }
                 return tmpCount;
             }
             throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");

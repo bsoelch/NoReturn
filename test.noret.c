@@ -290,34 +290,16 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
 // read an element from an Array
 Value* getElement(Value* array,uint64_t index,uint64_t width){
   if(index<array[2].asU64){
-    return (array+array[0].asU64+3)+index*width;
+    return (array+3)+(array[0].asU64+index)*width;
   }else{
     fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
     exit(1);
   }
 }
-// read a raw-element of with 8 from an Array
-uint8_t* getRawElement8(Value* array,uint64_t index){
+// read a raw-element with width byteWidth from an Array
+void* getRawElement(Value* array,uint64_t index,int byteWidth){
   if(index<array[2].asU64){
-    return ((uint8_t*)(array+3))+array[0].asU64+index;
-  }else{
-    fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
-    exit(1);
-  }
-}
-// read a raw-element of with 16 from an Array
-uint16_t* getRawElement16(Value* array,uint64_t index){
-  if(index<array[2].asU64){
-    return ((uint16_t*)(array+3))+array[0].asU64+index;
-  }else{
-    fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
-    exit(1);
-  }
-}
-// read a raw-element of with 32 from an Array
-uint32_t* getRawElement32(Value* array,uint64_t index){
-  if(index<array[2].asU64){
-    return ((uint32_t*)(array+3))+array[0].asU64+index;
+    return ((void*)(array+3))+(array[0].asU64+index)*byteWidth;
   }else{
     fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
     exit(1);
@@ -416,6 +398,9 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{VarExpression{1}}
     logValue(DEFAULT,false,TYPE_SIG_STRING8,var1);
   }
+  {// Log: Log[DEFAULT]{GetIndex{VarExpression{1}[ValueExpression{3}]}}
+    logValue(DEFAULT,false,TYPE_SIG_U8,((Value[]){(Value){.asU8=*((uint8_t*)getRawElement(var1->asPtr,((int32_t)(3)),1))}}));
+  }
   {// Log: Log[DEFAULT]{GetField{VarExpression{1}.length}}
     logValue(DEFAULT,false,TYPE_SIG_U64,(var1[0].asPtr+2));
   }
@@ -460,7 +445,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
     memcpy(var7,tmp0,1*sizeof(Value));
   }
   {// Assign: Assignment:{GetIndex{VarExpression{7}[ValueExpression{0}]}=ValueExpression{123456789}}
-    memcpy(getElement(var7->asPtr,((int32_t)(0)),1), ((Value[]){(Value){.asI32=123456789}}), 1*sizeof(Value));
+    getElement(var7->asPtr,((int32_t)(0)),1)[0].asI32=((int32_t)(123456789));
   }
   {// Log: Log[DEFAULT]{GetIndex{VarExpression{7}[ValueExpression{0}]}}
     logValue(DEFAULT,false,TYPE_SIG_I32,getElement(var7->asPtr,((int32_t)(0)),1));
