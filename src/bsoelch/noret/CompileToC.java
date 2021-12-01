@@ -253,6 +253,8 @@ public class CompileToC {
         }
     }
 
+    //addLater use signatures that are less likely to collide with other functions
+
     private void writeFileHeader(long maxArgSize) throws IOException {
         comment("Auto generated code from NoRet compiler");
         //addLater print information about compiled code
@@ -906,6 +908,13 @@ public class CompileToC {
         }else {
             comment("  ", "Native");
             //TODO implementations of native procedures
+            //? own syntax for native procedures:
+            //native out name(in1,in2,in3);
+            //natives act like procedures with the signature (in1,in2,in3,$a,(out,$a)=>?)
+            //code implementation: unwrap ins => call native function => wrap out => call child function
+            // code signatures:
+            // - native_proc_[name] wrapping and unwrapping of values
+            // - [name] native procedure code
             writeLine("  return NULL;");
         }
         writeLine("}");
@@ -1403,7 +1412,7 @@ public class CompileToC {
 
     private void writeRunSignature() throws IOException {
         comment(" main procedure handling function (written in a way that allows easy usage in pthreads)");
-        out.write("void* run(void* initState)");
+        out.write("void* noRet_run(void* initState)");
     }
     private void declareRun() throws IOException {
         writeRunSignature();
@@ -1434,7 +1443,7 @@ public class CompileToC {
         writeLine("}");
         out.newLine();
         comment("main method of the C representation: ");
-        comment("  transforms the input arguments and starts the run function on this thread");
+        comment("  transforms the input arguments and starts the noRet_run function on this thread");
         if(hasArgs){
             writeLine("int main(int argc,char** argv){");
             //ignore first argument for consistency with interpreter
@@ -1494,7 +1503,7 @@ public class CompileToC {
             writeLine("  }");
         }
         writeLine("  initLogStreams();");
-        writeLine("  run(init);");
+        writeLine("  noRet_run(init);");
         comment("  puts(\"\");","finish last line in stdout");
         writeLine("  return "+ERR_NONE+";");
         writeLine("}");
