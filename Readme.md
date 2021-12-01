@@ -66,23 +66,45 @@ There are 14 atomic types:
 - arrays: (syntax: `<Type>'[]'`) contain a sequence of values of
   Type < Type > indexed with an uint64
   elements of an array are accessible though the [] operator
+- Tuple: (syntax: `'tuple{'<Type>(,<Type>)*'}'` 
+  a sequence of typed values. 
+  The elements a tuple are accessible though the [] operator
 - optionals: (syntax: `<Type>'?'`) contains a value of Type < Type >
   or none
 - reference: (syntax `'@'<Type>`) contains a reference to a value
   of Type < Type >, can be used to share values
   between different procedures
-- Struct: (syntax: `'{'<Type>':'<Name>
+- Struct: (syntax: `'struct {'<Type>':'<Name>
   (','<Type>':'<Name )*'}'`) can be used to group
-  data, fields of a Struct can be accessed with .
+  data, fields of a Struct can be accessed with `.`
+- Union: (syntax: `'union {'<Type>':'<Name>
+  (','<Type>':'<Name )*'}'`) can be used to group
+  data, fields of a Union can be accessed with `.`
+  Like in C all fields of a union are stored in the same location
 
 Examples:
 ```
 uint64[]
 int32?
 @float64
-{int64:numerator,uint64:denominator}
+struct {int64:numerator,uint64:denominator}
+(union {int32:asInt,float32:asFloat})[][]
+```
 
-{int32:arg1,@(int32?):arg2}[][]
+Named Tuples,Structs and Unions can be declared at top level
+by inserting a typename between the type-name and the `{`
+
+Examples:
+```
+struct fraction{int64:num,uint64:den};
+union intOrFloat{int64:asInt,float64:asFloat};
+tuple v2D{float64,float64};
+
+proc():()=>{
+  fraction f={.num=3,.den=4};
+  intOrFloat iof=2.0;
+  v2D v={3,4};
+}=>[]
 ```
 
 !!! the handling of values in container types
@@ -140,15 +162,15 @@ any : value = {1,2,3,{4,5,6}};
 Assigns a new value to (a field/element of) a variable.
 syntax: `<Expr>'='<Expr>';'`
 The left-hand side supports local variables,
-array-access, field access and typecasts, changes to value 
-in one variable do not have effect on other variables
+array-access and field access, changes to value 
+in one variable do not have an effect on other variables
 (!!! the current version has not yet implemented that behaviour!!!)
 
 Examples:
 ```
 x=3;
 array[0]={1,2,3};
-(({int32:val}[]:)y)[0].val=17;
+y[0].val=17;
 ```
 #### Printing
 Lines starting with `log` are printed to standard-out,
@@ -250,9 +272,10 @@ The following Names are reserved for native constants:
 - true: true boolean
 - false: false boolean
 - none: empty optional (can be cast to any optional type)
-##### Arrays
+##### Arrays and Tuples
 Arrays are declared as a list of elements surround by
-{}
+{}, these lists are initially interpreted as tuples 
+but can be implicitly cast to arrays
 
 Example:
 ```
@@ -261,9 +284,18 @@ float64[]:array={1.0,0x3.4P1a,0b11.01E-11};
 ##### Structs
 The struct declaration syntax is like in C a list
 of statements of the form `'.'<field>'='<Value>`
+
 Example:
 ```
-{int64:num,uint64:den}:frac={.num=2,.den=3u};
+struct {int64:num,uint64:den}:frac={.num=2,.den=3u};
+```
+#### Unions
+The values of unions are set through implicitly casting an element 
+of the union to the union type
+
+Example:
+```
+union {int32:asInt,float32:asFloat}:union=3;
 ```
 
 #### Variables

@@ -466,7 +466,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
       if(((var8)[0].asBool)){
         memcpy(tmp0,((Value[]){(Value){.asBool=true},(Value){.asI32=((var8)+1)[0].asI32}}),2*sizeof(Value));
       }else{
-        memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asU64=0/*none*/}}))[0]}),2*sizeof(Value));
+        memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asPtr=NULL/*none*/}}))[0]}),2*sizeof(Value));
       }
     }
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),tmp0);
@@ -494,7 +494,8 @@ void* run(void* initState){
     Value* argsO=malloc(MAX_ARG_SIZE*sizeof(Value));
     Value* argsTmp;
     if(argsO==NULL){
-        return (void*)-1;
+      fputs("out of memory\n",stderr);
+      exit(1);
     }
     do{
         f=(Procedure)f(argsI,argsO);
@@ -509,6 +510,10 @@ void* run(void* initState){
 // main method of the C representation: 
 //   transforms the input arguments and starts the run function on this thread
 int main(int argc,char** argv){
+  // check type assumptions
+  assert(sizeof(Value)==8);
+  assert(sizeof(float32_t)==4);
+  assert(sizeof(float64_t)==8);
   // [proc_ptr,args_ptr,arg_data]
   char init[sizeof(Procedure)+2*sizeof(Value*)];
   size_t off=0;

@@ -670,7 +670,7 @@ public class CompileToC {
             //write fields preceded with types if in any
         }else if(v == Value.NONE){
             if(prefix){out.append(CAST_BLOCK); }
-            out.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=0/*none*/}");
+            out.append("{.asPtr=NULL/*none*/}");
         }else{
             throw new UnsupportedOperationException(v.getType()+" is currently not supported in the compiler");
         }
@@ -766,16 +766,17 @@ public class CompileToC {
                     line.setLength(0);
                     if(((Assignment) a).target.expectedType() instanceof Type.Primitive){
                         line.append("    ");
+                        //target expression
                         writeExpression("    ", initLines, line, ((Assignment) a).target, true, 0, name, argNames);
                         line.append("=");
+                        //source expression
                         writeExpression("    ", initLines, line, ((Assignment) a).expr, true, 0, name, argNames);
                     }else {
                         line.append("    memcpy(");
-                        //addLater raw assignment of primitive
-                        //prepare target
+                        //target-ptr
                         writeExpression("    ", initLines, line, ((Assignment) a).target, false, 0, name, argNames);
                         line.append(", ");
-                        //preform assignment
+                        //source-ptr
                         writeExpression("    ", initLines, line, ((Assignment) a).expr, false, 0, name, argNames);
                         line.append(", ").append(((Assignment) a).expr.expectedType().blockCount).append("*sizeof(" + VALUE_BLOCK_NAME + "))");
                     }
@@ -1381,6 +1382,7 @@ public class CompileToC {
         writeRunSignature();
         writeLine(";");
     }
+    //addLater exit with error specific value
     /**writes an integrated interpreted that runs the NoRet C-Representation as a C-Program*/
     private void writeMain(boolean hasArgs) throws IOException {
         writeRunSignature();writeLine("{");
@@ -1391,7 +1393,8 @@ public class CompileToC {
         writeLine("    " + VALUE_BLOCK_NAME + "* argsO=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
         writeLine("    " + VALUE_BLOCK_NAME + "* argsTmp;");
         writeLine("    if(argsO==NULL){");
-        writeLine("        return (void*)-1;");//addLater useful handling of return codes
+        writeLine("      fputs(\"out of memory\\n\",stderr);");
+        writeLine("      exit(1);");
         writeLine("    }");
         writeLine("    do{");
         writeLine("        f=(" + PROCEDURE_TYPE + ")f(argsI,argsO);");
@@ -1411,6 +1414,10 @@ public class CompileToC {
         }else{
             writeLine("int main(){");
         }
+        comment("  ","check type assumptions");
+        writeLine("  assert(sizeof(Value)==8);");
+        writeLine("  assert(sizeof(float32_t)==4);");
+        writeLine("  assert(sizeof(float64_t)==8);");
         comment("  ","[proc_ptr,args_ptr,arg_data]");
         writeLine("  char init[sizeof(" + PROCEDURE_TYPE + ")+2*sizeof("+VALUE_BLOCK_NAME+"*)];");
         writeLine("  size_t off=0;");
