@@ -357,7 +357,7 @@ void* proc_start(Value* argsIn,Value* argsOut);
 // readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
 void* proc_readLine(Value* argsIn,Value* argsOut);
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
-void* run(void* initState);
+void* noRet_run(void* initState);
 
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut){
@@ -519,7 +519,7 @@ void* proc_readLine(Value* argsIn,Value* argsOut){
 // declarations of all used type Signatures
 Type typeData []={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(2<<TYPE_CONTENT_SHIFT)};
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
-void* run(void* initState){
+void* noRet_run(void* initState){
     Procedure f=*((Procedure*)initState);
     initState+=sizeof(Procedure);
     Value* argsI=*((Value**)initState);
@@ -541,7 +541,7 @@ void* run(void* initState){
 }
 
 // main method of the C representation: 
-//   transforms the input arguments and starts the run function on this thread
+//   transforms the input arguments and starts the noRet_run function on this thread
 int main(int argc,char** argv){
   // check type assumptions
   assert(sizeof(Value)==8);
@@ -593,7 +593,7 @@ int main(int argc,char** argv){
     off++;
   }
   initLogStreams();
-  run(init);
+  noRet_run(init);
   puts("");// finish last line in stdout
   return 0;
 }
