@@ -14,34 +14,17 @@ public class GetIndex implements Expression{
         Type valType = value.expectedType();
         Type indType = index.expectedType();
         Type type;
-        if(valType == Type.NoRetString.STRING8){
+        if(valType instanceof Type.NoRetString){
             if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                type = Type.Numeric.CHAR8;//utf8-byte
-            }else if(Type.canAssign(Type.NoRetString.STRING8, indType,null)){
+                type = ((Type.NoRetString) valType).charType;
+            }else if(Type.canAssign(valType, indType,null)){
                 type = Type.Numeric.UINT64;//index of substring
             }else{
                 throw new TypeError("Invalid type for string index:"+
-                        indType+ " string indices have to be unsigned integers or strings");
-            }
-        }else if(valType == Type.NoRetString.STRING16){
-            if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                type = Type.Numeric.CHAR16;//utf16-char
-            }else if(Type.canAssign(Type.NoRetString.STRING16, indType,null)){
-                type = Type.Numeric.UINT64;//index of substring
-            }else{
-                throw new TypeError("Invalid type for string index:"+
-                        indType+ " string indices have to be unsigned integers or strings");
-            }
-        }else if(valType == Type.NoRetString.STRING32){
-            if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
-                type = Type.Numeric.CHAR32;//utf32-codepoint
-            }else if(Type.canAssign(Type.NoRetString.STRING32, indType,null)){
-                type = Type.Numeric.UINT64;//index of substring
-            }else{
-                throw new TypeError("Invalid type for string index:"+
-                        indType+ " string indices have to be unsigned integers or strings");
+                        indType+ " string indices have to be unsigned integers or strings of the same type");
             }
         }else {
+            //TODO addArray-access for tuples
             if(valType instanceof Type.Array){
                 if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
                     type =((Type.Array) valType).content;
@@ -50,8 +33,8 @@ public class GetIndex implements Expression{
                             indType+ " Array indices have to be unsigned integers");
                 }
             }else{
-                throw new TypeError("Invalid type for array/dictionary access: \"" +
-                        valType +"\" only dictionary, arrays and string support dict-access");
+                throw new TypeError("Invalid type for array access: \"" +
+                        valType +"\" only arrays,tuples and string support array-access");
             }
         }
         if(value instanceof ValueExpression&&index instanceof ValueExpression){//constant folding
