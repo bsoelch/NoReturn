@@ -45,10 +45,13 @@ public class Type {
     public static class Primitive extends Type{
         private static final HashMap<String,Type> primitives=new HashMap<>();
 
-        public static final Primitive BOOL      = new Primitive("bool",false);
+        public final int byteCount;
 
-        private Primitive(String name,boolean varSize){
+        public static final Primitive BOOL      = new Primitive("bool",false, 1);
+
+        private Primitive(String name, boolean varSize, int byteCount){
             super(name, 1, varSize);
+            this.byteCount = byteCount;
             if(primitives.put(name,this)!=null){
                 throw new RuntimeException("The primitive \""+name+"\" already exists");
             }
@@ -82,7 +85,7 @@ public class Type {
         static void ensureInitialized(){}
 
         private Numeric(String name,int level,boolean signed,boolean isFloat,boolean isChar) {
-            super(name,false);
+            super(name,false, 1<<level);
             this.level=level;
             this.signed=signed;
             this.isFloat=isFloat;
@@ -91,7 +94,7 @@ public class Type {
         }
 
         public int bitSize(){
-            return 8*(1<<level);
+            return 8*byteCount;
         }
 
         public static Iterable<Numeric> types(){
@@ -108,19 +111,19 @@ public class Type {
         /**UTF-32 string*/
         public static final NoRetString STRING32=new NoRetString(32,Numeric.CHAR32);
 
-        public final int charSize;
+        public final int charBits;
         public final Type.Numeric charType;
 
-        private NoRetString(int charSize,Type.Numeric charType) {
-            super("string"+charSize,1,true);
-            this.charSize=charSize;
+        private NoRetString(int charBits, Type.Numeric charType) {
+            super("string"+ charBits,1,true);
+            this.charBits = charBits;
             this.charType=charType;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
             stringTypes.put(name,this);
         }
 
         public static NoRetString sumType(NoRetString lType, NoRetString rType) {
-            return lType.charSize>=rType.charSize?lType:rType;
+            return lType.charBits >=rType.charBits ?lType:rType;
         }
     }
     public static void addAtomics(Map<String,Type> typeNames) {

@@ -7,7 +7,7 @@ import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.*;
 
-
+//TODO don't include code for unused types
 public class CompileToC {
     public static final String VALUE_BLOCK_NAME = "Value";
     public static final String CAST_BLOCK = "("+VALUE_BLOCK_NAME+")";
@@ -50,14 +50,17 @@ public class CompileToC {
             return prefix+(tmpCount++);
         }
 
-        //addLater compressed storage of primitive arrays
         private int getMinCap(Type type,int elementCount){
             if(type instanceof Type.Array){//Array
-                return elementCount*((Type.Array) type).content.blockCount;
+                if(((Type.Array) type).content instanceof Type.Primitive){
+                    return (((Type.Primitive)((Type.Array) type).content).byteCount*elementCount+7)/8;
+                }else{
+                    return elementCount*((Type.Array) type).content.blockCount;
+                }
             }else if(type instanceof Type.Tuple){//Tuple
                 return type.blockCount;
             }else {//String
-                return (((((Type.NoRetString)type).charSize+7)/8)*elementCount+7)/8;
+                return (((((Type.NoRetString)type).charBits +7)/8)*elementCount+7)/8;
             }
         }
         public StringBuilder newValueBuilder(String name, Type type,int elementCount,boolean prefix) {
@@ -326,6 +329,7 @@ public class CompileToC {
         writeLine("  uint8_t    raw8[8];");
         writeLine("  uint16_t   raw16[4];");
         writeLine("  uint32_t   raw32[2];");
+        writeLine("  uint64_t   raw64[1];");
         writeLine("};");
         //multi-value types:
         //  string  ->  len,        val_ptr/raw_data
@@ -578,70 +582,92 @@ public class CompileToC {
             out.append("{.asType=").append(typeSignature(((Value.TypeValue)v).value)).append("}");
         }else if(v.getType() instanceof Type.Numeric){
             writeNumber(out, v,  prefix);
-        }else if(v.getType()== Type.NoRetString.STRING8){
-            byte[] bytes=((Value.StringValue) v).utf8Bytes();
+        }else if(v.getType() instanceof Type.NoRetString){
             if(prefix){out.append(CAST_BLOCK); }
             String loc=dataOut.nextName();
             out.append("{.asPtr=(").append(loc).append(")}");
-            StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING8,bytes.length,prefix);
-            for(int i=0;i< bytes.length;i+=8){
-                if(i>0|| dataOut.constant) {
+            int length = ((Value.StringValue) v).length();
+            StringBuilder content=dataOut.newValueBuilder(loc,v.getType(), length,prefix);
+            int bitCount=((Type.NoRetString) v.getType()).charBits;
+            for(int c=8;c<65;c*=2){//round to next multiple of 2
+                if(bitCount<=c){
+                    bitCount=c;
+                    break;
+                }
+            }
+            int j=0,c=64/bitCount;
+            if(dataOut.constant){
+                content.append(',');
+            }
+            if(prefix){content.append(CAST_BLOCK); }
+            content.append("{.raw").append(bitCount).append("={");
+            for (Value elt : ((Value.StringValue) v)) {
+                if(j==c){
+                    j=0;
+                    content.append("}}");
+                    content.append(',');
+                    if(prefix){content.append(CAST_BLOCK); }
+                    content.append("{.raw").append(bitCount).append("={");
+                }
+                if(j>0){
                     content.append(',');
                 }
-                if(prefix){content.append(CAST_BLOCK); }
-                content.append("{.raw8={");
-                for(int j=0;j<8;j++){
-                    if(j>0){
-                        content.append(',');
-                    }
-                    content.append("0x").append((i + j < bytes.length) ? Integer.toHexString(bytes[i + j] & 0xff) : "0");
-                }
-                content.append("}}");
+                content.append("0x").append(Integer.toHexString(((Number)((Value.Primitive)elt).getValue()).intValue()));
+                j++;
             }
-            dataOut.addValueBuilder(loc,content,Type.NoRetString.STRING8,bytes.length);
-        }else if(v.getType()== Type.NoRetString.STRING16){
-            char[] chars=((Value.StringValue) v).chars();
+            while(j<c){
+                content.append(",0x0");
+                j++;
+            }
+            content.append("}}");
+            dataOut.addValueBuilder(loc,content,v.getType(),length);
+        }else if(v.getType() instanceof Type.Array){
             if(prefix){out.append(CAST_BLOCK); }
             String loc=dataOut.nextName();
             out.append("{.asPtr=(").append(loc).append(")}");
-            StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING16,chars.length,prefix);
-            for(int i=0;i< chars.length;i+=4){
-                if(i>0|| dataOut.constant) {
+            StringBuilder content=dataOut.newValueBuilder(loc,v.getType(),((Value.ArrayOrTuple) v).elements().length,prefix);
+            isFirst=!dataOut.constant;
+            if(((Type.Array) v.getType()).content instanceof Type.Primitive){
+                int bitCount=8*((Type.Primitive) ((Type.Array) v.getType()).content).byteCount;
+                for(int c=8;c<65;c*=2){//round to next multiple of 2
+                    if(bitCount<=c){
+                        bitCount=c;
+                        break;
+                    }
+                }
+                int j=0,c=64/bitCount;
+                if(dataOut.constant){
                     content.append(',');
                 }
                 if(prefix){content.append(CAST_BLOCK); }
-                content.append("{.raw16={");
-                for(int j=0;j<4;j++){
+                content.append("{.raw").append(bitCount).append("={");
+                for (Value elt : (Value.ArrayOrTuple) v) {
+                    if(j==c){
+                        j=0;
+                        content.append("}}");
+                        content.append(',');
+                        if(prefix){content.append(CAST_BLOCK); }
+                        content.append("{.raw").append(bitCount).append("={");
+                    }
                     if(j>0){
                         content.append(',');
                     }
-                    content.append("0x").append((i + j < chars.length) ? Integer.toHexString(chars[i + j] & 0xffff) : "0");
+                    content.append(((Value.Primitive)elt).getValue());
+                    j++;
+                }
+                while(j<c){
+                    content.append(",0");
+                    j++;
                 }
                 content.append("}}");
-            }
-            dataOut.addValueBuilder(loc,content,Type.NoRetString.STRING16,chars.length);
-        }else if(v.getType()== Type.NoRetString.STRING32){
-            int[] codePoints=((Value.StringValue) v).codePoints();
-            if(prefix){out.append(CAST_BLOCK); }
-            String loc=dataOut.nextName();
-            out.append("{.asPtr=(").append(loc).append(")}");
-            StringBuilder content=dataOut.newValueBuilder(loc,Type.NoRetString.STRING32,codePoints.length,prefix);
-            for(int i=0;i< codePoints.length;i+=2){
-                if(i>0|| dataOut.constant) {
-                    content.append(',');
+            }else{
+                for (Value elt : (Value.ArrayOrTuple) v) {
+                    writeConstValueAsUnion(content,elt, dataOut, isFirst, prefix);
+                    isFirst=false;
                 }
-                if(prefix){content.append(CAST_BLOCK); }
-                content.append("{.raw32={");
-                for(int j=0;j<2;j++){
-                    if(j>0){
-                        content.append(',');
-                    }
-                    content.append("0x").append((i + j < codePoints.length) ? Integer.toHexString(codePoints[i + j]) : "0");
-                }
-                content.append("}}");
             }
-            dataOut.addValueBuilder(loc,content,Type.NoRetString.STRING32,codePoints.length);
-        }else if(v instanceof Value.ArrayOrTuple){
+            dataOut.addValueBuilder(loc,content,v.getType(),((Value.ArrayOrTuple) v).elements().length);
+        }else if(v.getType() instanceof Type.Tuple){
             if(prefix){out.append(CAST_BLOCK); }
             String loc=dataOut.nextName();
             out.append("{.asPtr=(").append(loc).append(")}");
@@ -1313,14 +1339,29 @@ public class CompileToC {
             }
         }else if(expr instanceof GetIndex){
             if(((GetIndex)expr).value.expectedType() instanceof Type.Array){
-                //addLater handle compressed primitive arrays
-                line.append("getElement(");
-                tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).value,false,tmpCount,procName,varNames);
-                line.append("->asPtr,");
-                tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).index,true, tmpCount,procName,varNames);
-                line.append(",").append(((GetIndex) expr).value.expectedType().blockCount).append(")");
-                if(unwrap){
-                    line.append(unwrapSuffix(expr.expectedType()));
+                if(((Type.Array) ((GetIndex)expr).value.expectedType()).content instanceof Type.Primitive){
+                    Type.Primitive content=(Type.Primitive)((Type.Array) ((GetIndex)expr).value.expectedType()).content;
+                    if(!unwrap){
+                        line.append("((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{.").append(typeFieldName(content))
+                                .append("=");
+                    }
+                    line.append("*((").append(cTypeName(content)).append("*)getRawElement(");
+                    tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).value,false,tmpCount,procName,varNames);
+                    line.append("->asPtr,");
+                    tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).index,true, tmpCount,procName,varNames);
+                    line.append(",").append(content.byteCount).append("))");
+                    if(!unwrap){
+                        line.append("}})");
+                    }
+                }else {
+                    line.append("getElement(");
+                    tmpCount = writeExpression(indent, initLines, line, ((GetIndex) expr).value, false, tmpCount, procName, varNames);
+                    line.append("->asPtr,");
+                    tmpCount = writeExpression(indent, initLines, line, ((GetIndex) expr).index, true, tmpCount, procName, varNames);
+                    line.append(",").append(((GetIndex) expr).value.expectedType().blockCount).append(")");
+                    if (unwrap) {
+                        line.append(unwrapSuffix(expr.expectedType()));
+                    }
                 }
                 return tmpCount;
             }else if(((GetIndex)expr).value.expectedType() instanceof Type.NoRetString){
@@ -1333,7 +1374,7 @@ public class CompileToC {
                 tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).value,false,tmpCount,procName,varNames);
                 line.append("->asPtr,");
                 tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).index,true, tmpCount,procName,varNames);
-                line.append(",").append((((Type.NoRetString) ((GetIndex)expr).value.expectedType()).charSize+7)/8).append("))");
+                line.append(",").append((((Type.NoRetString) ((GetIndex)expr).value.expectedType()).charBits +7)/8).append("))");
                 if(!unwrap){
                     line.append("}})");
                 }

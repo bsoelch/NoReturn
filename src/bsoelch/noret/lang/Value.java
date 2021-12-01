@@ -405,6 +405,19 @@ public abstract class Value{
         @Override
         public boolean isMutable() {return true;}
 
+        public int length() {
+            if(type== Type.NoRetString.STRING8){
+                return utf8Bytes.length;
+            }else if(type== Type.NoRetString.STRING16){
+                return utf16String.length();
+            }else if(type== Type.NoRetString.STRING32){
+                return utf32Codepoints.length;
+            }else{
+                assert false;//"Unreachable"
+                throw new RuntimeException("Unreachable");
+            }
+        }
+
         public byte[] utf8Bytes() {
             return Arrays.copyOf(utf8Bytes,utf8Bytes.length);
         }
@@ -420,7 +433,7 @@ public abstract class Value{
             if(type== Type.NoRetString.STRING8){
                 return IntStream.range(0, utf8Bytes.length).mapToObj(i->createPrimitive(Type.Numeric.CHAR8,utf8Bytes[i])).iterator();
             }else if(type== Type.NoRetString.STRING16){
-                return IntStream.range(0, utf16String.length()).mapToObj(i->createPrimitive(Type.Numeric.CHAR16,utf16String.charAt(i))).iterator();
+                return IntStream.range(0, utf16String.length()).mapToObj(i->createPrimitive(Type.Numeric.CHAR16,(short)utf16String.charAt(i))).iterator();
             }else if(type== Type.NoRetString.STRING32){
                 return Arrays.stream(utf32Codepoints).mapToObj(i->createPrimitive(Type.Numeric.CHAR32,i)).iterator();
             }else{

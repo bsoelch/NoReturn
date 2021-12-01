@@ -77,6 +77,7 @@ union ValueImpl{
   uint8_t    raw8[8];
   uint16_t   raw16[4];
   uint32_t   raw32[2];
+  uint64_t   raw64[1];
 };
 
 // definitions and functions for log
@@ -334,9 +335,9 @@ void* getRawElement(Value* array,uint64_t index,int byteWidth){
 // const Type:int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
 // const Type:any : array_test = {{1,2,3},{4,5},{6}}
-static Value tmp_const_array__test1[]={{.asU64=0/*off*/},{.asU64=3/*cap*/},{.asU64=3/*len*/},{.asI32=1},{.asI32=2},{.asI32=3}};
-static Value tmp_const_array__test2[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU64=2/*len*/},{.asI32=4},{.asI32=5}};
-static Value tmp_const_array__test3[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=1/*len*/},{.asI32=6}};
+static Value tmp_const_array__test1[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU64=3/*len*/},{.raw32={1,2}},{.raw32={3,0}}};
+static Value tmp_const_array__test2[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=2/*len*/},{.raw32={4,5}}};
+static Value tmp_const_array__test3[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=1/*len*/},{.raw32={6,0}}};
 static Value tmp_const_array__test0[]={{.asU64=0/*off*/},{.asU64=3/*cap*/},{.asU64=3/*len*/},{.asPtr=(tmp_const_array__test1)},{.asPtr=(tmp_const_array__test2)},{.asPtr=(tmp_const_array__test3)}};
 const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT)},{.asPtr=(tmp_const_array__test0)}};
 // const Type:string8[] : str_test = {"str1","str2"}
@@ -345,7 +346,7 @@ static Value tmp_const_str__test2[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64
 static Value tmp_const_str__test0[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU64=2/*len*/},{.asPtr=(tmp_const_str__test1)},{.asPtr=(tmp_const_str__test2)}};
 const Value const_str__test []={{.asPtr=(tmp_const_str__test0)}};
 // const Type:int32[] : y = {2112454933,2,3}
-static Value tmp_const_y0[]={{.asU64=0/*off*/},{.asU64=3/*cap*/},{.asU64=3/*len*/},{.asI32=2112454933},{.asI32=2},{.asI32=3}};
+static Value tmp_const_y0[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU64=3/*len*/},{.raw32={2112454933,2}},{.raw32={3,0}}};
 const Value const_y []={{.asPtr=(tmp_const_y0)}};
 // const Type:(((int32[])[])?)[] : type_sig_test = {}
 static Value tmp_const_type__sig__test0[]={{.asU64=0/*off*/},{.asU64=0/*cap*/},{.asU64=0/*len*/}};
@@ -460,20 +461,20 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Initialize: ValueExpression{{1,2,3,42}}
     Value tmp0 [1];
     {
-      Value* tmp1=malloc((7)*sizeof(Value));
+      Value* tmp1=malloc((5)*sizeof(Value));
       tmp1[0]=(Value){.asU64=0}; /*off*/
-      tmp1[1]=(Value){.asU64=4}; /*cap*/
+      tmp1[1]=(Value){.asU64=2}; /*cap*/
       tmp1[2]=(Value){.asU64=4}; /*len*/
-      memcpy(tmp1+3,(Value[]){(Value){.asI32=1},(Value){.asI32=2},(Value){.asI32=3},(Value){.asI32=42}},(4)*sizeof(Value));
+      memcpy(tmp1+3,(Value[]){(Value){.raw32={1,2}},(Value){.raw32={3,42}}},(2)*sizeof(Value));
       memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
     }
     memcpy(var7,tmp0,1*sizeof(Value));
   }
   {// Assign: Assignment:{GetIndex{VarExpression{7}[ValueExpression{0}]}=ValueExpression{123456789}}
-    getElement(var7->asPtr,((int32_t)(0)),1)[0].asI32=((int32_t)(123456789));
+    *((int32_t*)getRawElement(var7->asPtr,((int32_t)(0)),4))=((int32_t)(123456789));
   }
   {// Log: Log[DEFAULT]{GetIndex{VarExpression{7}[ValueExpression{0}]}}
-    logValue(DEFAULT,false,TYPE_SIG_I32,getElement(var7->asPtr,((int32_t)(0)),1));
+    logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=*((int32_t*)getRawElement(var7->asPtr,((int32_t)(0)),4))}}));
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_NONE}}));
