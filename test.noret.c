@@ -233,7 +233,7 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
   switch(type&TYPE_SIG_MASK){
     case TYPE_SIG_EMPTY:
       fputs("unexpected Value-Type in log: \"EMPTY\"",log_ERR);
-      exit(-1);
+      exit(3);
       break;
     case TYPE_SIG_BOOL:
       fputs(value->asBool?"true":"false",log);
@@ -319,7 +319,7 @@ Value* getElement(Value* array,uint64_t index,uint64_t width){
     return (array+3)+(array[0].asU64+index)*width;
   }else{
     fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
-    exit(1);
+    exit(2);
   }
 }
 // read a raw-element with width byteWidth from an Array
@@ -328,7 +328,7 @@ void* getRawElement(Value* array,uint64_t index,int byteWidth){
     return ((void*)(array+3))+(array[0].asU64+index)*byteWidth;
   }else{
     fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
-    exit(1);
+    exit(2);
   }
 }
 
