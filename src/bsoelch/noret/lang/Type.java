@@ -33,14 +33,27 @@ public class Type {
             }
         }
     }
+    /** Generics types in NoRet allow forcing the calle of a procedure to use the same type for two different arguments,
+     *      * they allow signatures like ($a,($a)=>?)=>? that make it easier to call a restricted function
+     * */
+    public static class AnyType extends Type{//TODO replace generics with any at compile time ? merge class with Type:any
+        /**default value of type any, for storing non-generic values*/
+        public static final AnyType ANY=new AnyType(null);
+
+        public final String genericName;
+        public AnyType(String name) {
+            super("any", 2, true);
+            genericName=name==null?null:"$"+name;
+        }
+        @Override
+        public String toString() {
+            return genericName!=null?("Generic: "+genericName):super.toString();
+        }
+    }
     /**Type of NONE Value, assignable to any reference*/
     public static final Type TYPE = new TypeType();
     /**Type of NONE Value, assignable to any reference*/
     public static final Type NONE_TYPE = new Type("\"none\"", 1, false);
-    /**Value type for empty Arrays, assignable to any other type*/
-    public static final Type EMPTY_TYPE  = new Type("\"empty\"", 1, false);
-    /**Value type that can hold values of any other type*/
-    public static final Type ANY  = new Type("any", 2, true);
 
     public static class Primitive extends Type{
         private static final HashMap<String,Type> primitives=new HashMap<>();
@@ -122,13 +135,14 @@ public class Type {
             stringTypes.put(name,this);
         }
 
+        /* addLater use in StringConcat to choose the correct type of string
         public static NoRetString sumType(NoRetString lType, NoRetString rType) {
             return lType.charBits >=rType.charBits ?lType:rType;
-        }
+        }*/
     }
     public static void addAtomics(Map<String,Type> typeNames) {
         Numeric.ensureInitialized();
-        typeNames.put(ANY.name,ANY);
+        typeNames.put(AnyType.ANY.name,AnyType.ANY);
         typeNames.putAll(Primitive.primitives);
         typeNames.putAll(NoRetString.stringTypes);
     }
@@ -159,6 +173,10 @@ public class Type {
         return fields.get(fieldName);
     }
 
+    public boolean isMutableFlied(String fieldName) {
+        return false;
+    }
+
     @Override
     public String toString() {
         return "Type:"+name;
@@ -183,17 +201,12 @@ public class Type {
             }
         }
         //addLater better calculation for common supertype ? use union
-        return ANY;
+        return AnyType.ANY;
     }
 
     private static boolean canAssign(Type to, Type from, boolean allowCast, HashMap<String, GenericBound> generics){
         if(to==from||to.equals(from))
             return true;
-        if(from==EMPTY_TYPE||to==ANY)
-            return true;
-        if(allowCast&&from==ANY){
-            return true;
-        }
         if(from instanceof Numeric&&to instanceof Numeric){
             return allowCast||(((Numeric) from).level<((Numeric) to).level||
                     (((Numeric) from).level==((Numeric) to).level&&
@@ -243,9 +256,9 @@ public class Type {
         //union{A,B,C}->D if A->D and B->D and C->D
         //A->union{B,C,D} if A->B or A->C or A->D
         if(to instanceof Union){
-            return Stream.of(((Union) to).fieldNames).map(to.fields::get).anyMatch(e->canAssign(e,from,allowCast,generics));
+            return Arrays.stream(((Union) to).fieldNames).map(to.fields::get).anyMatch(e->canAssign(e,from,allowCast,generics));
         }else if(from instanceof Union){
-            return Stream.of(((Union) from).fieldNames).map(from.fields::get).allMatch(e->canAssign(to,e,allowCast,generics));
+            return Arrays.stream(((Union) from).fieldNames).map(from.fields::get).allMatch(e->canAssign(to,e,allowCast,generics));
         }
         //{A0,..,AN}->{B0,...,BN} iff A_i -> B_i for all i
         if(to instanceof Struct&&from instanceof Struct){
@@ -262,23 +275,25 @@ public class Type {
             return IntStream.range(0,((Proc) to).argTypes.length)
                     .allMatch(i->canAssign(((Proc) from).argTypes[i],((Proc) to).argTypes[i],allowCast,generics));
         }
-        if(to instanceof Generic){
-            if(from instanceof Generic){
-                return to.name.equals(from.name);
+        if(to instanceof AnyType){
+            if(((AnyType) to).genericName==null){
+                return true;
+            }else if(from instanceof AnyType){
+                return ((AnyType) to).genericName.equals(((AnyType) from).genericName);
             }else if(generics!=null){
-                GenericBound prev=generics.get(to.name);
+                GenericBound prev=generics.get(((AnyType) to).genericName);
                 if(prev==null){
-                    generics.put(to.name,new GenericBound(from,ANY));
+                    generics.put(((AnyType) to).genericName,new GenericBound(from,AnyType.ANY));
                     return true;
                 }else{
                     prev.assignableFrom=commonSupertype(prev.assignableFrom,from);
                     return canAssign(prev.assignableTo,prev.assignableFrom,false,null);
                 }
             }
-        }else if(from instanceof Generic&&generics!=null){
-            GenericBound prev=generics.get(from.name);
+        }else if(from instanceof AnyType&&((AnyType) from).genericName!=null&&generics!=null){
+            GenericBound prev=generics.get(((AnyType) from).genericName);
             if(prev==null){
-                generics.put(to.name,new GenericBound(EMPTY_TYPE,to));
+                generics.put(((AnyType) from).genericName,new GenericBound(Union.EMPTY,to));
                 return true;
             }else{
                 if(canAssign(prev.assignableTo,to,false,null)){
@@ -371,10 +386,10 @@ public class Type {
     }
 
     private static int calculateBlockCount(Type[] types) {
-        return Stream.of(types).mapToInt(t->t.blockCount).sum();
+        return Arrays.stream(types).mapToInt(t->t.blockCount).sum();
     }
     private static boolean isVarSize(Type[] types) {
-        return Stream.of(types).anyMatch(t->t.varSize);
+        return Arrays.stream(types).anyMatch(t->t.varSize);
     }
     public static class Tuple extends Type{
         final String tupleName;
@@ -416,6 +431,8 @@ public class Type {
         }
     }
     public static class Union extends StructOrUnion{
+        /**Value type for empty Arrays, assignable to any other type*/
+        public static final Union EMPTY = new Union("\"EMPTY\"", new Type[0], new String[0]);
         public Union(String name, Type[] types, String[] names) {
             super(name,types,names,true);
         }
@@ -423,7 +440,7 @@ public class Type {
     private static abstract class StructOrUnion extends Type{
         public final boolean isUnion;
         final String structName;
-        String[] fieldNames;
+        final String[] fieldNames;
         private static String structName(Type[] types,String[] names,boolean isUnion) {
             if(types.length!=names.length){
                 throw new IllegalArgumentException("lengths of types and names do not match");
@@ -449,6 +466,15 @@ public class Type {
                     throw new TypeError("duplicate or reserved field-name \""+names[i]+"\" in struct "+this);
                 }
             }
+        }
+
+        @Override
+        public boolean isMutableFlied(String fieldName) {
+            for(String field:fieldNames){
+                if(field.equals(fieldName))
+                    return true;
+            }
+            return super.isMutableFlied(fieldName);
         }
 
         @Override
@@ -508,18 +534,7 @@ public class Type {
 
     }
 
-    /** Generics types in NoRet allow forcing the calle of a procedure to use the same type for two different arguments,
-     *      * they allow signatures like ($a,($a)=>?)=>? that make it easier to call a restricted function
-     * */
-    public static class Generic extends Type{//TODO replace generics with any at compile time ? merge class with Type:any
-        public Generic(String name) {
-            super("$"+name, 2, true);
-        }
-        @Override
-        public String toString() {
-            return "Generic: "+name;
-        }
-    }
+
 
     public static class GenericBound{
         Type assignableFrom;

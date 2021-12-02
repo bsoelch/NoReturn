@@ -20,7 +20,7 @@ public abstract class Value{
     public static class AnyValue extends Value implements ContainerValue{
         public final Value content;
         public AnyValue(Value content) {
-            super(Type.ANY);
+            super(Type.AnyType.ANY);
             getters.replace(Type.FIELD_NAME_TYPE,()->new TypeValue(content.type));
             this.content=content;
         }
@@ -136,8 +136,8 @@ public abstract class Value{
     public Value castTo(Type t) {
         if(t==type){
             return this;
-        }else if(t== Type.ANY||t instanceof Type.Generic){
-            return type==Type.ANY?this:new AnyValue(this);
+        }else if(t instanceof Type.AnyType){
+            return type instanceof Type.AnyType?this:new AnyValue(this);
         }else if(t instanceof Type.Optional&&Type.canCast(((Type.Optional) t).content,type,null)){
             return new Optional((Type.Optional)t,castTo(((Type.Optional) t).content));
         }else if(t instanceof Type.Union){
@@ -199,9 +199,6 @@ public abstract class Value{
 
     public static Value createPrimitive(Type.Primitive type, Object value){
         //addLater? typeCheck value
-        if(type== Type.ANY){
-            throw new TypeError("Cannot create instances of Type \""+Type.ANY+"\"");
-        }
         if(type instanceof Type.Numeric){
             return new NumericValue((Type.Numeric) type,value);
         }else{
@@ -508,7 +505,7 @@ public abstract class Value{
         final Value[] elements;
         private static Type typeFromElements(Value[] elements,boolean asArray) {
             if(asArray){
-                return new Type.Array(Stream.of(elements).map(Value::getType).reduce(Type.EMPTY_TYPE,Type::commonSupertype));
+                return new Type.Array(Stream.of(elements).map(Value::getType).reduce(Type.Union.EMPTY,Type::commonSupertype));
             }else{
                 return new Type.Tuple(null,Stream.of(elements).map(Value::getType).toArray(Type[]::new));
             }
@@ -823,7 +820,7 @@ public abstract class Value{
             }else  if(value instanceof Type.Reference){
                 return new TypeValue(((Type.Reference) value).content);
             }else{
-                return new TypeValue(Type.EMPTY_TYPE);
+                return new TypeValue(Type.Union.EMPTY);
             }
         }
 

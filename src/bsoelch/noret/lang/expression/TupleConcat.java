@@ -82,7 +82,7 @@ public class TupleConcat implements Expression {
             }
             type=new Type.Tuple(null,collect);
         }else{
-            type= new Type.Array(sections.stream().map(s -> s.expr.expectedType()).reduce(Type.EMPTY_TYPE,Type::commonSupertype));
+            type= new Type.Array(sections.stream().map(s -> s.expr.expectedType()).reduce(Type.Union.EMPTY,Type::commonSupertype));
         }
     }
 

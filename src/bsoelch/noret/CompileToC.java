@@ -170,8 +170,6 @@ public class CompileToC {
     private String typeSignature(Type t){
         if(t instanceof Type.Primitive){
             return "TYPE_SIG_"+typeName((Type.Primitive)t,true);
-        }else if(t==Type.EMPTY_TYPE){
-            return "TYPE_SIG_EMPTY";
         }else if(t==Type.NoRetString.STRING8){
             return "TYPE_SIG_STRING8";
         }else if(t==Type.NoRetString.STRING16){
@@ -182,7 +180,7 @@ public class CompileToC {
             return "TYPE_SIG_TYPE";
         }else if(t==Type.Primitive.NONE_TYPE){
             return "TYPE_SIG_NONE";
-        }else if(t==Type.ANY){
+        }else if(t instanceof Type.AnyType){
             return "TYPE_SIG_ANY";
         }else if(t instanceof Type.Optional){
             typeSignature(((Type.Optional) t).content);//ensure type-signature exists
@@ -345,9 +343,6 @@ public class CompileToC {
         comment("recursive printing of types");
         writeLine("void " + PRINT_TYPE_NAME + "(const Type type,FILE* log,bool recursive){");
         writeLine("  switch(type&TYPE_SIG_MASK){");
-        writeLine("    case TYPE_SIG_EMPTY:");
-        writeLine("      fputs(\""+escapeStr(Type.EMPTY_TYPE)+"\",log);");
-        writeLine("      break;");
         writeLine("    case TYPE_SIG_BOOL:");
         writeLine("      fputs(\""+escapeStr(Type.Primitive.BOOL)+"\",log);");
         writeLine("      break;");
@@ -372,7 +367,7 @@ public class CompileToC {
         writeLine("      fputs(\""+escapeStr(Type.NONE_TYPE)+"\",log);");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_ANY:");
-        writeLine("      fputs(\""+escapeStr(Type.ANY)+"\",log);");
+        writeLine("      fputs(\""+escapeStr(Type.AnyType.ANY)+"\",log);");
         writeLine("      break;");
         writeLine("    case TYPE_SIG_OPTIONAL:");
         writeLine("      if(recursive){fputs(\"(\",log);}");
@@ -550,7 +545,7 @@ public class CompileToC {
         if(!isFirst){
             out.append(',');
         }
-        if(v.getType()== Type.ANY){
+        if(v.getType() instanceof Type.AnyType){
             Type contentType = ((Value.AnyValue) v).content.getType();
             if(prefix){out.append(CAST_BLOCK); }
             out.append("{.asType=").append(typeSignature(contentType)).append("}");
@@ -1166,7 +1161,7 @@ public class CompileToC {
                 parts[1] = ")[0]})";
             }
             return parts;
-        }else if(to == Type.ANY&&from.blockCount==1){
+        }else if(to instanceof Type.AnyType&&from.blockCount==1){
             if(unwrap){
                 throw new RuntimeException("cannot unwrap Any");
             }
@@ -1310,7 +1305,7 @@ public class CompileToC {
             }
         }else if(expr instanceof GetField){
             if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_TYPE)){
-                if(((GetField) expr).value.expectedType()== Type.ANY){
+                if(((GetField) expr).value.expectedType() instanceof Type.AnyType){
                     tmpCount=writeExpression(indent+"    ",initLines,line,((GetField) expr).value,false,tmpCount, procName, varNames);
                 }else{
                     line.append(CAST_BLOCK + "{.asType=").append(typeSignature(((GetField) expr).value.expectedType())).append('}');

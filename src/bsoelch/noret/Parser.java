@@ -929,7 +929,7 @@ public class Parser {
             if(tokens.get(i).tokenType ==ParserTokenType.WORD) {
                 if (i > 0 && tokens.get(i - 1).tokenType == ParserTokenType.DOLLAR) {
                     token = tokens.remove(i--);
-                    tokens.set(i, new TypeToken(new Type.Generic(((NamedToken) token).value), token.pos));
+                    tokens.set(i, new TypeToken(new Type.AnyType(((NamedToken) token).value), token.pos));
                 } else if (i == 0 ||(tokens.get(i - 1).tokenType != ParserTokenType.SEPARATOR&&
                         tokens.get(i-1).tokenType!=ParserTokenType.STRUCT_DEFINITION)) {
                     //word preceded with : is param name

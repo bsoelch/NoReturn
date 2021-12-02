@@ -7,7 +7,7 @@
 #include <inttypes.h>
 #include <assert.h>
 
-#define MAX_ARG_SIZE       0x3
+#define MAX_ARG_SIZE       0x1
 #define ARG_DATA_INIT_SIZE 0x1000
 
 // Type Definitions
@@ -106,9 +106,6 @@ void initLogStreams(){
 // recursive printing of types
 void printType(const Type type,FILE* log,bool recursive){
   switch(type&TYPE_SIG_MASK){
-    case TYPE_SIG_EMPTY:
-      fputs("Type:\"empty\"",log);
-      break;
     case TYPE_SIG_BOOL:
       fputs("Type:bool",log);
       break;
@@ -225,9 +222,15 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
       break;
     case DEBUG:
       log=log_DEBUG;
+      if(!append){
+        fputs("Debug: ",log);
+      }
       break;
     case INFO:
       log=log_INFO;
+      if(!append){
+        fputs("Info: ",log);
+      }
       break;
   }
   switch(type&TYPE_SIG_MASK){
@@ -354,8 +357,6 @@ const Value const_type__sig__test []={{.asPtr=(tmp_const_type__sig__test0)}};
 
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut);
-// readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
-void* proc_readLine(Value* argsIn,Value* argsOut);
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* noRet_run(void* initState);
 
@@ -506,14 +507,6 @@ void* proc_start(Value* argsIn,Value* argsOut){
   }
   Procedure ret=NULL;
   return ret;
-}
-
-// readLine(Generic: $a, Type:(Type:string8, Generic: $a)=>?)
-void* proc_readLine(Value* argsIn,Value* argsOut){
-  // var0:(argsIn+0)
-  // var1:(argsIn+2)
-  // Native
-  return NULL;
 }
 
 // declarations of all used type Signatures
