@@ -889,7 +889,6 @@ public class Parser {
     public Parser(Reader in) throws IOException {
         context=new ParserContext();
         Type.addAtomics(context.typeNames);
-        Native.addProcsTo(context);
         parse(in);
     }
     private void updateBracketStack(ParserToken nextToken, ArrayDeque<ParserTokenType> bracketStack) {

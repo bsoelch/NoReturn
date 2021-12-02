@@ -16,33 +16,27 @@ public class Operations {
         return Value.createPrimitive(Type.Numeric.FLOAT64,d);
     }
     static Value wrap(boolean signed,byte b){
-        return Value.createPrimitive(signed?Type.Numeric.INT8:
-                Type.Numeric.UINT8,b);
+        return Value.createPrimitive(signed?Type.Numeric.INT8:Type.Numeric.UINT8,b);
     }
     static Value wrap(boolean signed,short s){
-        return Value.createPrimitive(signed?Type.Numeric.INT16:
-                Type.Numeric.UINT16,s);
+        return Value.createPrimitive(signed?Type.Numeric.INT16:Type.Numeric.UINT16,s);
     }
     static Value wrap(boolean signed,int i){
-        return Value.createPrimitive(signed?Type.Numeric.INT32:
-                Type.Numeric.UINT32,i);
+        return Value.createPrimitive(signed?Type.Numeric.INT32:Type.Numeric.UINT32,i);
     }
     static Value wrap(boolean signed,long l) {
-        return Value.createPrimitive(signed ? Type.Numeric.INT64 :
-                Type.Numeric.UINT64, l);
+        return Value.createPrimitive(signed ? Type.Numeric.INT64 :Type.Numeric.UINT64, l);
     }
 
-    //TODO move array operations to different class
     public static <T> T performBinaryOperation(String opName, Value l, Value r,
                                                BiFunction<Byte,Byte,Function<Boolean,T>> i8Op,
                                                BiFunction<Short,Short,Function<Boolean,T>> i16Op,
                                                BiFunction<Integer,Integer,Function<Boolean,T>> i32Op,
                                                BiFunction<Long,Long,Function<Boolean,T>> i64Op,
                                                BiFunction<Float,Float,T> f32Op,
-                                               BiFunction<Double,Double,T> f64Op,
-                                               BiFunction<Value,Value,T> valueOp
+                                               BiFunction<Double,Double,T> f64Op
                                       ){
-        T res;
+        T res=null;
         if(l.type instanceof Type.Numeric&&r.type instanceof Type.Numeric){
             int level= Math.max(((Type.Numeric) l.type).level,((Type.Numeric) r.type).level);
             boolean isFloat=((Type.Numeric) l.type).isFloat||((Type.Numeric)  r.type).isFloat;
@@ -100,8 +94,6 @@ public class Operations {
                         throw new SyntaxError("exceeded maximum number capacity");
                 }
             }
-        }else{
-            res=valueOp.apply(l,r);
         }
         if(res==null){
             throw new TypeError("Unsupported types for "+opName+":"+l.type+", "+r.type);
@@ -117,32 +109,7 @@ public class Operations {
             (i1,i2)->(s)->wrap(s,i1+i2),
             (l1,l2)->(s)->wrap(s,l1+l2),
             (f1,f2)->wrap(f1+f2),
-            (d1,d2)->wrap(d1+d2),
-            (lVal,rVal)->{
-                if(lVal.type instanceof Type.NoRetString){
-                    Type.NoRetString sType=(Type.NoRetString)lVal.type;
-                    if(rVal.type instanceof Type.NoRetString){
-                        sType=Type.NoRetString.sumType(sType,(Type.NoRetString) rVal.type);
-                    }
-                    String s1=lVal.stringValue();
-                    String s2=rVal.stringValue();
-                    return Value.createString(sType,s1+s2);
-                }else if(rVal.type instanceof Type.NoRetString){
-                    String s1=lVal.stringValue();
-                    String s2=rVal.stringValue();
-                    return Value.createString((Type.NoRetString)rVal.type,s1+s2);
-                }else if(lVal.type instanceof Type.Array&&rVal.type instanceof Type.Array){
-                    Value[] newArray=new Value[((Value.ArrayOrTuple)lVal).elements.length+
-                            ((Value.ArrayOrTuple)rVal).elements.length];
-                    System.arraycopy(((Value.ArrayOrTuple)lVal).elements,0,
-                            newArray,0,((Value.ArrayOrTuple)lVal).elements.length);
-                    System.arraycopy(((Value.ArrayOrTuple)rVal).elements,0,
-                            newArray,((Value.ArrayOrTuple)lVal).elements.length
-                            ,((Value.ArrayOrTuple)rVal).elements.length);
-                    return new Value.ArrayOrTuple(newArray,true);//also allow tuples in array+array
-                }
-                return null;
-            }
+            (d1,d2)->wrap(d1+d2)
         );
     }
     public static Value minus(Value l,Value r){
@@ -152,8 +119,7 @@ public class Operations {
                 (i1,i2)->(s)->wrap(s,i1-i2),
                 (l1,l2)->(s)->wrap(s,l1-l2),
                 (f1,f2)->wrap(f1-f2),
-                (d1,d2)->wrap(d1-d2),
-                (x1,x2)->null
+                (d1,d2)->wrap(d1-d2)
         );
     }
     public static Value multiply(Value l,Value r){
@@ -163,8 +129,7 @@ public class Operations {
                 (i1,i2)->(s)->wrap(s,i1*i2),
                 (l1,l2)->(s)->wrap(s,l1*l2),
                 (f1,f2)->wrap(f1*f2),
-                (d1,d2)->wrap(d1*d2),
-                (x1,x2)->null
+                (d1,d2)->wrap(d1*d2)
         );
     }
     private static double toDouble(long l) {
@@ -184,8 +149,7 @@ public class Operations {
                         toDouble(l1) /
                                 toDouble(l2)),
                 (f1,f2)->wrap(f1/f2),
-                (d1,d2)->wrap(d1/d2),
-                (x1,x2)->null
+                (d1,d2)->wrap(d1/d2)
         );
     }
     public static Value intDiv(Value l,Value r){
@@ -198,8 +162,7 @@ public class Operations {
                         ((i1&0xffffffffL)/(i2&0xffffffffL)))),
                 (l1,l2)->(s)->wrap(s,s?l1/l2:Long.divideUnsigned(l1,l2)),
                 (f1,f2)->wrap((float)Math.floor(f1/f2)),
-                (d1,d2)->wrap(Math.floor(d1/d2)),
-                (x1,x2)->null
+                (d1,d2)->wrap(Math.floor(d1/d2))
         );
     }
     public static Value mod(Value l,Value r){
@@ -213,8 +176,7 @@ public class Operations {
                 (l1,l2)->(s)->wrap(s,s?l1%l2:
                         Long.remainderUnsigned(l1,l2)),
                 (f1,f2)->wrap(f1%f2),
-                (d1,d2)->wrap(d1%d2),
-                (x1,x2)->null
+                (d1,d2)->wrap(d1%d2)
         );
     }
     public static Value pow(Value l, Value r) {
@@ -225,8 +187,7 @@ public class Operations {
                 (l1,l2)->(s)->wrap(s?Math.pow(l1,l2):Math.pow(toDouble(l1)
                         , toDouble(l2))),
                 (f1,f2)->wrap(Math.pow(f1,f2)),
-                (d1,d2)->wrap(Math.pow(d1,d2)),
-                (x1,x2)->null
+                (d1,d2)->wrap(Math.pow(d1,d2))
         );
     }
 
@@ -238,8 +199,7 @@ public class Operations {
                 (i1,i2)->(s)->wrap(s,i1&i2),
                 (l1,l2)->(s)->wrap(s,l1&l2),
                 (f1,f2)->null,//no and/or/xor for floats
-                (d1,d2)->null,
-                (x1,x2)->null
+                (d1,d2)->null
         );
     }
     public static Value or(Value l, Value r) {
@@ -249,8 +209,7 @@ public class Operations {
                 (i1,i2)->(s)->wrap(s,i1|i2),
                 (l1,l2)->(s)->wrap(s,l1|l2),
                 (f1,f2)->null,//no and/or/xor for floats
-                (d1,d2)->null,
-                (x1,x2)->null
+                (d1,d2)->null
         );
     }
     public static Value xor(Value l, Value r) {
@@ -260,8 +219,7 @@ public class Operations {
                 (i1,i2)->(s)->wrap(s,i1^i2),
                 (l1,l2)->(s)->wrap(s,l1^l2),
                 (f1,f2)->null,//no and/or/xor for floats
-                (d1,d2)->null,
-                (x1,x2)->null
+                (d1,d2)->null
         );
     }
 
@@ -273,17 +231,7 @@ public class Operations {
                 (i1,i2)->(s)->wrap(s,i1<<i2),
                 (l1,l2)->(s)->wrap(s,l1<<l2),
                 (f1,f2)->null,//no shift for floats
-                (d1,d2)->null,
-                (x1,x2)-> {
-                       if(x1.type instanceof Type.Array){//pushLast
-                           Value[] newElements=new Value[((Value.ArrayOrTuple)x1).elements.length+1];
-                           System.arraycopy(newElements,0,((Value.ArrayOrTuple)x1).elements,
-                                   0,((Value.ArrayOrTuple)x1).elements.length);
-                           newElements[((Value.ArrayOrTuple)x1).elements.length]=x2;
-                           return new Value.ArrayOrTuple(newElements,true);
-                       }
-                       return null;
-                }
+                (d1,d2)->null
         );
     }
     public static Value rshift(Value l, Value r) {
@@ -293,17 +241,7 @@ public class Operations {
                 (i1,i2)->(s)->wrap(s,s?i1>>i2:i1>>>i2),
                 (l1,l2)->(s)->wrap(s,s?l1>>l2:l1>>>l2),
                 (f1,f2)->null,//no shift for floats
-                (d1,d2)->null,
-                (x1,x2)-> {
-                    if(x2.type instanceof Type.Array){//pushFirst
-                        Value[] newElements=new Value[((Value.ArrayOrTuple)x2).elements.length+1];
-                        System.arraycopy(newElements,1,((Value.ArrayOrTuple)x2).elements,
-                                0,((Value.ArrayOrTuple)x2).elements.length);
-                        newElements[0]=x1;
-                        return new Value.ArrayOrTuple(newElements,true);
-                    }
-                    return null;
-                }
+                (d1,d2)->null
         );
     }
 
@@ -318,27 +256,22 @@ public class Operations {
                 (l1,l2)->(s)->s?l1.compareTo(l2):
                     Long.compareUnsigned(l1,l2),
                 (f1,f2)->wrap(f1.compareTo(f2)),
-                (d1,d2)->wrap(d1.compareTo(d2)),
-                (x1,x2)-> {
-                    if(x1.type instanceof Type.NoRetString&&
-                        x2.type instanceof Type.NoRetString){
-                        return ((Value.StringValue)x1).compareTo(((Value.StringValue) x2));
-                    }else{
-                        return null;
-                    }
-                }
+                (d1,d2)->wrap(d1.compareTo(d2))
         );
     }
     public static boolean eq(Value l, Value r) {
-        return performBinaryOperation("compare",l,r,
-                (b1,b2)->(s)->b1.equals(b2),
-                (s1,s2)->(s)->s1.equals(s2),
-                (i1,i2)->(s)->i1.equals(i2),
-                (l1,l2)->(s)->l1.equals(l2),
-                Float::equals,
-                Double::equals,
-                Value::equals
-        );
+        if(l.type instanceof Type.Numeric && r.type instanceof Type.Numeric){
+            return performBinaryOperation("compare",l,r,
+                    (b1,b2)->(s)->b1.equals(b2),
+                    (s1,s2)->(s)->s1.equals(s2),
+                    (i1,i2)->(s)->i1.equals(i2),
+                    (l1,l2)->(s)->l1.equals(l2),
+                    Float::equals,
+                    Double::equals
+            );
+        }else{
+            return l.equals(r);
+        }
     }
 
     public static boolean asBool(Value value) {

@@ -153,37 +153,25 @@ public class CompileToC {
         return off;
     }
 
+    private static String typeName(Type.Primitive type,boolean uppercase){
+        if(type instanceof Type.Numeric){
+            if(((Type.Numeric)type).isFloat){
+                return "F"+ ((Type.Numeric)type).bitSize();
+            }else{
+                return (((Type.Numeric)type).signed?"I":(((Type.Numeric)type).isChar?"C":"U"))+
+                        ((Type.Numeric)type).bitSize();
+            }
+        }else if(type== Type.Primitive.BOOL){
+            return uppercase?"BOOL":"Bool";
+        }else{
+            throw new RuntimeException("unexpected primitive: "+type);
+        }
+    }
     private String typeSignature(Type t){
-        if(t==Type.EMPTY_TYPE){
+        if(t instanceof Type.Primitive){
+            return "TYPE_SIG_"+typeName((Type.Primitive)t,true);
+        }else if(t==Type.EMPTY_TYPE){
             return "TYPE_SIG_EMPTY";
-        }else if(t==Type.Primitive.BOOL){
-            return "TYPE_SIG_BOOL";
-        }else if(t==Type.Numeric.INT8){//addLater compress with function
-            return "TYPE_SIG_I8";
-        }else if(t==Type.Numeric.UINT8){
-            return "TYPE_SIG_U8";
-        }else if(t==Type.Numeric.CHAR8){
-            return "TYPE_SIG_C8";
-        }else if(t==Type.Numeric.INT16){
-            return "TYPE_SIG_I16";
-        }else if(t==Type.Numeric.UINT16){
-            return "TYPE_SIG_U16";
-        }else if(t==Type.Numeric.CHAR16){
-            return "TYPE_SIG_C16";
-        }else if(t==Type.Numeric.INT32){
-            return "TYPE_SIG_I32";
-        }else if(t==Type.Numeric.UINT32){
-            return "TYPE_SIG_U32";
-        }else if(t==Type.Numeric.CHAR32){
-            return "TYPE_SIG_C32";
-        }else if(t==Type.Numeric.INT64){
-            return "TYPE_SIG_I64";
-        }else if(t==Type.Numeric.UINT64){
-            return "TYPE_SIG_U64";
-        }else if(t==Type.Numeric.FLOAT32){
-            return "TYPE_SIG_F32";
-        }else if(t==Type.Numeric.FLOAT64){
-            return "TYPE_SIG_F64";
         }else if(t==Type.NoRetString.STRING8){
             return "TYPE_SIG_STRING8";
         }else if(t==Type.NoRetString.STRING16){
@@ -226,18 +214,7 @@ public class CompileToC {
     }
 
     private static String typeFieldName(Type.Primitive type){
-        if(type instanceof Type.Numeric){
-            if(((Type.Numeric)type).isFloat){
-                return "asF"+ ((Type.Numeric)type).bitSize();
-            }else{
-                return "as"+(((Type.Numeric)type).signed?"I":(((Type.Numeric)type).isChar?"C":"U"))+
-                        ((Type.Numeric)type).bitSize();
-            }
-        }else if(type== Type.Primitive.BOOL){
-            return "asBool";
-        }else{
-            throw new RuntimeException("unexpected primitive: "+type);
-        }
+        return "as"+typeName(type,false);
     }
     private static String cTypeName(Type.Primitive type){
         if(type instanceof Type.Numeric){
@@ -441,7 +418,15 @@ public class CompileToC {
         for(LogType.Type t:LogType.Type.values()){
             writeLine("    case "+t+":");
             writeLine("      log=log_"+t+";");
-            //TODO type specific prefixes
+            if(t== LogType.Type.DEBUG){
+                writeLine("      if(!append){");
+                writeLine("        fputs(\"Debug: \",log);");
+                writeLine("      }");
+            }else if(t== LogType.Type.INFO){
+                writeLine("      if(!append){");
+                writeLine("        fputs(\"Info: \",log);");
+                writeLine("      }");
+            }
             writeLine("      break;");
         }
         writeLine("  }");
@@ -1355,6 +1340,7 @@ public class CompileToC {
                 }
                 return tmpCount;
             }else{
+                //TODO struct/union field access
                 throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
             }
         }else if(expr instanceof GetIndex){
@@ -1469,7 +1455,7 @@ public class CompileToC {
         if(hasArgs){
             comment("  ","prepare program Arguments");
             comment("  ","!!! currently only UTF-8 encoding is supported !!!");//addLater support for other encodings of argv
-            writeLine("  "+VALUE_BLOCK_NAME+"* argArray=malloc(((argc-1)+"+ARRAY_HEADER+")*sizeof("+VALUE_BLOCK_NAME+"));");//addLater constant: header size
+            writeLine("  "+VALUE_BLOCK_NAME+"* argArray=malloc(((argc-1)+"+ARRAY_HEADER+")*sizeof("+VALUE_BLOCK_NAME+"));");
             writeLine("  if(argArray==NULL){");
             writeLine("    fputs(\"out of memory\\n\",stderr);");
             writeLine("    return "+ERR_MEM+";");

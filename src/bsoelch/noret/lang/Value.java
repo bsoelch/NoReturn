@@ -145,8 +145,8 @@ public abstract class Value{
                 return new Union((Type.Union)t,this);
             }
         }else if(t instanceof Type.NoRetString){
-            //TODO cast to string..
-            throw  new UnsupportedOperationException("unimplemented");
+            //Cast to string..
+            return createString((Type.NoRetString) t,stringValue());
         }
         throw new TypeError("Cannot cast \""+type+"\" to \""+t+"\"");
     }

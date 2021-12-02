@@ -13,7 +13,7 @@ public class GetField implements Expression{
 
     public static Expression create(Expression value, String fieldName){
         Type valType = value.expectedType();
-        Type type=valType.getField(fieldName);
+        Type type=valType.getField(fieldName);//addLater check if field is mutable
         if(type==null){
             throw new SyntaxError("Type "+valType+" does not have a field \""+fieldName+"\"");
         }
@@ -58,7 +58,7 @@ public class GetField implements Expression{
 
     @Override
     public boolean canAssignTo() {
-        return value.canAssignTo();//addLater check if field is mutable
+        return value.canAssignTo();
     }
 
     @Override

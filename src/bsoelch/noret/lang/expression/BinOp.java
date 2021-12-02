@@ -52,8 +52,7 @@ public class BinOp implements Expression {
                     if (lType instanceof Type.NoRetString && rType instanceof Type.NoRetString) {
                         return StringCompare.create(left,op,right);
                     }else{
-                        //TODO equals for general values
-                        throw new UnsupportedOperationException("unimplemented");
+                        return new EqualityCheck(left,op==OperatorType.NE,right);
                     }
                 case GT:
                 case GE:

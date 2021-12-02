@@ -511,7 +511,7 @@ public class Type {
     /** Generics types in NoRet allow forcing the calle of a procedure to use the same type for two different arguments,
      *      * they allow signatures like ($a,($a)=>?)=>? that make it easier to call a restricted function
      * */
-    public static class Generic extends Type{//TODO allow handling of generics in compile mode, generics should be replaceable by any value without side-effects
+    public static class Generic extends Type{//TODO replace generics with any at compile time ? merge class with Type:any
         public Generic(String name) {
             super("$"+name, 2, true);
         }

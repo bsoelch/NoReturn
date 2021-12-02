@@ -23,8 +23,8 @@ public class StringCompare implements Expression {
 
     public StringCompare(Expression left, OperatorType op, Expression right) {
         this.left = left;
-        this.right = right;
         this.op = op;
+        this.right = right;
     }
     @Override
     public boolean isBound() {

@@ -119,7 +119,6 @@ public class Procedure extends Value{
             for(Action a:primitives){
                 a.execute(this,values);
             }
-            //addLater run leaves directly
             for(int i=0;i<children.length;i++){
                 Procedure proc;
                 if(children[i] == RECURSIVE_CALL){
