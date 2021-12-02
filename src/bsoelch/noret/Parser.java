@@ -1447,7 +1447,7 @@ public class Parser {
 
     //TODO update types of values depending on maximum range of parameters
     // i.e. don't use type any for values that are always an integer
-    //TODO detect variables with predictable value-code
+    //TODO detect variables with predictable value
     private void readProcDef(String name,Tokenizer tokens,ParserContext context) throws IOException {
         ParserToken token;
         ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();
@@ -1604,7 +1604,7 @@ public class Parser {
                             ((NamedToken)token).value.equals("assert")){
                         //addLater assert
                         throw new UnsupportedEncodingException("assert-statements are currently not supported");
-                    }else{//addLater exit, if-else, switch-case
+                    }else{//addLater exit, if-else, match
                         /*
                             if <expr> :
                             <if-body>
@@ -1752,8 +1752,8 @@ public class Parser {
             for(int i=0;i< argBuffer.size();i++){
                 //Type-check parameters
                 if(Type.canAssign(outTypes[i],argBuffer.get(i).expectedType(),generics)){
-                    //TODO ensure element is cast to correct type (respecting generics)
-                    argArray[i]=argBuffer.get(i);
+                    //ensure arguments are cast to correct type addLater cast contents of generics to correct type
+                    argArray[i]=TypeCast.create(outTypes[i],argBuffer.get(i),false);
                 }else{
                     throw new TypeError("Cannot assign "+ argBuffer.get(i).expectedType()+" to "+outTypes[i]+" generics:"+generics);
                 }

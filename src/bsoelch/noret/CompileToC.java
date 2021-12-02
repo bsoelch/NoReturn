@@ -19,10 +19,17 @@ public class CompileToC {
     public static final String PROC_PREFIX = "proc_";
     public static final String CONST_PREFIX = "const_";
     public static final String PROCEDURE_TYPE = "Procedure";
+    public static final String TYPE_SIG_PREFIX = "TYPE_SIG_";
+    public static final String LOG_STREAM_PREFIX = "log_";
 
     public static final int ARRAY_HEADER = 3;
     public static final int ARRAY_LEN_OFFSET = 2;
+
+    public static final String LOG_TYPE_NAME = "LogType";
     public static final String PRINT_TYPE_NAME = "printType";
+    public static final String LOG_VALUE_NAME = "logValue";
+    public static final String ARRAY_GET_NAME = "getElement";
+    public static final String ARRAY_GET_RAW_NAME = "getRawElement";
 
     public static final int ERR_NONE  = 0;
     public static final int ERR_MEM   = 1;
@@ -169,31 +176,31 @@ public class CompileToC {
     }
     private String typeSignature(Type t){
         if(t instanceof Type.Primitive){
-            return "TYPE_SIG_"+typeName((Type.Primitive)t,true);
+            return TYPE_SIG_PREFIX+typeName((Type.Primitive)t,true);
         }else if(t==Type.NoRetString.STRING8){
-            return "TYPE_SIG_STRING8";
+            return TYPE_SIG_PREFIX + "STRING8";
         }else if(t==Type.NoRetString.STRING16){
-            return "TYPE_SIG_STRING16";
+            return TYPE_SIG_PREFIX + "STRING16";
         }else if(t==Type.NoRetString.STRING32){
-            return "TYPE_SIG_STRING32";
+            return TYPE_SIG_PREFIX + "STRING32";
         }else if(t==Type.TYPE){
-            return "TYPE_SIG_TYPE";
+            return TYPE_SIG_PREFIX + "TYPE";
         }else if(t==Type.Primitive.NONE_TYPE){
-            return "TYPE_SIG_NONE";
+            return TYPE_SIG_PREFIX + "NONE";
         }else if(t instanceof Type.AnyType){
-            return "TYPE_SIG_ANY";
+            return TYPE_SIG_PREFIX + "ANY";
         }else if(t instanceof Type.Optional){
             typeSignature(((Type.Optional) t).content);//ensure type-signature exists
             Long off = typeOffset(((Type.Optional) t).content);
-            return "TYPE_SIG_OPTIONAL|("+off+"<<TYPE_CONTENT_SHIFT)";
+            return TYPE_SIG_PREFIX + "OPTIONAL|("+off+"<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Reference){
             typeSignature(((Type.Reference) t).content);//ensure type-signature exists
             Long off = typeOffset(((Type.Reference) t).content);
-            return "TYPE_SIG_REFERENCE|("+off+"<<TYPE_CONTENT_SHIFT)";
+            return TYPE_SIG_PREFIX + "REFERENCE|("+off+"<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Array){
             typeSignature(((Type.Array) t).content);//ensure type-signature exists
             Long off = typeOffset(((Type.Array) t).content);
-            return "TYPE_SIG_ARRAY|("+off+"<<TYPE_CONTENT_SHIFT)";
+            return TYPE_SIG_PREFIX + "ARRAY|("+off+"<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Tuple){
             throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
             //  return "TYPE_SIG_TUPLE|("+off+"<<TYPE_CONTENT_SHIFT)";
@@ -248,28 +255,28 @@ public class CompileToC {
         //Type enum
         comment("Type Definitions");
         writeLine("typedef uint64_t Type;");
-        writeLine("#define TYPE_SIG_MASK       0xff");
+        writeLine("#define " + TYPE_SIG_PREFIX + "MASK       0xff");
         int count=0;
-        writeLine("#define TYPE_SIG_EMPTY      0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_BOOL       0x"+Integer.toHexString(count++));
+        writeLine("#define " + TYPE_SIG_PREFIX + "EMPTY      0x"+Integer.toHexString(count++));
+        writeLine("#define " + TYPE_SIG_PREFIX + "BOOL       0x"+Integer.toHexString(count++));
         for(Type.Numeric t: Type.Numeric.types()){
             StringBuilder tmp=new StringBuilder(typeSignature(t));
             while(tmp.length()<19){tmp.append(' ');}
             writeLine("#define "+tmp+" 0x"+Integer.toHexString(count++));
         }
-        writeLine("#define TYPE_SIG_STRING8    0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_STRING16   0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_STRING32   0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_TYPE       0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_NONE       0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_ANY        0x"+Integer.toHexString(count++));
-        writeLine("#define TYPE_SIG_OPTIONAL   0x"+Integer.toHexString(count++));//content[u32-off]
-        writeLine("#define TYPE_SIG_REFERENCE  0x"+Integer.toHexString(count++));//content[u32-off]
-        writeLine("#define TYPE_SIG_ARRAY      0x"+Integer.toHexString(count++));//content[u32-off]
-        writeLine("#define TYPE_SIG_TUPLE      0x"+Integer.toHexString(count++));//content[u32-off][u16-size]
-        writeLine("#define TYPE_SIG_UNION      0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
-        writeLine("#define TYPE_SIG_STRUCT     0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
-        writeLine("#define TYPE_SIG_PROC       0x"+Integer.toHexString(count++));//signature[u32-off][u16-size]
+        writeLine("#define " + TYPE_SIG_PREFIX + "STRING8    0x"+Integer.toHexString(count++));
+        writeLine("#define " + TYPE_SIG_PREFIX + "STRING16   0x"+Integer.toHexString(count++));
+        writeLine("#define " + TYPE_SIG_PREFIX + "STRING32   0x"+Integer.toHexString(count++));
+        writeLine("#define " + TYPE_SIG_PREFIX + "TYPE       0x"+Integer.toHexString(count++));
+        writeLine("#define " + TYPE_SIG_PREFIX + "NONE       0x"+Integer.toHexString(count++));
+        writeLine("#define " + TYPE_SIG_PREFIX + "ANY        0x"+Integer.toHexString(count++));
+        writeLine("#define " + TYPE_SIG_PREFIX + "OPTIONAL   0x"+Integer.toHexString(count++));//content[u32-off]
+        writeLine("#define " + TYPE_SIG_PREFIX + "REFERENCE  0x"+Integer.toHexString(count++));//content[u32-off]
+        writeLine("#define " + TYPE_SIG_PREFIX + "ARRAY      0x"+Integer.toHexString(count++));//content[u32-off]
+        writeLine("#define " + TYPE_SIG_PREFIX + "TUPLE      0x"+Integer.toHexString(count++));//content[u32-off][u16-size]
+        writeLine("#define " + TYPE_SIG_PREFIX + "UNION      0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
+        writeLine("#define " + TYPE_SIG_PREFIX + "STRUCT     0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
+        writeLine("#define " + TYPE_SIG_PREFIX + "PROC       0x"+Integer.toHexString(count++));//signature[u32-off][u16-size]
         assert count<=0xff;
         writeLine("#define TYPE_CONTENT_SHIFT  8");
         writeLine("#define TYPE_CONTENT_MASK   0xffffffff");
@@ -326,24 +333,24 @@ public class CompileToC {
         for(LogType.Type t:LogType.Type.values()){
             writeLine("  "+t+",");
         }
-        writeLine("}LogType;");
+        writeLine("}" + LOG_TYPE_NAME + ";");
         comment("previously used logType");
-        writeLine("static LogType prevType = null;");
+        writeLine("static " + LOG_TYPE_NAME + " prevType = null;");
         comment("definition of NEW_LINE character");
         writeLine("#define NEW_LINE \"\\n\"");//addLater set to system line separator
         for(LogType.Type t:LogType.Type.values()){
-            writeLine("FILE* log_"+t+";");
+            writeLine("FILE* " + LOG_STREAM_PREFIX +t+";");
         }
         comment("sets log-streams to their initial value");
         writeLine("void initLogStreams(){");
         for(LogType.Type t:LogType.Type.values()){
-            writeLine("  log_"+t+" = "+(t== LogType.Type.ERR?"stderr":"stdout")+";");
+            writeLine("  " + LOG_STREAM_PREFIX +t+" = "+(t== LogType.Type.ERR?"stderr":"stdout")+";");
         }
         writeLine("}");
         comment("recursive printing of types");
         writeLine("void " + PRINT_TYPE_NAME + "(const Type type,FILE* log,bool recursive){");
-        writeLine("  switch(type&TYPE_SIG_MASK){");
-        writeLine("    case TYPE_SIG_BOOL:");
+        writeLine("  switch(type&" + TYPE_SIG_PREFIX + "MASK){");
+        writeLine("    case " + TYPE_SIG_PREFIX + "BOOL:");
         writeLine("      fputs(\""+escapeStr(Type.Primitive.BOOL)+"\",log);");
         writeLine("      break;");
         for(Type.Numeric t:Type.Numeric.types()){
@@ -351,49 +358,49 @@ public class CompileToC {
             writeLine("      fputs(\""+escapeStr(t)+"\",log);");
             writeLine("      break;");
         }
-        writeLine("    case TYPE_SIG_STRING8:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "STRING8:");
         writeLine("      fputs(\""+escapeStr(Type.NoRetString.STRING8)+"\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_STRING16:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "STRING16:");
         writeLine("      fputs(\""+escapeStr(Type.NoRetString.STRING16)+"\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_STRING32:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "STRING32:");
         writeLine("      fputs(\""+escapeStr(Type.NoRetString.STRING32)+"\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_TYPE:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "TYPE:");
         writeLine("      fputs(\""+escapeStr(Type.TYPE)+"\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_NONE:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "NONE:");
         writeLine("      fputs(\""+escapeStr(Type.NONE_TYPE)+"\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_ANY:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "ANY:");
         writeLine("      fputs(\""+escapeStr(Type.AnyType.ANY)+"\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_OPTIONAL:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "OPTIONAL:");
         writeLine("      if(recursive){fputs(\"(\",log);}");
         writeLine("      " + PRINT_TYPE_NAME + "(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log,true);");
         writeLine("      fputs(recursive?\"?)\":\"?\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_REFERENCE:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "REFERENCE:");
         writeLine("      fputs(recursive?\"(@\":\"@\",log);");
         writeLine("      " + PRINT_TYPE_NAME + "(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log,true);");
         writeLine("      if(recursive){fputs(\")\",log);}");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_ARRAY:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "ARRAY:");
         writeLine("      if(recursive){fputs(\"(\",log);}");
         writeLine("      " + PRINT_TYPE_NAME + "(typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],log,true);");
         writeLine("      fputs(recursive?\"[])\":\"[]\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_TUPLE:");
-        writeLine("    case TYPE_SIG_STRUCT:");
-        writeLine("    case TYPE_SIG_UNION:");
-        writeLine("    case TYPE_SIG_PROC:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "TUPLE:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "STRUCT:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "UNION:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "PROC:");
         writeLine("      assert(false && \" unreachable \");");
         writeLine("      break;");
         writeLine("  }");
         writeLine("}");
         comment("log-Method");
-        writeLine("void logValue(LogType logType,bool append,const Type type,const "+VALUE_BLOCK_NAME+"* value){");
+        writeLine("void " + LOG_VALUE_NAME + "(" + LOG_TYPE_NAME + " logType,bool append,const Type type,const " +VALUE_BLOCK_NAME+"* value){");
         writeLine("  if(prevType!=null){");
         writeLine("    if((logType!=prevType)||(!append)){");
         writeLine("      switch(prevType){");
@@ -401,7 +408,7 @@ public class CompileToC {
         writeLine("          break;");
         for(LogType.Type t:LogType.Type.values()){
             writeLine("        case "+t+":");
-            writeLine("          fputs(NEW_LINE,log_"+t+");");
+            writeLine("          fputs(NEW_LINE," + LOG_STREAM_PREFIX +t+");");
             writeLine("          break;");
         }
         writeLine("      }");
@@ -412,7 +419,7 @@ public class CompileToC {
         writeLine("    case null:");
         for(LogType.Type t:LogType.Type.values()){
             writeLine("    case "+t+":");
-            writeLine("      log=log_"+t+";");
+            writeLine("      log=" + LOG_STREAM_PREFIX +t+";");
             if(t== LogType.Type.DEBUG){
                 writeLine("      if(!append){");
                 writeLine("        fputs(\"Debug: \",log);");
@@ -425,66 +432,66 @@ public class CompileToC {
             writeLine("      break;");
         }
         writeLine("  }");
-        writeLine("  switch(type&TYPE_SIG_MASK){");
-        writeLine("    case TYPE_SIG_EMPTY:");
-        writeLine("      fputs(\"unexpected Value-Type in log: \\\"EMPTY\\\"\",log_"+LogType.Type.ERR+");");
+        writeLine("  switch(type&" + TYPE_SIG_PREFIX + "MASK){");
+        writeLine("    case " + TYPE_SIG_PREFIX + "EMPTY:");
+        writeLine("      fputs(\"unexpected Value-Type in log: \\\"EMPTY\\\"\"," + LOG_STREAM_PREFIX +LogType.Type.ERR+");");
         writeLine("      exit("+ERR_TYPE+");");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_BOOL:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "BOOL:");
         writeLine("      fputs(value->asBool?\"true\":\"false\",log);");
         writeLine("      break;");
         for(int n=8;n<100;n*=2){
-            writeLine("    case TYPE_SIG_I"+n+":");
+            writeLine("    case " + TYPE_SIG_PREFIX + "I"+n+":");
             writeLine("      fprintf(log,\"%\"PRIi"+n+",value->asI"+n+");");
             writeLine("      break;");
-            writeLine("    case TYPE_SIG_U"+n+":");
+            writeLine("    case " + TYPE_SIG_PREFIX + "U"+n+":");
             writeLine("      fprintf(log,\"%\"PRIu"+n+",value->asU"+n+");");
             writeLine("      break;");
         }
-        writeLine("    case TYPE_SIG_F32:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "F32:");
         writeLine("      fprintf(log,\"%f\",value->asF32);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_F64:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "F64:");
         writeLine("      fprintf(log,\"%f\",value->asF64);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_NONE:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "NONE:");
         writeLine("      fputs(\"\\\"none\\\"\",log);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_C8:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "C8:");
         writeLine("      fprintf(log,\"'%c'\",value->asC8);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_STRING8:");//!!! this implementation assumes that the system encoding is UTF8
+        writeLine("    case " + TYPE_SIG_PREFIX + "STRING8:");//!!! this implementation assumes that the system encoding is UTF8
         writeLine("      fprintf(log,\"%.*s\",(int)(value->asPtr["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+")"+
                 ",(char*)(value->asPtr+"+ARRAY_HEADER+"/*header*/+value->asPtr[0].asU64/*off*/));");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_C16:");
-        writeLine("    case TYPE_SIG_STRING16:");
-        writeLine("    case TYPE_SIG_C32:");
-        writeLine("    case TYPE_SIG_STRING32:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "C16:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "STRING16:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "C32:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "STRING32:");
         //TODO print wide strings/chars
         writeLine("      assert(false && \"unimplemented\");");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_TYPE:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "TYPE:");
         writeLine("      " + PRINT_TYPE_NAME + "(value->asType,log,false);");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_ANY:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "ANY:");
         writeLine("       prevType=logType;");
-        writeLine("       logValue(logType,true,value->asType,value+1/*content*/);");//TODO dereference content if pointer
+        writeLine("       " + LOG_VALUE_NAME + "(logType,true,value->asType,value+1/*content*/);");//TODO dereference content if pointer
         writeLine("       break;");
-        writeLine("    case TYPE_SIG_OPTIONAL:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "OPTIONAL:");
         writeLine("      if(value[0].asBool){");
         writeLine("        prevType=logType;");
         writeLine("        fputs(\"Optional{\",log);");
-        writeLine("        logValue(logType,true,typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],value+1/*value*/);");
+        writeLine("        " + LOG_VALUE_NAME + "(logType,true,typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],value+1/*value*/);");
         writeLine("        fputs(\"}\",log);");
         writeLine("      }else{");
         writeLine("        fputs(\"Optional{}\",log);");
         writeLine("      }");
         writeLine("      break;");
-        writeLine("    case TYPE_SIG_REFERENCE:");
-        writeLine("    case TYPE_SIG_ARRAY:");
-        writeLine("    case TYPE_SIG_PROC:");
-        writeLine("    case TYPE_SIG_STRUCT:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "REFERENCE:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "ARRAY:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "PROC:");
+        writeLine("    case " + TYPE_SIG_PREFIX + "STRUCT:");
         //TODO Print Containers
         writeLine("      assert(false && \" unimplemented \");");
         writeLine("      break;");
@@ -496,7 +503,7 @@ public class CompileToC {
         writeLine("}");
         out.newLine();
         comment("read an element from an Array");
-        writeLine(VALUE_BLOCK_NAME+"* getElement("+VALUE_BLOCK_NAME+"* array,uint64_t index,uint64_t width){");
+        writeLine(VALUE_BLOCK_NAME+ "* " + ARRAY_GET_NAME + "(" +VALUE_BLOCK_NAME+"* array,uint64_t index,uint64_t width){");
         writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"].asU64){");
         writeLine("    return (array+"+ARRAY_HEADER+")+(array[0].asU64+index)*width;");
         writeLine("  }else{");
@@ -505,7 +512,7 @@ public class CompileToC {
         writeLine("  }");
         writeLine("}");
         comment("read a raw-element with width byteWidth from an Array");
-        writeLine("void* getRawElement("+VALUE_BLOCK_NAME+"* array,uint64_t index,int byteWidth){");
+        writeLine("void* " + ARRAY_GET_RAW_NAME + "(" +VALUE_BLOCK_NAME+"* array,uint64_t index,int byteWidth){");
         writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"].asU64){");
         writeLine("    return ((void*)(array+"+ARRAY_HEADER+"))+(array[0].asU64+index)*byteWidth;");
         writeLine("  }else{");
@@ -790,7 +797,7 @@ public class CompileToC {
                 }else if(a instanceof LogAction){
                     comment("  {","Log: "+a);
                     line.setLength(0);
-                    line.append("    logValue(").append(((LogAction) a).type.type).append(",")
+                    line.append("    " + LOG_VALUE_NAME + "(").append(((LogAction) a).type.type).append(",")
                             .append(((LogAction) a).type.append).append(',')
                             .append(typeSignature(((LogAction) a).expr.expectedType()))
                             .append(",");
@@ -1346,7 +1353,7 @@ public class CompileToC {
                         line.append("((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{.").append(typeFieldName(content))
                                 .append("=");
                     }
-                    line.append("*((").append(cTypeName(content)).append("*)getRawElement(");
+                    line.append("*((").append(cTypeName(content)).append("*)" + ARRAY_GET_RAW_NAME + "(");
                     tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).value,false,tmpCount,procName,varNames);
                     line.append("->asPtr,");
                     tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).index,true, tmpCount,procName,varNames);
@@ -1355,7 +1362,7 @@ public class CompileToC {
                         line.append("}})");
                     }
                 }else {
-                    line.append("getElement(");
+                    line.append(ARRAY_GET_NAME + "(");
                     tmpCount = writeExpression(indent, initLines, line, ((GetIndex) expr).value, false, tmpCount, procName, varNames);
                     line.append("->asPtr,");
                     tmpCount = writeExpression(indent, initLines, line, ((GetIndex) expr).index, true, tmpCount, procName, varNames);
@@ -1371,7 +1378,7 @@ public class CompileToC {
                     line.append("((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{.").append(typeFieldName(charType))
                             .append("=");
                 }
-                line.append("*((").append(cTypeName(charType)).append("*)getRawElement(");
+                line.append("*((").append(cTypeName(charType)).append("*)" + ARRAY_GET_RAW_NAME + "(");
                 tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).value,false,tmpCount,procName,varNames);
                 line.append("->asPtr,");
                 tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).index,true, tmpCount,procName,varNames);

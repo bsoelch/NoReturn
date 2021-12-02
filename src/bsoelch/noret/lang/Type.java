@@ -36,7 +36,7 @@ public class Type {
     /** Generics types in NoRet allow forcing the calle of a procedure to use the same type for two different arguments,
      *      * they allow signatures like ($a,($a)=>?)=>? that make it easier to call a restricted function
      * */
-    public static class AnyType extends Type{//TODO replace generics with any at compile time ? merge class with Type:any
+    public static class AnyType extends Type{
         /**default value of type any, for storing non-generic values*/
         public static final AnyType ANY=new AnyType(null);
 
@@ -305,7 +305,7 @@ public class Type {
         return false;
     }
 
-    //FIXME ensure that no Value is assigned without castTo()
+    //TODO ensure that no Value is assigned without castTo()
     // castTo should only return a value with eactly the supplied type (setting generics to any)
     public static boolean canAssign(Type to,Type from, HashMap<String, GenericBound> generics){
         return canAssign(to, from,false, generics);

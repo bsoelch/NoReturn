@@ -17,6 +17,7 @@ public class TypeCast implements Expression{
         if(!Type.canCast(castType,value.expectedType(),null)){
             throw new TypeError("Values of type "+value.expectedType()+ " cannot be cast to "+castType);
         }
+        //TODO? check if evalConstants flag is necessary
         if(value instanceof ValueExpression&&evalConstants){
             return ValueExpression.create(((ValueExpression) value).value.castTo(castType), null);
         }
