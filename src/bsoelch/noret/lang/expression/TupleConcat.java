@@ -9,41 +9,48 @@ import java.util.stream.Stream;
 
 public class TupleConcat implements Expression {
 
-    private static void addToList(Expression tpl, ArrayList<Section> tmp) {
-        if (tpl instanceof TupleConcat) {
-            tmp.addAll(((TupleConcat) tpl).sections);
+    //TODO join constant values
+    private static void addToList(Expression expr, ArrayList<Section> tmp,boolean wrap) {
+        if(wrap){
+            tmp.add(new Section(expr,false,1,true));
+        }else if (expr instanceof TupleConcat) {
+            tmp.addAll(((TupleConcat) expr).sections);
         } else {
-            if (tpl.expectedType() instanceof Type.Tuple) {
-                tmp.add(new Section(tpl, false, ((Type.Tuple) tpl.expectedType()).getElements().length, false));
-            } else if (tpl.expectedType() instanceof Type.Array){
-                if(tpl instanceof ValueExpression){
-                    tmp.add(new Section(tpl, false, ((Value.ArrayOrTuple)((ValueExpression)tpl).value).elements().length, false));
+            if (expr.expectedType() instanceof Type.Tuple) {
+                tmp.add(new Section(expr, false, ((Type.Tuple) expr.expectedType()).getElements().length, false));
+            } else if (expr.expectedType() instanceof Type.Array){
+                if(expr instanceof ValueExpression){
+                    tmp.add(new Section(expr, false, ((Value.ArrayOrTuple)((ValueExpression)expr).value).elements().length, false));
                 }else{//addLater slices
-                    tmp.add(new Section(tpl, true, -1, false));
+                    tmp.add(new Section(expr, true, -1, false));
                 }
             } else{
-                throw new TypeError("unexpected Type in TupleConcat "+tpl.expectedType()+" expected Array or Tuple");
+                throw new TypeError("unexpected Type in TupleConcat "+expr.expectedType()+" expected Array or Tuple");
             }
         }
     }
     public static Expression pushEnd(Expression tpl, Expression val) {
         ArrayList<Section> tmp=new ArrayList<>();
-        addToList(tpl, tmp);
-        tmp.add(new Section(val,false,1,true));
+        addToList(tpl, tmp,false);
+        addToList(val, tmp,true);
         return new TupleConcat(tmp);
     }
     public static Expression pushStart(Expression val, Expression tpl) {
         ArrayList<Section> tmp=new ArrayList<>();
-        tmp.add(new Section(val,false,1,true));
-        addToList(tpl,tmp);
+        addToList(val, tmp,true);
+        addToList(tpl,tmp,false);
         return new TupleConcat(tmp);
     }
     public static Expression concat(Expression tpl1, Expression tpl2) {
         ArrayList<Section> tmp=new ArrayList<>();
-        addToList(tpl1, tmp);
-        addToList(tpl2, tmp);
+        addToList(tpl1, tmp,false);
+        addToList(tpl2, tmp,false);
         return new TupleConcat(tmp);
     }
+    static Expression createTuple(ArrayList<Section> parts) {
+        return new TupleConcat(parts);
+    }
+
 
     static class Section{
         final Expression expr;
@@ -61,7 +68,6 @@ public class TupleConcat implements Expression {
     private final Type type;
     private final ArrayList<Section> sections;
 
-    //TODO join constant values
     private TupleConcat(ArrayList<Section> fromSections) {
         this.sections =fromSections;
         if(sections.stream().noneMatch(t->t.varSize)){
