@@ -13,7 +13,7 @@
 // Type Definitions
 typedef uint64_t Type;
 #define TYPE_SIG_MASK       0xff
-#define TYPE_SIG_EMPTY      0x0
+#define TYPE_SIG_NONE       0x0
 #define TYPE_SIG_BOOL       0x1
 #define TYPE_SIG_I8         0x2
 #define TYPE_SIG_U8         0x3
@@ -28,19 +28,18 @@ typedef uint64_t Type;
 #define TYPE_SIG_C32        0xc
 #define TYPE_SIG_F32        0xd
 #define TYPE_SIG_F64        0xe
-#define TYPE_SIG_STRING8    0xf
-#define TYPE_SIG_STRING16   0x10
-#define TYPE_SIG_STRING32   0x11
-#define TYPE_SIG_TYPE       0x12
-#define TYPE_SIG_NONE       0x13
-#define TYPE_SIG_ANY        0x14
-#define TYPE_SIG_OPTIONAL   0x15
-#define TYPE_SIG_REFERENCE  0x16
-#define TYPE_SIG_ARRAY      0x17
-#define TYPE_SIG_TUPLE      0x18
-#define TYPE_SIG_UNION      0x19
-#define TYPE_SIG_STRUCT     0x1a
-#define TYPE_SIG_PROC       0x1b
+#define TYPE_SIG_TYPE       0xf
+#define TYPE_SIG_STRING8    0x10
+#define TYPE_SIG_STRING16   0x11
+#define TYPE_SIG_STRING32   0x12
+#define TYPE_SIG_ARRAY      0x13
+#define TYPE_SIG_TUPLE      0x14
+#define TYPE_SIG_REFERENCE  0x15
+#define TYPE_SIG_PROC       0x16
+#define TYPE_SIG_UNION      0x17
+#define TYPE_SIG_STRUCT     0x18
+#define TYPE_SIG_OPTIONAL   0x19
+#define TYPE_SIG_ANY        0x1a
 #define TYPE_CONTENT_SHIFT  8
 #define TYPE_CONTENT_MASK   0xffffffff
 #define TYPE_COUNT_SHIFT    40
@@ -191,6 +190,7 @@ void printType(const Type type,FILE* log,bool recursive){
 }
 // log-Method
 void logValue(LogType logType,bool append,const Type type,const Value* value){
+  Type valType;
   if(prevType!=null){
     if((logType!=prevType)||(!append)){
       switch(prevType){
@@ -234,10 +234,6 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
       break;
   }
   switch(type&TYPE_SIG_MASK){
-    case TYPE_SIG_EMPTY:
-      fputs("unexpected Value-Type in log: \"EMPTY\"",log_ERR);
-      exit(3);
-      break;
     case TYPE_SIG_BOOL:
       fputs(value->asBool?"true":"false",log);
       break;
@@ -290,14 +286,24 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
       printType(value->asType,log,false);
       break;
     case TYPE_SIG_ANY:
-       prevType=logType;
-       logValue(logType,true,value->asType,value+1/*content*/);
-       break;
+      prevType=logType;
+      valType=value->asType;
+      if(valType<23){
+        logValue(logType,true,valType,value+1/*content*/);
+      }else{
+        assert(false && "unimplemented");
+      }
+      break;
     case TYPE_SIG_OPTIONAL:
       if(value[0].asBool){
         prevType=logType;
         fputs("Optional{",log);
-        logValue(logType,true,typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],value+1/*value*/);
+        valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];
+        if(valType<23){
+          logValue(logType,true,valType,value+1/*value*/);
+        }else{
+          assert(false && "unimplemented");
+        }
         fputs("}",log);
       }else{
         fputs("Optional{}",log);

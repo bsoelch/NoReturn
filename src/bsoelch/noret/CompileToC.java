@@ -117,6 +117,7 @@ public class CompileToC {
     private long typeDataOff=0;
     private final HashMap<Type,Long> typeOffsets=new HashMap<>();
     private StringBuilder typeDataDeclarations;
+    private int min2BlockSignature;
 
     public CompileToC(BufferedWriter out) {
         this.out = out;
@@ -257,26 +258,27 @@ public class CompileToC {
         writeLine("typedef uint64_t Type;");
         writeLine("#define " + TYPE_SIG_PREFIX + "MASK       0xff");
         int count=0;
-        writeLine("#define " + TYPE_SIG_PREFIX + "EMPTY      0x"+Integer.toHexString(count++));
+        writeLine("#define " + TYPE_SIG_PREFIX + "NONE       0x"+Integer.toHexString(count++));
         writeLine("#define " + TYPE_SIG_PREFIX + "BOOL       0x"+Integer.toHexString(count++));
         for(Type.Numeric t: Type.Numeric.types()){
             StringBuilder tmp=new StringBuilder(typeSignature(t));
             while(tmp.length()<19){tmp.append(' ');}
             writeLine("#define "+tmp+" 0x"+Integer.toHexString(count++));
         }
+        writeLine("#define " + TYPE_SIG_PREFIX + "TYPE       0x"+Integer.toHexString(count++));
         writeLine("#define " + TYPE_SIG_PREFIX + "STRING8    0x"+Integer.toHexString(count++));
         writeLine("#define " + TYPE_SIG_PREFIX + "STRING16   0x"+Integer.toHexString(count++));
         writeLine("#define " + TYPE_SIG_PREFIX + "STRING32   0x"+Integer.toHexString(count++));
-        writeLine("#define " + TYPE_SIG_PREFIX + "TYPE       0x"+Integer.toHexString(count++));
-        writeLine("#define " + TYPE_SIG_PREFIX + "NONE       0x"+Integer.toHexString(count++));
-        writeLine("#define " + TYPE_SIG_PREFIX + "ANY        0x"+Integer.toHexString(count++));
-        writeLine("#define " + TYPE_SIG_PREFIX + "OPTIONAL   0x"+Integer.toHexString(count++));//content[u32-off]
-        writeLine("#define " + TYPE_SIG_PREFIX + "REFERENCE  0x"+Integer.toHexString(count++));//content[u32-off]
         writeLine("#define " + TYPE_SIG_PREFIX + "ARRAY      0x"+Integer.toHexString(count++));//content[u32-off]
         writeLine("#define " + TYPE_SIG_PREFIX + "TUPLE      0x"+Integer.toHexString(count++));//content[u32-off][u16-size]
+        writeLine("#define " + TYPE_SIG_PREFIX + "REFERENCE  0x"+Integer.toHexString(count++));//content[u32-off]
+        writeLine("#define " + TYPE_SIG_PREFIX + "PROC       0x"+Integer.toHexString(count++));//signature[u32-off][u16-size]
+        min2BlockSignature=count;
         writeLine("#define " + TYPE_SIG_PREFIX + "UNION      0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
         writeLine("#define " + TYPE_SIG_PREFIX + "STRUCT     0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
-        writeLine("#define " + TYPE_SIG_PREFIX + "PROC       0x"+Integer.toHexString(count++));//signature[u32-off][u16-size]
+        //addLater handle union and struct differently (depending on sum of lengths of contents)
+        writeLine("#define " + TYPE_SIG_PREFIX + "OPTIONAL   0x"+Integer.toHexString(count++));//content[u32-off]
+        writeLine("#define " + TYPE_SIG_PREFIX + "ANY        0x"+Integer.toHexString(count++));
         assert count<=0xff;
         writeLine("#define TYPE_CONTENT_SHIFT  8");
         writeLine("#define TYPE_CONTENT_MASK   0xffffffff");
@@ -321,8 +323,7 @@ public class CompileToC {
         writeLine("  uint64_t   raw64[1];");
         writeLine("};");
         //multi-value types:
-        //  string  ->  len,        val_ptr/raw_data
-        //  array   ->  len,        val_ptr/raw_data
+        //  union   -> (if any element is multi-valued)
         //  struct  ->  elt1,elt2,...,eltN
         //  any     ->  typeID,     val_ptr/raw_data
         //  opt     ->  hasData,    data
@@ -401,6 +402,7 @@ public class CompileToC {
         writeLine("}");
         comment("log-Method");
         writeLine("void " + LOG_VALUE_NAME + "(" + LOG_TYPE_NAME + " logType,bool append,const Type type,const " +VALUE_BLOCK_NAME+"* value){");
+        writeLine("  Type valType;");
         writeLine("  if(prevType!=null){");
         writeLine("    if((logType!=prevType)||(!append)){");
         writeLine("      switch(prevType){");
@@ -433,10 +435,6 @@ public class CompileToC {
         }
         writeLine("  }");
         writeLine("  switch(type&" + TYPE_SIG_PREFIX + "MASK){");
-        writeLine("    case " + TYPE_SIG_PREFIX + "EMPTY:");
-        writeLine("      fputs(\"unexpected Value-Type in log: \\\"EMPTY\\\"\"," + LOG_STREAM_PREFIX +LogType.Type.ERR+");");
-        writeLine("      exit("+ERR_TYPE+");");
-        writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "BOOL:");
         writeLine("      fputs(value->asBool?\"true\":\"false\",log);");
         writeLine("      break;");
@@ -475,14 +473,24 @@ public class CompileToC {
         writeLine("      " + PRINT_TYPE_NAME + "(value->asType,log,false);");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "ANY:");
-        writeLine("       prevType=logType;");
-        writeLine("       " + LOG_VALUE_NAME + "(logType,true,value->asType,value+1/*content*/);");//TODO dereference content if pointer
-        writeLine("       break;");
+        writeLine("      prevType=logType;");
+        writeLine("      valType=value->asType;");
+        writeLine("      if(valType<"+min2BlockSignature+"){");
+        writeLine("        " + LOG_VALUE_NAME + "(logType,true,valType,value+1/*content*/);");
+        writeLine("      }else{");//TODO dereference content
+        writeLine("        assert(false && \"unimplemented\");");
+        writeLine("      }");
+        writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "OPTIONAL:");
         writeLine("      if(value[0].asBool){");
         writeLine("        prevType=logType;");
         writeLine("        fputs(\"Optional{\",log);");
-        writeLine("        " + LOG_VALUE_NAME + "(logType,true,typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK],value+1/*value*/);");
+        writeLine("        valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];");
+        writeLine("        if(valType<"+min2BlockSignature+"){");
+        writeLine("          " + LOG_VALUE_NAME + "(logType,true,valType,value+1/*value*/);");
+        writeLine("        }else{");//TODO dereference content
+        writeLine("          assert(false && \"unimplemented\");");
+        writeLine("        }");
         writeLine("        fputs(\"}\",log);");
         writeLine("      }else{");
         writeLine("        fputs(\"Optional{}\",log);");
