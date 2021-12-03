@@ -34,7 +34,6 @@ public class CompileToC {
     public static final int ERR_NONE  = 0;
     public static final int ERR_MEM   = 1;
     public static final int ERR_INDEX = 2;
-    public static final int ERR_TYPE  = 3;
 
     /* TODO rewrite DataOut
         constant memory may keep the original approach
@@ -118,6 +117,7 @@ public class CompileToC {
     private final HashMap<Type,Long> typeOffsets=new HashMap<>();
     private StringBuilder typeDataDeclarations;
     private int min2BlockSignature;
+    private final int[] minByteSignatures =new int[4];
 
     public CompileToC(BufferedWriter out) {
         this.out = out;
@@ -171,6 +171,32 @@ public class CompileToC {
             }
         }else if(type== Type.Primitive.BOOL){
             return uppercase?"BOOL":"Bool";
+        }else{
+            throw new RuntimeException("unexpected primitive: "+type);
+        }
+    }
+    private static String[] printParams(Type.Primitive type){
+        String[] ret=new String[3];
+        ret[1]="";
+        ret[2]="->"+typeFieldName(type);
+        if(type instanceof Type.Numeric){
+            if(((Type.Numeric)type).isFloat){
+                ret[0]="\"%f\"";
+            }else{
+                if(((Type.Numeric) type).isChar){
+                    if(type.byteCount==1){
+                        ret[0]="\"'%c'\"";
+                        return ret;
+                    }
+                    //TODO implement big-char to String
+                }
+                ret[0]="\"%\"PRI"+(((Type.Numeric)type).signed?"i":"u")+((Type.Numeric)type).bitSize();
+            }
+            return ret;
+        }else if(type== Type.Primitive.BOOL){
+            ret[0]="\"%s\"";
+            ret[2]+="?\"true\":\"false\"";
+            return ret;
         }else{
             throw new RuntimeException("unexpected primitive: "+type);
         }
@@ -258,13 +284,19 @@ public class CompileToC {
         writeLine("typedef uint64_t Type;");
         writeLine("#define " + TYPE_SIG_PREFIX + "MASK       0xff");
         int count=0;
-        writeLine("#define " + TYPE_SIG_PREFIX + "NONE       0x"+Integer.toHexString(count++));
-        writeLine("#define " + TYPE_SIG_PREFIX + "BOOL       0x"+Integer.toHexString(count++));
-        for(Type.Numeric t: Type.Numeric.types()){
+        //primitives 1-8 bytes
+        for(Type.Primitive t: Type.Primitive.types()){
             StringBuilder tmp=new StringBuilder(typeSignature(t));
             while(tmp.length()<19){tmp.append(' ');}
             writeLine("#define "+tmp+" 0x"+Integer.toHexString(count++));
+            for(int i = 0; i< minByteSignatures.length; i++){
+                if(t.byteCount<(2<<i)){
+                    minByteSignatures[i]++;
+                }
+            }
         }
+        //1-block Types
+        writeLine("#define " + TYPE_SIG_PREFIX + "NONE       0x"+Integer.toHexString(count++));
         writeLine("#define " + TYPE_SIG_PREFIX + "TYPE       0x"+Integer.toHexString(count++));
         writeLine("#define " + TYPE_SIG_PREFIX + "STRING8    0x"+Integer.toHexString(count++));
         writeLine("#define " + TYPE_SIG_PREFIX + "STRING16   0x"+Integer.toHexString(count++));
@@ -274,11 +306,13 @@ public class CompileToC {
         writeLine("#define " + TYPE_SIG_PREFIX + "REFERENCE  0x"+Integer.toHexString(count++));//content[u32-off]
         writeLine("#define " + TYPE_SIG_PREFIX + "PROC       0x"+Integer.toHexString(count++));//signature[u32-off][u16-size]
         min2BlockSignature=count;
-        writeLine("#define " + TYPE_SIG_PREFIX + "UNION      0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
-        writeLine("#define " + TYPE_SIG_PREFIX + "STRUCT     0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
+        //2-block types
         //addLater handle union and struct differently (depending on sum of lengths of contents)
         writeLine("#define " + TYPE_SIG_PREFIX + "OPTIONAL   0x"+Integer.toHexString(count++));//content[u32-off]
         writeLine("#define " + TYPE_SIG_PREFIX + "ANY        0x"+Integer.toHexString(count++));
+        //var-block types
+        writeLine("#define " + TYPE_SIG_PREFIX + "UNION      0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
+        writeLine("#define " + TYPE_SIG_PREFIX + "STRUCT     0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
         assert count<=0xff;
         writeLine("#define TYPE_CONTENT_SHIFT  8");
         writeLine("#define TYPE_CONTENT_MASK   0xffffffff");
@@ -303,8 +337,7 @@ public class CompileToC {
         writeLine("typedef double float64_t;");
         comment("value-block definition");
         writeLine("union " + VALUE_BLOCK_NAME + "Impl{");
-        writeLine("  bool       asBool;");
-        for(Type.Numeric t:Type.Numeric.types()){
+        for(Type.Primitive t:Type.Primitive.types()){
             StringBuilder tmp=new StringBuilder("  ");
             tmp.append(cTypeName(t));
             while(tmp.length()<12){
@@ -351,10 +384,7 @@ public class CompileToC {
         comment("recursive printing of types");
         writeLine("void " + PRINT_TYPE_NAME + "(const Type type,FILE* log,bool recursive){");
         writeLine("  switch(type&" + TYPE_SIG_PREFIX + "MASK){");
-        writeLine("    case " + TYPE_SIG_PREFIX + "BOOL:");
-        writeLine("      fputs(\""+escapeStr(Type.Primitive.BOOL)+"\",log);");
-        writeLine("      break;");
-        for(Type.Numeric t:Type.Numeric.types()){
+        for(Type.Primitive t:Type.Primitive.types()){
             writeLine("    case "+typeSignature(t)+":");
             writeLine("      fputs(\""+escapeStr(t)+"\",log);");
             writeLine("      break;");
@@ -401,6 +431,7 @@ public class CompileToC {
         writeLine("  }");
         writeLine("}");
         comment("log-Method");
+        //TODO extract printValue to its own function
         writeLine("void " + LOG_VALUE_NAME + "(" + LOG_TYPE_NAME + " logType,bool append,const Type type,const " +VALUE_BLOCK_NAME+"* value){");
         writeLine("  Type valType;");
         writeLine("  if(prevType!=null){");
@@ -435,36 +466,20 @@ public class CompileToC {
         }
         writeLine("  }");
         writeLine("  switch(type&" + TYPE_SIG_PREFIX + "MASK){");
-        writeLine("    case " + TYPE_SIG_PREFIX + "BOOL:");
-        writeLine("      fputs(value->asBool?\"true\":\"false\",log);");
-        writeLine("      break;");
-        for(int n=8;n<100;n*=2){
-            writeLine("    case " + TYPE_SIG_PREFIX + "I"+n+":");
-            writeLine("      fprintf(log,\"%\"PRIi"+n+",value->asI"+n+");");
-            writeLine("      break;");
-            writeLine("    case " + TYPE_SIG_PREFIX + "U"+n+":");
-            writeLine("      fprintf(log,\"%\"PRIu"+n+",value->asU"+n+");");
+        for(Type.Primitive t: Type.Primitive.types()){
+            String[] parts=printParams(t);
+            writeLine("    case " + typeSignature(t)+":");
+            writeLine("      fprintf(log,"+parts[0]+","+parts[1]+"value"+parts[2]+");");
             writeLine("      break;");
         }
-        writeLine("    case " + TYPE_SIG_PREFIX + "F32:");
-        writeLine("      fprintf(log,\"%f\",value->asF32);");
-        writeLine("      break;");
-        writeLine("    case " + TYPE_SIG_PREFIX + "F64:");
-        writeLine("      fprintf(log,\"%f\",value->asF64);");
-        writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "NONE:");
         writeLine("      fputs(\"\\\"none\\\"\",log);");
-        writeLine("      break;");
-        writeLine("    case " + TYPE_SIG_PREFIX + "C8:");
-        writeLine("      fprintf(log,\"'%c'\",value->asC8);");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRING8:");//!!! this implementation assumes that the system encoding is UTF8
         writeLine("      fprintf(log,\"%.*s\",(int)(value->asPtr["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+")"+
                 ",(char*)(value->asPtr+"+ARRAY_HEADER+"/*header*/+value->asPtr[0].asU64/*off*/));");
         writeLine("      break;");
-        writeLine("    case " + TYPE_SIG_PREFIX + "C16:");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRING16:");
-        writeLine("    case " + TYPE_SIG_PREFIX + "C32:");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRING32:");
         //TODO print wide strings/chars
         writeLine("      assert(false && \"unimplemented\");");

@@ -56,7 +56,7 @@ public class Type {
     public static final Type NONE_TYPE = new Type("\"none\"", 1, false);
 
     public static class Primitive extends Type{
-        private static final HashMap<String,Type> primitives=new HashMap<>();
+        private static final TreeMap<String,Primitive> primitives=new TreeMap<>();
 
         public final int byteCount;
 
@@ -68,12 +68,15 @@ public class Type {
             if(primitives.put(name,this)!=null){
                 throw new RuntimeException("The primitive \""+name+"\" already exists");
             }
-            initFields();
         }
-        void initFields(){}
+
+        public static Collection<Primitive> types(){
+            ArrayList<Primitive> ret = new ArrayList<>(Primitive.primitives.values());
+            ret.sort(Comparator.comparingInt(a -> a.byteCount));
+            return ret;
+        }
     }
     public static class Numeric extends Primitive{
-        private static final ArrayList<Numeric> numberTypes=new ArrayList<>();
         public final int level;
         public final boolean signed,isFloat;
         public final boolean isChar;
@@ -103,15 +106,10 @@ public class Type {
             this.signed=signed;
             this.isFloat=isFloat;
             this.isChar=isChar;
-            numberTypes.add(this);
         }
 
         public int bitSize(){
             return 8*byteCount;
-        }
-
-        public static Iterable<Numeric> types(){
-            return numberTypes;
         }
     }
     public static class NoRetString extends Type{

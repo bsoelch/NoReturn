@@ -13,21 +13,21 @@
 // Type Definitions
 typedef uint64_t Type;
 #define TYPE_SIG_MASK       0xff
-#define TYPE_SIG_NONE       0x0
-#define TYPE_SIG_BOOL       0x1
+#define TYPE_SIG_BOOL       0x0
+#define TYPE_SIG_C8         0x1
 #define TYPE_SIG_I8         0x2
 #define TYPE_SIG_U8         0x3
-#define TYPE_SIG_I16        0x4
-#define TYPE_SIG_U16        0x5
-#define TYPE_SIG_I32        0x6
-#define TYPE_SIG_U32        0x7
-#define TYPE_SIG_I64        0x8
-#define TYPE_SIG_U64        0x9
-#define TYPE_SIG_C8         0xa
-#define TYPE_SIG_C16        0xb
-#define TYPE_SIG_C32        0xc
-#define TYPE_SIG_F32        0xd
-#define TYPE_SIG_F64        0xe
+#define TYPE_SIG_C16        0x4
+#define TYPE_SIG_I16        0x5
+#define TYPE_SIG_U16        0x6
+#define TYPE_SIG_C32        0x7
+#define TYPE_SIG_F32        0x8
+#define TYPE_SIG_I32        0x9
+#define TYPE_SIG_U32        0xa
+#define TYPE_SIG_F64        0xb
+#define TYPE_SIG_I64        0xc
+#define TYPE_SIG_U64        0xd
+#define TYPE_SIG_NONE       0xe
 #define TYPE_SIG_TYPE       0xf
 #define TYPE_SIG_STRING8    0x10
 #define TYPE_SIG_STRING16   0x11
@@ -36,10 +36,10 @@ typedef uint64_t Type;
 #define TYPE_SIG_TUPLE      0x14
 #define TYPE_SIG_REFERENCE  0x15
 #define TYPE_SIG_PROC       0x16
-#define TYPE_SIG_UNION      0x17
-#define TYPE_SIG_STRUCT     0x18
-#define TYPE_SIG_OPTIONAL   0x19
-#define TYPE_SIG_ANY        0x1a
+#define TYPE_SIG_OPTIONAL   0x17
+#define TYPE_SIG_ANY        0x18
+#define TYPE_SIG_UNION      0x19
+#define TYPE_SIG_STRUCT     0x1a
 #define TYPE_CONTENT_SHIFT  8
 #define TYPE_CONTENT_MASK   0xffffffff
 #define TYPE_COUNT_SHIFT    40
@@ -57,19 +57,19 @@ typedef double float64_t;
 // value-block definition
 union ValueImpl{
   bool       asBool;
+  uint8_t    asC8;
   int8_t     asI8;
   uint8_t    asU8;
+  uint16_t   asC16;
   int16_t    asI16;
   uint16_t   asU16;
-  int32_t    asI32;
-  uint32_t   asU32;
-  int64_t    asI64;
-  uint64_t   asU64;
-  uint8_t    asC8;
-  uint16_t   asC16;
   uint32_t   asC32;
   float32_t  asF32;
+  int32_t    asI32;
+  uint32_t   asU32;
   float64_t  asF64;
+  int64_t    asI64;
+  uint64_t   asU64;
   Type       asType;
   Procedure  asProc;
   Value*     asPtr;
@@ -108,11 +108,17 @@ void printType(const Type type,FILE* log,bool recursive){
     case TYPE_SIG_BOOL:
       fputs("Type:bool",log);
       break;
+    case TYPE_SIG_C8:
+      fputs("Type:char8",log);
+      break;
     case TYPE_SIG_I8:
       fputs("Type:int8",log);
       break;
     case TYPE_SIG_U8:
       fputs("Type:uint8",log);
+      break;
+    case TYPE_SIG_C16:
+      fputs("Type:char16",log);
       break;
     case TYPE_SIG_I16:
       fputs("Type:int16",log);
@@ -120,32 +126,26 @@ void printType(const Type type,FILE* log,bool recursive){
     case TYPE_SIG_U16:
       fputs("Type:uint16",log);
       break;
-    case TYPE_SIG_I32:
-      fputs("Type:int32",log);
-      break;
-    case TYPE_SIG_U32:
-      fputs("Type:uint32",log);
-      break;
-    case TYPE_SIG_I64:
-      fputs("Type:int64",log);
-      break;
-    case TYPE_SIG_U64:
-      fputs("Type:uint64",log);
-      break;
-    case TYPE_SIG_C8:
-      fputs("Type:char8",log);
-      break;
-    case TYPE_SIG_C16:
-      fputs("Type:char16",log);
-      break;
     case TYPE_SIG_C32:
       fputs("Type:char32",log);
       break;
     case TYPE_SIG_F32:
       fputs("Type:float32",log);
       break;
+    case TYPE_SIG_I32:
+      fputs("Type:int32",log);
+      break;
+    case TYPE_SIG_U32:
+      fputs("Type:uint32",log);
+      break;
     case TYPE_SIG_F64:
       fputs("Type:float64",log);
+      break;
+    case TYPE_SIG_I64:
+      fputs("Type:int64",log);
+      break;
+    case TYPE_SIG_U64:
+      fputs("Type:uint64",log);
       break;
     case TYPE_SIG_STRING8:
       fputs("Type:string8",log);
@@ -235,7 +235,10 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
   }
   switch(type&TYPE_SIG_MASK){
     case TYPE_SIG_BOOL:
-      fputs(value->asBool?"true":"false",log);
+      fprintf(log,"%s",value->asBool?"true":"false");
+      break;
+    case TYPE_SIG_C8:
+      fprintf(log,"'%c'",value->asC8);
       break;
     case TYPE_SIG_I8:
       fprintf(log,"%"PRIi8,value->asI8);
@@ -243,11 +246,20 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
     case TYPE_SIG_U8:
       fprintf(log,"%"PRIu8,value->asU8);
       break;
+    case TYPE_SIG_C16:
+      fprintf(log,"%"PRIu16,value->asC16);
+      break;
     case TYPE_SIG_I16:
       fprintf(log,"%"PRIi16,value->asI16);
       break;
     case TYPE_SIG_U16:
       fprintf(log,"%"PRIu16,value->asU16);
+      break;
+    case TYPE_SIG_C32:
+      fprintf(log,"%"PRIu32,value->asC32);
+      break;
+    case TYPE_SIG_F32:
+      fprintf(log,"%f",value->asF32);
       break;
     case TYPE_SIG_I32:
       fprintf(log,"%"PRIi32,value->asI32);
@@ -255,30 +267,22 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
     case TYPE_SIG_U32:
       fprintf(log,"%"PRIu32,value->asU32);
       break;
+    case TYPE_SIG_F64:
+      fprintf(log,"%f",value->asF64);
+      break;
     case TYPE_SIG_I64:
       fprintf(log,"%"PRIi64,value->asI64);
       break;
     case TYPE_SIG_U64:
       fprintf(log,"%"PRIu64,value->asU64);
       break;
-    case TYPE_SIG_F32:
-      fprintf(log,"%f",value->asF32);
-      break;
-    case TYPE_SIG_F64:
-      fprintf(log,"%f",value->asF64);
-      break;
     case TYPE_SIG_NONE:
       fputs("\"none\"",log);
-      break;
-    case TYPE_SIG_C8:
-      fprintf(log,"'%c'",value->asC8);
       break;
     case TYPE_SIG_STRING8:
       fprintf(log,"%.*s",(int)(value->asPtr[2].asU64),(char*)(value->asPtr+3/*header*/+value->asPtr[0].asU64/*off*/));
       break;
-    case TYPE_SIG_C16:
     case TYPE_SIG_STRING16:
-    case TYPE_SIG_C32:
     case TYPE_SIG_STRING32:
       assert(false && "unimplemented");
       break;
