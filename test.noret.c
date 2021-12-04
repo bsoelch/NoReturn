@@ -184,13 +184,141 @@ void printType(const Type type,FILE* log,bool recursive){
     case TYPE_SIG_STRUCT:
     case TYPE_SIG_UNION:
     case TYPE_SIG_PROC:
+      assert(false && " unimplemented ");
+      break;
+    default:
+      assert(false && " unimplemented ");
+      break;
+  }
+}
+// recursive printing of values
+void printValue(FILE* log,Type type,const void* value){
+  Value* data;
+  Type valType;
+  switch(type&TYPE_SIG_MASK){
+    case TYPE_SIG_BOOL:
+      fprintf(log,"%s",(*((bool*)value))?"true":"false");
+      break;
+    case TYPE_SIG_C8:
+      fprintf(log,"'%c'",(*((uint8_t*)value)));
+      break;
+    case TYPE_SIG_I8:
+      fprintf(log,"%"PRIi8,(*((int8_t*)value)));
+      break;
+    case TYPE_SIG_U8:
+      fprintf(log,"%"PRIu8,(*((uint8_t*)value)));
+      break;
+    case TYPE_SIG_C16:
+      fprintf(log,"%"PRIu16,(*((uint16_t*)value)));
+      break;
+    case TYPE_SIG_I16:
+      fprintf(log,"%"PRIi16,(*((int16_t*)value)));
+      break;
+    case TYPE_SIG_U16:
+      fprintf(log,"%"PRIu16,(*((uint16_t*)value)));
+      break;
+    case TYPE_SIG_C32:
+      fprintf(log,"%"PRIu32,(*((uint32_t*)value)));
+      break;
+    case TYPE_SIG_F32:
+      fprintf(log,"%f",(*((float32_t*)value)));
+      break;
+    case TYPE_SIG_I32:
+      fprintf(log,"%"PRIi32,(*((int32_t*)value)));
+      break;
+    case TYPE_SIG_U32:
+      fprintf(log,"%"PRIu32,(*((uint32_t*)value)));
+      break;
+    case TYPE_SIG_F64:
+      fprintf(log,"%f",(*((float64_t*)value)));
+      break;
+    case TYPE_SIG_I64:
+      fprintf(log,"%"PRIi64,(*((int64_t*)value)));
+      break;
+    case TYPE_SIG_U64:
+      fprintf(log,"%"PRIu64,(*((uint64_t*)value)));
+      break;
+    case TYPE_SIG_NONE:
+      fputs("\"none\"",log);
+      break;
+    case TYPE_SIG_STRING8:
+      data=*((Value**)value);/*value->asPtr*/
+      fprintf(log,"%.*s",(int)(data[2].asU64),(char*)(data+3/*header*/+data[0].asU64/*off*/));
+      break;
+    case TYPE_SIG_STRING16:
+    case TYPE_SIG_STRING32:
+      assert(false && "unimplemented");
+      break;
+    case TYPE_SIG_TYPE:
+      printType(*((Type*)value),log,false);
+      break;
+    case TYPE_SIG_ANY:
+      valType=*((Type*)value);
+      if((valType&TYPE_SIG_MASK)<23){
+        printValue(log,valType,value+sizeof(Value)/*content*/);
+      }else{
+        printValue(log,valType,*((Value**)(value+sizeof(Value)))/*value*/);
+      }
+      break;
+    case TYPE_SIG_OPTIONAL:
+      if(*((bool*)value)){
+        fputs("Optional{",log);
+        valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];
+        if((valType&TYPE_SIG_MASK)<23){
+          printValue(log,valType,value+sizeof(Value)/*value*/);
+        }else{
+          printValue(log,valType,*((Value**)(value+sizeof(Value)))/*value*/);
+        }
+        fputs("}",log);
+      }else{
+        fputs("Optional{}",log);
+      }
+      break;
+    case TYPE_SIG_REFERENCE:
+      valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];
+      printValue(log,valType,*((Value**)value)/*content*/);
+      break;
+    case TYPE_SIG_ARRAY:
+      data=*((Value**)value);/*value->asPtr*/
+      valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];
+      size_t w;
+      void* min;
+      void* max;
+      if((valType&TYPE_SIG_MASK)<4){
+        w=1;
+      }else if((valType&TYPE_SIG_MASK)<7){
+        w=2;
+      }else if((valType&TYPE_SIG_MASK)<11){
+        w=4;
+      }else if((valType&TYPE_SIG_MASK)<14){
+        w=8;
+      }else if((valType&TYPE_SIG_MASK)<23){
+        w=sizeof(Value);
+      }else{
+        w=2*sizeof(Value);
+      }
+      min=data+3/*header size*/+data[0].asU64/*off*/;
+      max=min+w*(data[2].asU64)/*len*/;
+      fputs("{",log);
+      for(void* p=min;p<max;p+=w){
+        if(p>min){fputs(",",log);}
+        printValue(log,valType,p/*element*/);
+      }
+      fputs("}",log);
+      break;
+    case TYPE_SIG_TUPLE:
+    case TYPE_SIG_UNION:
+    case TYPE_SIG_STRUCT:
+    case TYPE_SIG_PROC:
+      assert(false && " unimplemented ");
+      break;
+    default:
       assert(false && " unreachable ");
       break;
   }
 }
 // log-Method
 void logValue(LogType logType,bool append,const Type type,const Value* value){
-  Type valType;
   if(prevType!=null){
     if((logType!=prevType)||(!append)){
       switch(prevType){
@@ -233,96 +361,7 @@ void logValue(LogType logType,bool append,const Type type,const Value* value){
       }
       break;
   }
-  switch(type&TYPE_SIG_MASK){
-    case TYPE_SIG_BOOL:
-      fprintf(log,"%s",value->asBool?"true":"false");
-      break;
-    case TYPE_SIG_C8:
-      fprintf(log,"'%c'",value->asC8);
-      break;
-    case TYPE_SIG_I8:
-      fprintf(log,"%"PRIi8,value->asI8);
-      break;
-    case TYPE_SIG_U8:
-      fprintf(log,"%"PRIu8,value->asU8);
-      break;
-    case TYPE_SIG_C16:
-      fprintf(log,"%"PRIu16,value->asC16);
-      break;
-    case TYPE_SIG_I16:
-      fprintf(log,"%"PRIi16,value->asI16);
-      break;
-    case TYPE_SIG_U16:
-      fprintf(log,"%"PRIu16,value->asU16);
-      break;
-    case TYPE_SIG_C32:
-      fprintf(log,"%"PRIu32,value->asC32);
-      break;
-    case TYPE_SIG_F32:
-      fprintf(log,"%f",value->asF32);
-      break;
-    case TYPE_SIG_I32:
-      fprintf(log,"%"PRIi32,value->asI32);
-      break;
-    case TYPE_SIG_U32:
-      fprintf(log,"%"PRIu32,value->asU32);
-      break;
-    case TYPE_SIG_F64:
-      fprintf(log,"%f",value->asF64);
-      break;
-    case TYPE_SIG_I64:
-      fprintf(log,"%"PRIi64,value->asI64);
-      break;
-    case TYPE_SIG_U64:
-      fprintf(log,"%"PRIu64,value->asU64);
-      break;
-    case TYPE_SIG_NONE:
-      fputs("\"none\"",log);
-      break;
-    case TYPE_SIG_STRING8:
-      fprintf(log,"%.*s",(int)(value->asPtr[2].asU64),(char*)(value->asPtr+3/*header*/+value->asPtr[0].asU64/*off*/));
-      break;
-    case TYPE_SIG_STRING16:
-    case TYPE_SIG_STRING32:
-      assert(false && "unimplemented");
-      break;
-    case TYPE_SIG_TYPE:
-      printType(value->asType,log,false);
-      break;
-    case TYPE_SIG_ANY:
-      prevType=logType;
-      valType=value->asType;
-      if(valType<23){
-        logValue(logType,true,valType,value+1/*content*/);
-      }else{
-        assert(false && "unimplemented");
-      }
-      break;
-    case TYPE_SIG_OPTIONAL:
-      if(value[0].asBool){
-        prevType=logType;
-        fputs("Optional{",log);
-        valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];
-        if(valType<23){
-          logValue(logType,true,valType,value+1/*value*/);
-        }else{
-          assert(false && "unimplemented");
-        }
-        fputs("}",log);
-      }else{
-        fputs("Optional{}",log);
-      }
-      break;
-    case TYPE_SIG_REFERENCE:
-    case TYPE_SIG_ARRAY:
-    case TYPE_SIG_PROC:
-    case TYPE_SIG_STRUCT:
-      assert(false && " unimplemented ");
-      break;
-    default:
-      assert(false && " unreachable ");
-      break;
-  }
+  printValue(log,type,value);
   prevType=logType;
 }
 
@@ -373,7 +412,22 @@ void* noRet_run(void* initState);
 // start(Type:string8[])
 void* proc_start(Value* argsIn,Value* argsOut){
   // var0:(argsIn+0)
-  {// Log: Log[DEFAULT]{IfExpr{BinOp{GetField{VarExpression{0}.length} GT ValueExpression{0}}?GetIndex{VarExpression{0}[ValueExpression{0}]}:ValueExpression{"No Arguments Provided"}}}
+  {// Log: Log[DEBUG]{VarExpression{0}}
+    logValue(DEBUG,false,TYPE_SIG_ARRAY|(2<<TYPE_CONTENT_SHIFT),(argsIn+0));
+  }
+  {// Log: Log[DEBUG]{ValueExpression{"args[0]="}}
+    Value tmp0 [1];
+    {
+      Value* tmp1=malloc((4)*sizeof(Value));
+      tmp1[0]=(Value){.asU64=0}; /*off*/
+      tmp1[1]=(Value){.asU64=1}; /*cap*/
+      tmp1[2]=(Value){.asU64=8}; /*len*/
+      memcpy(tmp1+3,(Value[]){(Value){.raw8={0x61,0x72,0x67,0x73,0x5b,0x30,0x5d,0x3d}}},(1)*sizeof(Value));
+      memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
+    }
+    logValue(DEBUG,false,TYPE_SIG_STRING8,tmp0);
+  }
+  {// Log: Log[_DEBUG]{IfExpr{BinOp{GetField{VarExpression{0}.length} GT ValueExpression{0}}?GetIndex{VarExpression{0}[ValueExpression{0}]}:ValueExpression{"No Arguments Provided"}}}
     Value tmp0 [1];
     {
       if(((bool)(((argsIn+0)[0].asPtr+2)[0].asU64>((int32_t)(0))))){
@@ -391,7 +445,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
         memcpy(tmp0,tmp1,1*sizeof(Value));
       }
     }
-    logValue(DEFAULT,false,TYPE_SIG_STRING8,tmp0);
+    logValue(DEBUG,true,TYPE_SIG_STRING8,tmp0);
   }
   Value var1 [1];// (Type:string8)
   {// Initialize: ValueExpression{"UTF8-String"}
@@ -459,6 +513,9 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{VarExpression{6}}
     logValue(DEFAULT,false,TYPE_SIG_I32,var6);
   }
+  {// Log: Log[DEFAULT]{ValueExpression{{2112454933,2,3}}}
+    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),const_y);
+  }
   {// Log: Log[DEFAULT]{ValueExpression{2112454933}}
     logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=2112454933}}));
   }
@@ -466,7 +523,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}}));
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(3<<TYPE_CONTENT_SHIFT)}}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(4<<TYPE_CONTENT_SHIFT)}}));
   }
   Value var7 [1];// (Type:uint64)
   {// Initialize: ValueExpression{3}
@@ -494,6 +551,9 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{GetIndex{VarExpression{8}[ValueExpression{0}]}}
     logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=*((int32_t*)getRawElement(var8->asPtr,((int32_t)(0)),4))}}));
   }
+  {// Log: Log[DEFAULT]{VarExpression{8}}
+    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),var8);
+  }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_NONE}}));
   }
@@ -520,7 +580,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
 }
 
 // declarations of all used type Signatures
-Type typeData []={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(2<<TYPE_CONTENT_SHIFT)};
+Type typeData []={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_STRING8,TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(3<<TYPE_CONTENT_SHIFT)};
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* noRet_run(void* initState){
     Procedure f=*((Procedure*)initState);

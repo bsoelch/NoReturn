@@ -31,10 +31,10 @@ public class LogAction implements Action {
                 System.out.print(value);
                 break;
             case DEBUG:
-                System.out.print((type.append?"":"Debug:")+value);
+                System.out.print((type.append?"":"Debug: ")+value);
                 break;
             case INFO:
-                System.out.print((type.append?"":"Info:")+value);
+                System.out.print((type.append?"":"Info: ")+value);
                 break;
             case ERR:
                 System.err.print(value);
