@@ -476,6 +476,8 @@ void* getRawElement(Value* array,uint64_t index,int byteWidth){
   }
 }
 
+// const Type:struct_test : aStruct = {.a=0,.b=1}
+const Value const_aStruct []={{.asI32=0},{.asI32=1}};
 // const Type:int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
 // const Type:any : array_test = {{1,2,3},{4,5},{6}}

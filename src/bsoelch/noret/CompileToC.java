@@ -848,15 +848,17 @@ public class CompileToC {
             out.append("{.asPtr=(").append(loc).append(")}");
             StringBuilder content=dataOut.newValueBuilder(loc,v.getType(),((Value.ArrayOrTuple) v).elements().length,prefix);
             isFirst=!dataOut.constant;
-            for (Value elt : ((Value.ArrayOrTuple) v).elements()) {
+            for (Value elt : (Value.ArrayOrTuple) v) {
                 writeConstValueAsUnion(content,elt, dataOut, isFirst, prefix);
                 isFirst=false;
             }
             dataOut.addValueBuilder(loc,content,v.getType(),((Value.ArrayOrTuple) v).elements().length);
         }else if(v instanceof Value.Struct){
-            throw new UnsupportedOperationException("structs are currently not supported");
-            //write fields one by one
-            //write fields preceded with types if in any
+            isFirst=true;
+            for(Value elt:(Value.Struct)v){
+                writeConstValueAsUnion(out,elt, dataOut, isFirst, prefix);
+                isFirst=false;
+            }
         }else if(v == Value.NONE){
             if(prefix){out.append(CAST_BLOCK); }
             out.append("{.asPtr=NULL/*none*/}");

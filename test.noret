@@ -4,6 +4,8 @@ const int[]:y={1234567890123456789,2,3.0};
 const any: array_test =(int32[][]:){{1,2,3},{4,5},{6}};
 const string8[]:str_test={"str1","str2"};
 const int32[][]?[]:type_sig_test={};
+struct struct_test{int32:a,int32:b};
+const struct_test:aStruct={.a=0,.b=1};
 ## struct struct_test{tuple{int32,int64}:a,union{int32:c,float64:d}:b};
 
 start(string8[]):(args)=>{
