@@ -29,6 +29,9 @@ start(string8[]):(args)=>{
     log '💻';
     any:anAny=3;
     log anAny.type;
+    tuple{int32,int32,int32}:aTuple={1,2,3};
+    ## log aTuple;
+    log aTuple.length;
     int:add=1+(int:)(args.length);
     int:mathTest=add*add-add//2;
     log mathTest;

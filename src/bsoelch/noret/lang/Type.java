@@ -406,6 +406,7 @@ public class Type {
             super(name==null?tupleName(elements):name, calculateBlockCount(elements), isVarSize(elements));
             this.tupleName=name;
             this.elements=elements;
+            fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
         }
         public Type[] getElements() {
             return elements;

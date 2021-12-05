@@ -614,16 +614,23 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{GetField{VarExpression{4}.type}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,var4);
   }
-  Value var5 [1];// (Type:int32)
-  {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
-    memcpy(var5,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(1))+((int32_t)(((argsIn+0)[0].asPtr+2)[0].asU64))))}}),1*sizeof(Value));
+  Value var5 [3];// (Type:tuple{Type:int32, Type:int32, Type:int32})
+  {// Initialize: ValueExpression{{1,2,3}}
+    memcpy(var5,((Value[]){(Value){.asI32=1},(Value){.asI32=2},(Value){.asI32=3}}),3*sizeof(Value));
+  }
+  {// Log: Log[DEFAULT]{GetField{VarExpression{5}.length}}
+    logValue(DEFAULT,false,TYPE_SIG_U64,((Value[]){(Value){.asU64=3}}));
   }
   Value var6 [1];// (Type:int32)
-  {// Initialize: BinOp{BinOp{VarExpression{5} MULT VarExpression{5}} MINUS BinOp{VarExpression{5} INT_DIV ValueExpression{2}}}
-    memcpy(var6,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(var5[0].asI32*var5[0].asI32))-((int32_t)(var5[0].asI32/((int32_t)(2))))))}}),1*sizeof(Value));
+  {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
+    memcpy(var6,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(1))+((int32_t)(((argsIn+0)[0].asPtr+2)[0].asU64))))}}),1*sizeof(Value));
   }
-  {// Log: Log[DEFAULT]{VarExpression{6}}
-    logValue(DEFAULT,false,TYPE_SIG_I32,var6);
+  Value var7 [1];// (Type:int32)
+  {// Initialize: BinOp{BinOp{VarExpression{6} MULT VarExpression{6}} MINUS BinOp{VarExpression{6} INT_DIV ValueExpression{2}}}
+    memcpy(var7,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(var6[0].asI32*var6[0].asI32))-((int32_t)(var6[0].asI32/((int32_t)(2))))))}}),1*sizeof(Value));
+  }
+  {// Log: Log[DEFAULT]{VarExpression{7}}
+    logValue(DEFAULT,false,TYPE_SIG_I32,var7);
   }
   {// Log: Log[DEFAULT]{ValueExpression{{2112454933,2,3}}}
     logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),const_y);
@@ -637,14 +644,14 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(4<<TYPE_CONTENT_SHIFT)}}));
   }
-  Value var7 [1];// (Type:uint64)
+  Value var8 [1];// (Type:uint64)
   {// Initialize: ValueExpression{3}
-    memcpy(var7,((Value[]){(Value){.asU64=3}}),1*sizeof(Value));
+    memcpy(var8,((Value[]){(Value){.asU64=3}}),1*sizeof(Value));
   }
-  {// Log: Log[DEFAULT]{VarExpression{7}}
-    logValue(DEFAULT,false,TYPE_SIG_U64,var7);
+  {// Log: Log[DEFAULT]{VarExpression{8}}
+    logValue(DEFAULT,false,TYPE_SIG_U64,var8);
   }
-  Value var8 [1];// (Type:int32[])
+  Value var9 [1];// (Type:int32[])
   {// Initialize: ValueExpression{{1,2,3,42}}
     Value tmp0 [1];
     {
@@ -655,32 +662,32 @@ void* proc_start(Value* argsIn,Value* argsOut){
       memcpy(tmp1+3,(Value[]){(Value){.raw32={1,2}},(Value){.raw32={3,42}}},(2)*sizeof(Value));
       memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
     }
-    memcpy(var8,tmp0,1*sizeof(Value));
+    memcpy(var9,tmp0,1*sizeof(Value));
   }
-  {// Assign: Assignment:{GetIndex{VarExpression{8}[ValueExpression{0}]}=ValueExpression{123456789}}
-    *((int32_t*)getRawElement(var8->asPtr,((int32_t)(0)),4))=((int32_t)(123456789));
+  {// Assign: Assignment:{GetIndex{VarExpression{9}[ValueExpression{0}]}=ValueExpression{123456789}}
+    *((int32_t*)getRawElement(var9->asPtr,((int32_t)(0)),4))=((int32_t)(123456789));
   }
-  {// Log: Log[DEFAULT]{GetIndex{VarExpression{8}[ValueExpression{0}]}}
-    logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=*((int32_t*)getRawElement(var8->asPtr,((int32_t)(0)),4))}}));
+  {// Log: Log[DEFAULT]{GetIndex{VarExpression{9}[ValueExpression{0}]}}
+    logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=*((int32_t*)getRawElement(var9->asPtr,((int32_t)(0)),4))}}));
   }
-  {// Log: Log[DEFAULT]{VarExpression{8}}
-    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),var8);
+  {// Log: Log[DEFAULT]{VarExpression{9}}
+    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),var9);
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_NONE}}));
   }
-  Value var9 [2];// (Type:int32?)
+  Value var10 [2];// (Type:int32?)
   {// Initialize: TypeCast{Type:int32?:ValueExpression{4}}
-    memcpy(var9,((Value[]){(Value){.asBool=true},(Value){.asI32=((int32_t)(4))}}),2*sizeof(Value));
+    memcpy(var10,((Value[]){(Value){.asBool=true},(Value){.asI32=((int32_t)(4))}}),2*sizeof(Value));
   }
-  {// Log: Log[DEFAULT]{VarExpression{9}}
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var9);
+  {// Log: Log[DEFAULT]{VarExpression{10}}
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var10);
   }
-  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{9}}?TypeCast{Type:int32?:GetField{VarExpression{9}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
+  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{10}}?TypeCast{Type:int32?:GetField{VarExpression{10}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
     Value tmp0 [2];
     {
-      if(((var9)[0].asBool)){
-        memcpy(tmp0,((Value[]){(Value){.asBool=true},(Value){.asI32=((var9)+1)[0].asI32}}),2*sizeof(Value));
+      if(((var10)[0].asBool)){
+        memcpy(tmp0,((Value[]){(Value){.asBool=true},(Value){.asI32=((var10)+1)[0].asI32}}),2*sizeof(Value));
       }else{
         memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asPtr=NULL/*none*/}}))[0]}),2*sizeof(Value));
       }
