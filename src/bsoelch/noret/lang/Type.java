@@ -17,9 +17,13 @@ public class Type {
     public static final String FIELD_NAME_VALUE = "value";
     public static final String FIELDS_PROC_TYPES = "argTypes";
 
+    public Iterable<Type> childTypes() {
+        return Collections.emptySet();
+    }
+
     private static final class TypeType extends Type{
         private TypeType() {
-            super("type", 1, false);
+            super("type", 1, false, true);
             fields.put("isArray",     Primitive.BOOL);
             fields.put("isStruct",    Primitive.BOOL);
             fields.put("isOptional",  Primitive.BOOL);
@@ -42,7 +46,7 @@ public class Type {
 
         public final String genericName;
         public AnyType(String name) {
-            super("any", 2, true);
+            super("any", 2, true, true);
             genericName=name==null?null:"$"+name;
         }
         @Override
@@ -53,7 +57,7 @@ public class Type {
     /**Type of NONE Value, assignable to any reference*/
     public static final Type TYPE = new TypeType();
     /**Type of NONE Value, assignable to any reference*/
-    public static final Type NONE_TYPE = new Type("\"none\"", 1, false);
+    public static final Type NONE_TYPE = new Type("\"none\"", 1, false, true);
 
     public static class Primitive extends Type{
         private static final TreeMap<String,Primitive> primitives=new TreeMap<>();
@@ -63,7 +67,7 @@ public class Type {
         public static final Primitive BOOL      = new Primitive("bool",false, 1);
 
         private Primitive(String name, boolean varSize, int byteCount){
-            super(name, 1, varSize);
+            super(name, 1, varSize, true);
             this.byteCount = byteCount;
             if(primitives.put(name,this)!=null){
                 throw new RuntimeException("The primitive \""+name+"\" already exists");
@@ -126,7 +130,7 @@ public class Type {
         public final Type.Numeric charType;
 
         private NoRetString(int charBits, Type.Numeric charType) {
-            super("string"+ charBits,1,true);
+            super("string"+ charBits,1,true, true);
             this.charBits = charBits;
             this.charType=charType;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
@@ -151,11 +155,14 @@ public class Type {
     public final int blockCount;
     /**true if values of this type have a variable encoding size*/
     public final boolean varSize;
+    /**true if this type is no composition of smaller types*/
+    public final boolean isAtomic;
 
-    private Type(String name, int blockCount, boolean varSize){
+    private Type(String name, int blockCount, boolean varSize, boolean isAtomic){
         this.name=name;
         this.blockCount = blockCount;
         this.varSize = varSize;
+        this.isAtomic = isAtomic;
         synchronized (waitingForTypeType) {
             if(TYPE!=null){
                 fields.put(FIELD_NAME_TYPE,TYPE);
@@ -316,7 +323,7 @@ public class Type {
     public static class Optional extends Type{
         public final Type content;
         public Optional(Type content) {
-            super(content.wrappedName()+"?", 2, content.varSize);
+            super(content.wrappedName()+"?", 2, content.varSize, false);
             this.content=content;
             fields.put(FIELD_NAME_VALUE,content);
         }
@@ -335,11 +342,16 @@ public class Type {
         public int hashCode() {
             return Objects.hash(content);
         }
+
+        @Override
+        public Iterable<Type> childTypes() {
+            return Collections.singleton(content);
+        }
     }
     public static class Reference extends Type{
         public final Type content;
         public Reference(Type content) {
-            super("@"+content.wrappedName(), 1, false);
+            super("@"+content.wrappedName(), 1, false, false);
             this.content=content;
             fields.put(FIELD_NAME_VALUE,content);
         }
@@ -358,12 +370,16 @@ public class Type {
         public int hashCode() {
             return Objects.hash(content);
         }
+        @Override
+        public Iterable<Type> childTypes() {
+            return Collections.singleton(content);
+        }
     }
 
     public static class Array extends Type{
         public final Type content;
         public Array(Type content) {
-            super(content.wrappedName()+"[]", 1, true);
+            super(content.wrappedName()+"[]", 1, true, false);
             this.content=content;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
         }
@@ -380,6 +396,10 @@ public class Type {
         @Override
         public int hashCode() {
             return Objects.hash(content);
+        }
+        @Override
+        public Iterable<Type> childTypes() {
+            return Collections.singleton(content);
         }
     }
 
@@ -403,7 +423,7 @@ public class Type {
             return ret.append('}').toString();
         }
         public Tuple(String name, Type[] elements) {
-            super(name==null?tupleName(elements):name, calculateBlockCount(elements), isVarSize(elements));
+            super(name==null?tupleName(elements):name, calculateBlockCount(elements), isVarSize(elements), false);
             this.tupleName=name;
             this.elements=elements;
             fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
@@ -421,6 +441,10 @@ public class Type {
         @Override
         public int hashCode() {
             return Arrays.deepHashCode(elements);
+        }
+        @Override
+        public Iterable<Type> childTypes() {
+            return Arrays.asList(elements);
         }
     }
 
@@ -440,6 +464,7 @@ public class Type {
         public final boolean isUnion;
         final String structName;
         final String[] fieldNames;
+        final Type[] elements;
         private static String structName(Type[] types,String[] names,boolean isUnion) {
             if(types.length!=names.length){
                 throw new IllegalArgumentException("lengths of types and names do not match");
@@ -456,10 +481,11 @@ public class Type {
         private StructOrUnion(String name, Type[] types, String[] names,boolean isUnion){
             super(name==null?structName(types,names,isUnion):name,
                     isUnion?Stream.of(types).mapToInt(t->t.blockCount).max().orElse(0):Stream.of(types).mapToInt(t->t.blockCount).max().orElse(0)
-                    , isVarSize(types));
+                    , isVarSize(types), false);
             structName=name;
             this.isUnion=isUnion;
             this.fieldNames=names.clone();
+            this.elements=types.clone();
             for(int i=0;i<names.length;i++){
                 if(fields.put(names[i],types[i])!=null){
                     throw new TypeError("duplicate or reserved field-name \""+names[i]+"\" in struct "+this);
@@ -486,6 +512,10 @@ public class Type {
         @Override
         public int hashCode() {
             return Objects.hash(fields);
+        }@Override
+
+        public Iterable<Type> childTypes() {
+            return Arrays.asList(elements);
         }
     }
     public static class Proc extends Type{
@@ -501,7 +531,7 @@ public class Type {
             return ret.append(")=>?").toString();
         }
         public Proc(Type[] argTypes) {
-            super(procName(argTypes), 1, false);
+            super(procName(argTypes), 1, false, false);
             this.argTypes=argTypes;
             fields.put(FIELDS_PROC_TYPES,new Array(Primitive.TYPE));
         }
@@ -531,6 +561,9 @@ public class Type {
             return Arrays.hashCode(argTypes);
         }
 
+        public Iterable<Type> childTypes() {
+            return Arrays.asList(argTypes);
+        }
     }
 
 

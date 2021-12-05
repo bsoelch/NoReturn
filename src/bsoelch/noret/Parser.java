@@ -11,6 +11,7 @@ import java.io.UnsupportedEncodingException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.regex.Pattern;
 
 public class Parser {
@@ -798,6 +799,8 @@ public class Parser {
         final HashMap<String, Integer>   varIds    = new HashMap<>();
         final ArrayList<Type> varTypes = new ArrayList<>();
 
+        final HashSet<Type> runtimeTypes =new HashSet<>();
+
         long maxArgSize=0;
 
         public void declareProcedure(String name,Procedure proc){
@@ -810,6 +813,19 @@ public class Parser {
         private boolean hasName(String name) {
             return typeNames.containsKey(name)|| procNames.containsKey(name)||
                     constants.containsKey(name)|| varIds.containsKey(name);
+        }
+
+        /**child types of containers that are needed at runtime,
+         * this method is a helper of the compiler
+         * @param topLevel true if the supplied type is not contained in any other type*/
+        public void addRuntimeType(Type t,boolean topLevel){
+            if(!topLevel){
+                runtimeTypes.add(t);
+            }
+            //add child types
+            for(Type c: t.childTypes()){
+                addRuntimeType(c,false);
+            }
         }
 
         public void defType(String name,Type type){
@@ -1298,7 +1314,7 @@ public class Parser {
                     String fieldName=((NamedToken)tokens.remove(i+1)).value;
                     tokens.set(i-1,new ExprToken(GetField.create(
                             ((ExprToken)tokens.get(i-1)).expr,
-                            fieldName),tokens.get(i-1).pos));
+                            fieldName,context),tokens.get(i-1).pos));
                     tokens.remove(i--);
                 }else if(tokens.get(i).tokenType==ParserTokenType.INDEX){
                     tokens.set(i-1,new ExprToken(GetIndex.create(
@@ -1313,7 +1329,7 @@ public class Parser {
                 tokens.get(i).tokenType==ParserTokenType.EXPRESSION){//typecast
                 tokens.set(i-1,new ExprToken(TypeCast.create(
                         ((TypeToken)tokens.get(i-1)).type,
-                        ((ExprToken)tokens.get(i)).expr, true),tokens.get(i-1).pos));
+                        ((ExprToken)tokens.get(i)).expr, true, context),tokens.get(i-1).pos));
                 tokens.remove(i--);
             }
         }
@@ -1399,7 +1415,7 @@ public class Parser {
                 tokens.get(i-1).tokenType==ParserTokenType.SEPARATOR&&
                 tokens.get(i).tokenType==ParserTokenType.EXPRESSION){
                 tokens.set(i-4,new ExprToken(IfExpr.create(((ExprToken)tokens.get(i-4)).expr,
-                        ((ExprToken)tokens.get(i-2)).expr,((ExprToken)tokens.get(i)).expr),tokens.get(i-4).pos));
+                        ((ExprToken)tokens.get(i-2)).expr,((ExprToken)tokens.get(i)).expr,context),tokens.get(i-4).pos));
                 tokens.remove(i--);//i
                 tokens.remove(i);//i-1
                 tokens.remove(i-1);//i-2
@@ -1617,10 +1633,10 @@ public class Parser {
                             match <expr>:
                             <const>:
                             <case-body>
-                            break
+                            break;
                             <const>:
                             <case-body>
-                            break
+                            break;
                             default:
                             <case-body>
                             end
@@ -1636,7 +1652,7 @@ public class Parser {
                         }else if(!assignTarget.canAssignTo()){
                             throw new TypeError("cannot assign values to immutable value"+assignTarget);
                         }
-                        actions.add(new Assignment(assignTarget,expr));
+                        actions.add(new Assignment(assignTarget,expr,context));
                         tokenBuffer.clear();
                         state=ActionParserState.ROOT;
                     }else{
@@ -1646,7 +1662,7 @@ public class Parser {
                 case DEF_EXPR:
                     if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
                         Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
-                        actions.add(new ValDef(defType,expr));
+                        actions.add(new ValDef(defType,expr,context));
                         context.declareVariable(defName,defType);
                         tokenBuffer.clear();
                         state=ActionParserState.ROOT;
@@ -1657,7 +1673,7 @@ public class Parser {
                 case LOG:
                     if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
                         Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
-                        actions.add(new LogAction(logType,expr));
+                        actions.add(new LogAction(logType,expr,context));
                         tokenBuffer.clear();
                         state=ActionParserState.ROOT;
                     }else{
@@ -1753,7 +1769,7 @@ public class Parser {
                 //Type-check parameters
                 if(Type.canAssign(outTypes[i],argBuffer.get(i).expectedType(),generics)){
                     //ensure arguments are cast to correct type addLater cast contents of generics to correct type
-                    argArray[i]=TypeCast.create(outTypes[i],argBuffer.get(i),false);
+                    argArray[i]=TypeCast.create(outTypes[i],argBuffer.get(i),false, context);
                 }else{
                     throw new TypeError("Cannot assign "+ argBuffer.get(i).expectedType()+" to "+outTypes[i]+" generics:"+generics);
                 }

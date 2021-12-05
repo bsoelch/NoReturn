@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.Parser;
 import bsoelch.noret.SyntaxError;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
@@ -11,11 +12,13 @@ public class GetField implements Expression{
     public final String fieldName;
     final Type type;
 
-    public static Expression create(Expression value, String fieldName){
+    public static Expression create(Expression value, String fieldName, Parser.ParserContext context){
         Type valType = value.expectedType();
         Type type=valType.getField(fieldName);
         if(type==null){
             throw new SyntaxError("Type "+valType+" does not have a field \""+fieldName+"\"");
+        }else if(Type.FIELD_NAME_TYPE.equals(fieldName)){
+            context.addRuntimeType(valType,true);
         }
         if(value instanceof ValueExpression){//constant folding
             //set field is not supported for constants

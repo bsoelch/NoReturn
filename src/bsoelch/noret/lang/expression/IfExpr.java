@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.Parser;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -11,21 +12,23 @@ public class IfExpr implements Expression {
 
     final Type expectedOutput;
 
-    public static Expression create(Expression cond, Expression ifVal, Expression elseVal){
-        cond=TypeCast.create(Type.Primitive.BOOL,cond,true);
+    public static Expression create(Expression cond, Expression ifVal, Expression elseVal, Parser.ParserContext context){
+        cond=TypeCast.create(Type.Primitive.BOOL,cond,true,context);
         if(cond instanceof ValueExpression){//constant folding
             return ((Boolean)((Value.Primitive)((ValueExpression) cond).value.castTo(Type.Primitive.BOOL)).getValue())?
                     ifVal:elseVal;
         }
-        return new IfExpr(cond, ifVal, elseVal);
+        Type expectedOut=Type.commonSupertype(ifVal.expectedType(),elseVal.expectedType());
+        ifVal = TypeCast.create(expectedOut,ifVal,true, context);
+        elseVal = TypeCast.create(expectedOut,elseVal,false, context);
+        return new IfExpr(cond,expectedOut, ifVal, elseVal);
     }
 
-    private IfExpr(Expression cond, Expression ifVal, Expression elseVal) {
+    private IfExpr(Expression cond,Type expectedOut, Expression ifVal, Expression elseVal) {
         this.cond = cond;
-        expectedOutput=Type.commonSupertype(ifVal.expectedType(),
-                elseVal.expectedType());
-        this.ifVal = TypeCast.create(expectedOutput,ifVal,true);
-        this.elseVal = TypeCast.create(expectedOutput,elseVal,false);
+        expectedOutput=expectedOut;
+        this.ifVal = ifVal;
+        this.elseVal = elseVal;
     }
 
     @Override

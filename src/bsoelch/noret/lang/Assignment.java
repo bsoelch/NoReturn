@@ -1,5 +1,6 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.Parser;
 import bsoelch.noret.SyntaxError;
 import bsoelch.noret.lang.expression.TypeCast;
 
@@ -9,13 +10,13 @@ public class Assignment implements Action {
     public final Expression target;
     public final Expression expr;
 
-    public Assignment(Expression target, Expression expr) {
+    public Assignment(Expression target, Expression expr, Parser.ParserContext context) {
         this.target = target;
         if(!target.canAssignTo()){
             throw new SyntaxError(target+" cannot be modified");
         }
         //ensure values are cast to the correct type
-        this.expr = TypeCast.create(target.expectedType(),expr, false);
+        this.expr = TypeCast.create(target.expectedType(),expr, false, context);
     }
 
     @Override

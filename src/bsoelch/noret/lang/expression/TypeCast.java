@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.Parser;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
@@ -12,8 +13,8 @@ public class TypeCast implements Expression{
     /**
      * @param evalConstants if false evaluation of constants is disabled (for ensuring the value in valDefs
      *                      and assignments is cast to the correct type)
-     * */
-    public static Expression create(Type castType, Expression value, boolean evalConstants){
+     * @param context ParserContext of the Parser that parsed this expression*/
+    public static Expression create(Type castType, Expression value, boolean evalConstants, Parser.ParserContext context){
         if(!Type.canCast(castType,value.expectedType(),null)){
             throw new TypeError("Values of type "+value.expectedType()+ " cannot be cast to "+castType);
         }
@@ -24,6 +25,9 @@ public class TypeCast implements Expression{
         if(value.expectedType().equals(castType)){
             return value;
         }else{
+            if(castType instanceof Type.AnyType){
+                context.addRuntimeType(value.expectedType(),false);
+            }
             return new TypeCast(castType,value);
         }
     }

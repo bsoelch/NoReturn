@@ -6,6 +6,7 @@ import bsoelch.noret.lang.expression.*;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.*;
+import java.util.stream.Collectors;
 
 //TODO don't include code for unused types
 public class CompileToC {
@@ -282,7 +283,7 @@ public class CompileToC {
 
     //addLater use signatures that are less likely to collide with other functions
 
-    private void writeFileHeader(long maxArgSize) throws IOException {
+    private void writeFileHeader(long maxArgSize, Parser.ParserContext context) throws IOException {
         comment("Auto generated code from NoRet compiler");
         //addLater print information about compiled code
         out.newLine();
@@ -336,9 +337,34 @@ public class CompileToC {
         writeLine("#define TYPE_CONTENT_MASK   0xffffffff");
         writeLine("#define TYPE_COUNT_SHIFT    40");
         writeLine("#define TYPE_COUNT_MASK     0xffff");
-        comment("Type data for all contained Types");
+        comment("Type data for all composite Types");
+        /*old code, remove when new implementation for compositve types is finished*/
         writeLine("Type typeData [];");
         typeDataDeclarations=new StringBuilder("Type typeData []={");
+        /*end of old code*/
+        HashSet<Type> structsAndUnions= context.runtimeTypes.stream().filter(t -> (t instanceof Type.Struct || t instanceof Type.Union))
+                .collect(Collectors.toCollection(HashSet::new));
+        if(structsAndUnions.size()>0){
+            writeLine("typedef struct{");
+            writeLine("  char* name;");
+            writeLine("  Type  type;");
+            writeLine("}NoRetStructEntry;");
+            StringBuilder tmp;
+            long structCount=0;
+            for(Type t:structsAndUnions){
+                tmp=new StringBuilder("NoRetStructEntry struct"+(structCount++)+" []={");
+                //TODO write structs-types
+                tmp.append("}");
+            }
+            throw new UnsupportedOperationException("unimplemented");
+        }
+        //procedures are not distinguished at in compiled code
+        HashSet<Type> otherTypes= context.runtimeTypes.stream()
+                .filter(t -> (!(t instanceof Type.Struct || t instanceof Type.Union|| t instanceof Type.Proc)))
+                .collect(Collectors.toCollection(HashSet::new));
+        //sort types by element count
+        //store as array
+
         out.newLine();
         //Value struct
         comment("value-block type");
@@ -842,7 +868,7 @@ public class CompileToC {
                 }
             }
             dataOut.addValueBuilder(loc,content,v.getType(),((Value.ArrayOrTuple) v).elements().length);
-        }else if(v.getType() instanceof Type.Tuple){//TODO compress storage of tuples/structs?
+        }else if(v.getType() instanceof Type.Tuple){//addLater? compress storage of tuples/structs?
             isFirst=true;
             for(Value elt:(Value.ArrayOrTuple)v){
                 writeConstValueAsUnion(out,elt, dataOut, isFirst, prefix);
@@ -1690,7 +1716,7 @@ public class CompileToC {
     }
 
     public void compile(Parser.ParserContext context) throws IOException {
-        writeFileHeader(context.maxArgSize());
+        writeFileHeader(context.maxArgSize(),context);
         for(Map.Entry<String, Value> e:context.constants.entrySet()){
             writeConstant(e.getKey(),e.getValue());
         }

@@ -1,5 +1,7 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.Parser;
+
 import java.util.ArrayList;
 
 public class LogAction implements Action {
@@ -7,10 +9,11 @@ public class LogAction implements Action {
 
     public final LogType type;
     public final Expression expr;
-    public LogAction(LogType logType, Expression expr) {
+    public LogAction(LogType logType, Expression expr, Parser.ParserContext context) {
         assert  logType!=null;
         this.type=logType;
         this.expr=expr;
+        context.addRuntimeType(expr.expectedType(),true);
     }
 
     private static void log(LogType type,String value){

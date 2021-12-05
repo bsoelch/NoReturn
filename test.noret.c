@@ -44,7 +44,7 @@ typedef uint64_t Type;
 #define TYPE_CONTENT_MASK   0xffffffff
 #define TYPE_COUNT_SHIFT    40
 #define TYPE_COUNT_MASK     0xffff
-// Type data for all contained Types
+// Type data for all composite Types
 Type typeData [];
 
 // value-block type
