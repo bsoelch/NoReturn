@@ -28,22 +28,21 @@ public class BinOp implements Expression {
                 case LSHIFT:
                     if (lType instanceof Type.NoRetString) {
                         return StringConcat.appendEnd(left,right);
-                    } else if (lType instanceof Type.Tuple || lType instanceof Type.Array) {
+                    } else if (lType instanceof Type.Array) {
                         return TupleConcat.pushEnd(left,right);
                     }
                     break;
                 case RSHIFT:
                     if (rType instanceof Type.NoRetString) {
                         return StringConcat.appendStart(left,right);
-                    } else if (rType instanceof Type.Tuple || rType instanceof Type.Array) {
+                    } else if (rType instanceof Type.Array) {
                         return TupleConcat.pushStart(left,right);
                     }
                     break;
                 case PLUS:
                     if (lType instanceof Type.NoRetString || rType instanceof Type.NoRetString) {
                         return StringConcat.concat(left,right);
-                    } else if ((lType instanceof Type.Tuple || lType instanceof Type.Array) &&
-                            (rType instanceof Type.Tuple || rType instanceof Type.Array)) {
+                    } else if (lType instanceof Type.Array && rType instanceof Type.Array) {
                         return TupleConcat.concat(left,right);
                     }
                     break;

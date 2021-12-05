@@ -78,16 +78,16 @@ public class CompileToC {
                 }else{
                     return elementCount*((Type.Array) type).content.blockCount;
                 }
-            }else if(type instanceof Type.Tuple){//Tuple
-                return type.blockCount;
-            }else {//String
+            }else if(type instanceof Type.NoRetString){//String
                 return (((((Type.NoRetString)type).charBits +7)/8)*elementCount+7)/8;
+            }else{
+                throw new UnsupportedOperationException("unsupported mutable "+type);
             }
         }
         public StringBuilder newValueBuilder(String name, Type type,int elementCount,boolean prefix) {
             if(constant){
                 StringBuilder sb=new StringBuilder("static "+VALUE_BLOCK_NAME+" "+name+"[]={");
-                if(type instanceof Type.Array||type instanceof Type.Tuple||type instanceof Type.NoRetString){
+                if(type instanceof Type.Array||type instanceof Type.NoRetString){
                     //off
                     if(prefix) {sb.append(CAST_BLOCK);}
                     sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=0/*off*/},");
@@ -842,17 +842,12 @@ public class CompileToC {
                 }
             }
             dataOut.addValueBuilder(loc,content,v.getType(),((Value.ArrayOrTuple) v).elements().length);
-        }else if(v.getType() instanceof Type.Tuple){
-            if(prefix){out.append(CAST_BLOCK); }
-            String loc=dataOut.nextName();
-            out.append("{.asPtr=(").append(loc).append(")}");
-            StringBuilder content=dataOut.newValueBuilder(loc,v.getType(),((Value.ArrayOrTuple) v).elements().length,prefix);
-            isFirst=!dataOut.constant;
-            for (Value elt : (Value.ArrayOrTuple) v) {
-                writeConstValueAsUnion(content,elt, dataOut, isFirst, prefix);
+        }else if(v.getType() instanceof Type.Tuple){//TODO compress storage of tuples/structs?
+            isFirst=true;
+            for(Value elt:(Value.ArrayOrTuple)v){
+                writeConstValueAsUnion(out,elt, dataOut, isFirst, prefix);
                 isFirst=false;
             }
-            dataOut.addValueBuilder(loc,content,v.getType(),((Value.ArrayOrTuple) v).elements().length);
         }else if(v instanceof Value.Struct){
             isFirst=true;
             for(Value elt:(Value.Struct)v){
@@ -1504,16 +1499,27 @@ public class CompileToC {
                     }
                 }
                 return tmpCount;
-            }else if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_LENGTH)&&
-                    (((GetField) expr).value.expectedType() instanceof Type.Array||((GetField) expr).value.expectedType() instanceof Type.Tuple||
-                            ((GetField) expr).value.expectedType() instanceof Type.NoRetString)){
-                line.append('(');
-                writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
-                line.append("[0].asPtr+"+ARRAY_LEN_OFFSET+")");//array.length
-                if(unwrap){
-                    line.append(unwrapSuffix(expr.expectedType()));
+            }else if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_LENGTH)){
+                if((((GetField) expr).value.expectedType() instanceof Type.Array||
+                        ((GetField) expr).value.expectedType() instanceof Type.NoRetString)){
+                    line.append('(');
+                    writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
+                    line.append("[0].asPtr+"+ARRAY_LEN_OFFSET+")");//array.length
+                    if(unwrap){
+                        line.append(unwrapSuffix(expr.expectedType()));
+                    }
+                    return tmpCount;
+                }else if((((GetField) expr).value.expectedType() instanceof Type.Tuple)){
+                    if(!unwrap){
+                        line.append("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK + "{.")
+                                .append(typeFieldName(Type.Numeric.UINT64)).append("=");
+                    }
+                    line.append(((Type.Tuple) ((GetField) expr).value.expectedType()).getElements().length);
+                    if(!unwrap){
+                        line.append("}})");
+                    }
+                    return tmpCount;
                 }
-                return tmpCount;
             }else if(((GetField) expr).value.expectedType() instanceof Type.Optional&&
                     ((GetField) expr).fieldName.equals(Type.FIELD_NAME_VALUE)){
                 //TODO check value before access, dereference pointers
@@ -1524,10 +1530,10 @@ public class CompileToC {
                     line.append(unwrapSuffix(expr.expectedType()));
                 }
                 return tmpCount;
-            }else{
-                //TODO struct/union field access
-                throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
             }
+
+            //TODO struct/union field access
+            throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
         }else if(expr instanceof GetIndex){
             if(((GetIndex)expr).value.expectedType() instanceof Type.Array){
                 if(((Type.Array) ((GetIndex)expr).value.expectedType()).content instanceof Type.Primitive){
@@ -1570,6 +1576,9 @@ public class CompileToC {
                     line.append("}})");
                 }
                 return tmpCount;
+            }else if(((GetIndex)expr).value.expectedType() instanceof Type.Tuple){
+                //addLater get tuple elements
+                throw new UnsupportedOperationException("unimplemented");
             }
             throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
             //return tmpCount;

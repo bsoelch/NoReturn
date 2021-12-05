@@ -16,16 +16,14 @@ public class TupleConcat implements Expression {
         }else if (expr instanceof TupleConcat) {
             tmp.addAll(((TupleConcat) expr).sections);
         } else {
-            if (expr.expectedType() instanceof Type.Tuple) {
-                tmp.add(new Section(expr, false, ((Type.Tuple) expr.expectedType()).getElements().length, false));
-            } else if (expr.expectedType() instanceof Type.Array){
+            if (expr.expectedType() instanceof Type.Array){
                 if(expr instanceof ValueExpression){
                     tmp.add(new Section(expr, false, ((Value.ArrayOrTuple)((ValueExpression)expr).value).elements().length, false));
                 }else{//addLater slices
                     tmp.add(new Section(expr, true, -1, false));
                 }
             } else{
-                throw new TypeError("unexpected Type in TupleConcat "+expr.expectedType()+" expected Array or Tuple");
+                throw new TypeError("unexpected Type in Array concatenation "+expr.expectedType()+" expected Array");
             }
         }
     }
