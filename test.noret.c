@@ -191,10 +191,80 @@ void printType(const Type type,FILE* log,bool recursive){
       break;
   }
 }
+// transforming of string types
+static void codePointToUTF8(uint32_t codepoint,uint8_t* buff,size_t* count){
+  if(codepoint<0x80){
+   buff[(*count)++]=codepoint&0x7f;
+  }else if(codepoint<0x800){
+    buff[(*count)++]=0xc0|((codepoint>>6)&0x1f);
+    buff[(*count)++]=0x80|(codepoint&0x3f);
+  }else if(codepoint<0x10000){
+    buff[(*count)++]=0xe0|((codepoint>>12)&0xf);
+    buff[(*count)++]=0x80|((codepoint>>6)&0x3f);
+    buff[(*count)++]=0x80|(codepoint&0x3f);
+  }else if(codepoint<0x200000){
+    buff[(*count)++]=0xf0|((codepoint>>18)&0x7);
+    buff[(*count)++]=0x80|((codepoint>>12)&0x3f);
+    buff[(*count)++]=0x80|((codepoint>>6)&0x3f);
+    buff[(*count)++]=0x80|(codepoint&0x3f);
+  }else{
+    fprintf(stderr,"code-point out of range: %"PRIu32,codepoint);
+    exit(3);
+  }
+}
+static uint32_t codePointFromUTF8(uint8_t* buff,size_t* off){
+  if((buff[*off]&0x80)==0){
+    return buff[(*off)++];
+  }else{
+    int m=0x40,c=0;
+    while(buff[*off]&m){
+      c++;
+      m>>=1;
+    }
+    uint32_t ret=buff[(*off)++]&(m-1);
+    while(c>0){
+      if((buff[(*off)]&0xc0)!=0x80){
+        fprintf(stderr,"format error in UTF8-string");
+        exit(3);
+      }
+      ret<<=6;
+      ret|=buff[(*off)++]&0x3f;
+      c--;
+    }
+    return ret;
+  }
+}
+static void codePointToUTF16(uint32_t codepoint,uint16_t* buff,size_t* count){
+  if(codepoint<0x10000){
+    buff[(*count)++]=codepoint&0xffff;
+  }else if(codepoint<0x110000){
+    codepoint-=10000;
+    buff[(*count)++]=0xd800|((codepoint>>10)&0x3ff);
+    buff[(*count)++]=0xdc00|(codepoint&0x3ff);
+  }else{
+    fprintf(stderr,"code-point out of range: %"PRIu32,codepoint);
+    exit(3);
+  }
+}
+static uint32_t codePointFromUTF16(uint16_t* buff,size_t* off){
+  if(((buff[*off]&0xdC00)==0xd800)&&((buff[(*off)+1]&0xdC00)==0xdC00)){
+    uint32_t ret=buff[(*off)++]&0x3ff;
+    ret<<=10;
+    ret|=buff[(*off)++]&0x3ff;
+    return ret+0x10000;
+  }else{
+    return buff[(*off)++];
+  }
+}
 // recursive printing of values
 void printValue(FILE* log,Type type,const void* value){
   Value* data;
   Type valType;
+  uint8_t charBuff[4];
+  size_t count;
+  uint16_t* chars16;
+  uint32_t* chars32;
+  size_t off,len;
   switch(type&TYPE_SIG_MASK){
     case TYPE_SIG_BOOL:
       fprintf(log,"%s",(*((bool*)value))?"true":"false");
@@ -209,7 +279,9 @@ void printValue(FILE* log,Type type,const void* value){
       fprintf(log,"%"PRIu8,(*((uint8_t*)value)));
       break;
     case TYPE_SIG_C16:
-      fprintf(log,"%"PRIu16,(*((uint16_t*)value)));
+      count=0;
+      codePointToUTF8((*((uint16_t*)value)), charBuff, &count);
+      fprintf(log,"%.*s",(int)count, (char*)charBuff);
       break;
     case TYPE_SIG_I16:
       fprintf(log,"%"PRIi16,(*((int16_t*)value)));
@@ -218,7 +290,9 @@ void printValue(FILE* log,Type type,const void* value){
       fprintf(log,"%"PRIu16,(*((uint16_t*)value)));
       break;
     case TYPE_SIG_C32:
-      fprintf(log,"%"PRIu32,(*((uint32_t*)value)));
+      count=0;
+      codePointToUTF8((*((uint32_t*)value)), charBuff, &count);
+      fprintf(log,"%.*s",(int)count, (char*)charBuff);
       break;
     case TYPE_SIG_F32:
       fprintf(log,"%f",(*((float32_t*)value)));
@@ -246,8 +320,26 @@ void printValue(FILE* log,Type type,const void* value){
       fprintf(log,"%.*s",(int)(data[2].asU64),(char*)(data+3/*header*/+data[0].asU64/*off*/));
       break;
     case TYPE_SIG_STRING16:
+      data=*((Value**)value);/*value->asPtr*/
+      chars16=((uint16_t*)(data+3))/*header size*/+data[0].asU64/*off*/;
+      len=data[2].asU64/*len*/;
+      off=0;
+      while(off<len){
+        count=0;
+        codePointToUTF8(codePointFromUTF16(chars16,&off), charBuff, &count);
+        fprintf(log,"%.*s",(int)count, (char*)charBuff);
+      }
+      break;
     case TYPE_SIG_STRING32:
-      assert(false && "unimplemented");
+      data=*((Value**)value);/*value->asPtr*/
+      chars32=((uint32_t*)(data+3))/*header size*/+data[0].asU64/*off*/;
+      len=data[2].asU64/*len*/;
+      off=0;
+      while(off<len){
+        count=0;
+        codePointToUTF8(chars32[off++], charBuff, &count);
+        fprintf(log,"%.*s",(int)count, (char*)charBuff);
+      }
       break;
     case TYPE_SIG_TYPE:
       printType(*((Type*)value),log,false);
@@ -265,7 +357,7 @@ void printValue(FILE* log,Type type,const void* value){
         fputs("Optional{",log);
         valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];
         if((valType&TYPE_SIG_MASK)<23){
-          printValue(log,valType,value+sizeof(Value)/*value*/);
+          printValue(log,valType,value+sizeof(Value)  /*value*/);
         }else{
           printValue(log,valType,*((Value**)(value+sizeof(Value)))/*value*/);
         }
@@ -448,40 +540,40 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEBUG,true,TYPE_SIG_STRING8,tmp0);
   }
   Value var1 [1];// (Type:string8)
-  {// Initialize: ValueExpression{"UTF8-String"}
-    Value tmp0 [1];
-    {
-      Value* tmp1=malloc((5)*sizeof(Value));
-      tmp1[0]=(Value){.asU64=0}; /*off*/
-      tmp1[1]=(Value){.asU64=2}; /*cap*/
-      tmp1[2]=(Value){.asU64=11}; /*len*/
-      memcpy(tmp1+3,(Value[]){(Value){.raw8={0x55,0x54,0x46,0x38,0x2d,0x53,0x74,0x72}},(Value){.raw8={0x69,0x6e,0x67,0x0,0x0,0x0,0x0,0x0}}},(2)*sizeof(Value));
-      memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
-    }
-    memcpy(var1,tmp0,1*sizeof(Value));
-  }
-  Value var2 [1];// (Type:string16)
-  {// Initialize: ValueExpression{"UTF16-String"}
+  {// Initialize: ValueExpression{"UTF8-String:a°💻"}
     Value tmp0 [1];
     {
       Value* tmp1=malloc((6)*sizeof(Value));
       tmp1[0]=(Value){.asU64=0}; /*off*/
       tmp1[1]=(Value){.asU64=3}; /*cap*/
-      tmp1[2]=(Value){.asU64=12}; /*len*/
-      memcpy(tmp1+3,(Value[]){(Value){.raw16={0x55,0x54,0x46,0x31}},(Value){.raw16={0x36,0x2d,0x53,0x74}},(Value){.raw16={0x72,0x69,0x6e,0x67}}},(3)*sizeof(Value));
+      tmp1[2]=(Value){.asU64=19}; /*len*/
+      memcpy(tmp1+3,(Value[]){(Value){.raw8={0x55,0x54,0x46,0x38,0x2d,0x53,0x74,0x72}},(Value){.raw8={0x69,0x6e,0x67,0x3a,0x61,0xc2,0xb0,0xf0}},(Value){.raw8={0x9f,0x92,0xbb,0x0,0x0,0x0,0x0,0x0}}},(3)*sizeof(Value));
+      memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
+    }
+    memcpy(var1,tmp0,1*sizeof(Value));
+  }
+  Value var2 [1];// (Type:string16)
+  {// Initialize: ValueExpression{"UTF16-String:a°💻"}
+    Value tmp0 [1];
+    {
+      Value* tmp1=malloc((8)*sizeof(Value));
+      tmp1[0]=(Value){.asU64=0}; /*off*/
+      tmp1[1]=(Value){.asU64=5}; /*cap*/
+      tmp1[2]=(Value){.asU64=17}; /*len*/
+      memcpy(tmp1+3,(Value[]){(Value){.raw16={0x55,0x54,0x46,0x31}},(Value){.raw16={0x36,0x2d,0x53,0x74}},(Value){.raw16={0x72,0x69,0x6e,0x67}},(Value){.raw16={0x3a,0x61,0xb0,0xd83d}},(Value){.raw16={0xdcbb,0x0,0x0,0x0}}},(5)*sizeof(Value));
       memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
     }
     memcpy(var2,tmp0,1*sizeof(Value));
   }
   Value var3 [1];// (Type:string32)
-  {// Initialize: ValueExpression{"UTF32-String"}
+  {// Initialize: ValueExpression{"UTF32-String:a°💻"}
     Value tmp0 [1];
     {
-      Value* tmp1=malloc((9)*sizeof(Value));
+      Value* tmp1=malloc((11)*sizeof(Value));
       tmp1[0]=(Value){.asU64=0}; /*off*/
-      tmp1[1]=(Value){.asU64=6}; /*cap*/
-      tmp1[2]=(Value){.asU64=12}; /*len*/
-      memcpy(tmp1+3,(Value[]){(Value){.raw32={0x55,0x54}},(Value){.raw32={0x46,0x33}},(Value){.raw32={0x32,0x2d}},(Value){.raw32={0x53,0x74}},(Value){.raw32={0x72,0x69}},(Value){.raw32={0x6e,0x67}}},(6)*sizeof(Value));
+      tmp1[1]=(Value){.asU64=8}; /*cap*/
+      tmp1[2]=(Value){.asU64=16}; /*len*/
+      memcpy(tmp1+3,(Value[]){(Value){.raw32={0x55,0x54}},(Value){.raw32={0x46,0x33}},(Value){.raw32={0x32,0x2d}},(Value){.raw32={0x53,0x74}},(Value){.raw32={0x72,0x69}},(Value){.raw32={0x6e,0x67}},(Value){.raw32={0x3a,0x61}},(Value){.raw32={0xb0,0x1f4bb}}},(8)*sizeof(Value));
       memcpy(tmp0,(Value[]){(Value){.asPtr=(tmp1)}},1*sizeof(Value));
     }
     memcpy(var3,tmp0,1*sizeof(Value));
@@ -489,11 +581,29 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{VarExpression{1}}
     logValue(DEFAULT,false,TYPE_SIG_STRING8,var1);
   }
-  {// Log: Log[DEFAULT]{GetIndex{VarExpression{1}[ValueExpression{3}]}}
-    logValue(DEFAULT,false,TYPE_SIG_C8,((Value[]){(Value){.asC8=*((uint8_t*)getRawElement(var1->asPtr,((int32_t)(3)),1))}}));
-  }
   {// Log: Log[DEFAULT]{GetField{VarExpression{1}.length}}
     logValue(DEFAULT,false,TYPE_SIG_U64,(var1[0].asPtr+2));
+  }
+  {// Log: Log[DEFAULT]{ValueExpression{'a'}}
+    logValue(DEFAULT,false,TYPE_SIG_C8,((Value[]){(Value){.asC8=97}}));
+  }
+  {// Log: Log[DEFAULT]{VarExpression{2}}
+    logValue(DEFAULT,false,TYPE_SIG_STRING16,var2);
+  }
+  {// Log: Log[DEFAULT]{GetField{VarExpression{2}.length}}
+    logValue(DEFAULT,false,TYPE_SIG_U64,(var2[0].asPtr+2));
+  }
+  {// Log: Log[DEFAULT]{ValueExpression{'°'}}
+    logValue(DEFAULT,false,TYPE_SIG_C16,((Value[]){(Value){.asC16=176}}));
+  }
+  {// Log: Log[DEFAULT]{VarExpression{3}}
+    logValue(DEFAULT,false,TYPE_SIG_STRING32,var3);
+  }
+  {// Log: Log[DEFAULT]{GetField{VarExpression{3}.length}}
+    logValue(DEFAULT,false,TYPE_SIG_U64,(var3[0].asPtr+2));
+  }
+  {// Log: Log[DEFAULT]{ValueExpression{'💻'}}
+    logValue(DEFAULT,false,TYPE_SIG_C32,((Value[]){(Value){.asC32=128187}}));
   }
   Value var4 [2];// (Type:any)
   {// Initialize: TypeCast{Type:any:ValueExpression{3}}

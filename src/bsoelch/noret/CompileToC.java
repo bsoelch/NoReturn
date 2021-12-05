@@ -30,6 +30,12 @@ public class CompileToC {
     public static final String LOG_TYPE_NAME = "LogType";
     public static final String PRINT_TYPE_NAME = "printType";
     public static final String PRINT_VALUE = "printValue";
+
+    public static final String PRINT__UTF8_BUFF = "charBuff";
+    public static final String PRINT__UTF8_COUNT = "count";
+    public static final String PRINT__STREAM_NAME = "log";
+    public static final String PRINT__VALUE_NAME = "value";
+
     public static final String ID_LOG = "logValue";
     public static final String ARRAY_GET_NAME = "getElement";
     public static final String ARRAY_GET_RAW_NAME = "getRawElement";
@@ -37,6 +43,7 @@ public class CompileToC {
     public static final int ERR_NONE  = 0;
     public static final int ERR_MEM   = 1;
     public static final int ERR_INDEX = 2;
+    public static final int ERR_STR_ENCODING=3;
 
     /* TODO rewrite DataOut
         constant memory may keep the original approach
@@ -179,27 +186,34 @@ public class CompileToC {
             throw new RuntimeException("unexpected primitive: "+type);
         }
     }
-    private static String[] printParams(Type.Primitive type){
-        String[] ret=new String[3];
-        ret[1]="(*(("+cTypeName(type)+"*)";
-        ret[2]="))";
+    private static ArrayList<String> printParams(Type.Primitive type){
+        ArrayList<String> ret=new ArrayList<>();
+        //fprintf(STREAM,FORMAT,CAST value FIELD)
+        String print="fprintf("+ PRINT__STREAM_NAME +",";
+        String value="(*(("+cTypeName(type)+"*)"+PRINT__VALUE_NAME+"))";
         if(type instanceof Type.Numeric){
             if(((Type.Numeric)type).isFloat){
-                ret[0]="\"%f\"";
+                ret.add(print+"\"%f\","+value+");");
+                return ret;
             }else{
                 if(((Type.Numeric) type).isChar){
                     if(type.byteCount==1){
-                        ret[0]="\"'%c'\"";
+                        ret.add(print+"\"'%c'\","+value+");");
+                        return ret;
+                    }else{
+                        ret.add(PRINT__UTF8_COUNT +"=0;");
+                        ret.add("codePointToUTF8("+value+", "+ PRINT__UTF8_BUFF +", &"+ PRINT__UTF8_COUNT +");");
+                        ret.add(print+"\"%.*s\",(int)"+PRINT__UTF8_COUNT+", (char*)"+ PRINT__UTF8_BUFF +");");
                         return ret;
                     }
                     //TODO implement big-char to String
+                }else{
+                    ret.add(print+"\"%\"PRI"+(((Type.Numeric)type).signed?"i":"u")+((Type.Numeric)type).bitSize()+","+value+");");
+                    return ret;
                 }
-                ret[0]="\"%\"PRI"+(((Type.Numeric)type).signed?"i":"u")+((Type.Numeric)type).bitSize();
             }
-            return ret;
         }else if(type== Type.Primitive.BOOL){
-            ret[0]="\"%s\"";
-            ret[2]+="?\"true\":\"false\"";
+            ret.add(print+"\"%s\","+value+"?\"true\":\"false\");");
             return ret;
         }else{
             throw new RuntimeException("unexpected primitive: "+type);
@@ -437,64 +451,161 @@ public class CompileToC {
         writeLine("      break;");
         writeLine("  }");
         writeLine("}");
+        comment("transforming of string types");
+        //TODO prevent buffer overflows
+        //TODO syntax-check encoding
+        writeLine("static void codePointToUTF8("+cTypeName(Type.Numeric.CHAR32)+" codepoint,"
+                +cTypeName(Type.Numeric.CHAR8)+ "* buff,size_t* " + PRINT__UTF8_COUNT + "){");
+        writeLine("  if(codepoint<0x80){");
+        writeLine("   buff[(*" + PRINT__UTF8_COUNT + ")++]=codepoint&0x7f;");
+        writeLine("  }else if(codepoint<0x800){");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0xc0|((codepoint>>6)&0x1f);");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0x80|(codepoint&0x3f);");
+        writeLine("  }else if(codepoint<0x10000){");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0xe0|((codepoint>>12)&0xf);");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0x80|((codepoint>>6)&0x3f);");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0x80|(codepoint&0x3f);");
+        writeLine("  }else if(codepoint<0x200000){");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0xf0|((codepoint>>18)&0x7);");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0x80|((codepoint>>12)&0x3f);");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0x80|((codepoint>>6)&0x3f);");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0x80|(codepoint&0x3f);");
+        writeLine("  }else{");
+        writeLine("    fprintf(stderr,\"code-point out of range: %\"PRIu32,codepoint);");
+        writeLine("    exit("+ERR_STR_ENCODING+");");
+        writeLine("  }");
+        writeLine("}");
+        writeLine("static "+cTypeName(Type.Numeric.CHAR32)+" codePointFromUTF8("+cTypeName(Type.Numeric.CHAR8)+"* buff,size_t* off){");
+        writeLine("  if((buff[*off]&0x80)==0){");
+        writeLine("    return buff[(*off)++];");
+        writeLine("  }else{");
+        writeLine("    int m=0x40,c=0;");
+        writeLine("    while(buff[*off]&m){");
+        writeLine("      c++;");
+        writeLine("      m>>=1;");
+        writeLine("    }");
+        writeLine("    "+cTypeName(Type.Numeric.CHAR32)+" ret=buff[(*off)++]&(m-1);");
+        writeLine("    while(c>0){");
+        writeLine("      if((buff[(*off)]&0xc0)!=0x80){");
+        writeLine("        fprintf(stderr,\"format error in UTF8-string\");");
+        writeLine("        exit("+ERR_STR_ENCODING+");");
+        writeLine("      }");
+        writeLine("      ret<<=6;");
+        writeLine("      ret|=buff[(*off)++]&0x3f;");
+        writeLine("      c--;");
+        writeLine("    }");
+        writeLine("    return ret;");
+        writeLine("  }");
+        writeLine("}");
+        writeLine("static void codePointToUTF16("+cTypeName(Type.Numeric.CHAR32)+" codepoint,"+cTypeName(Type.Numeric.CHAR16)+ "* buff,size_t* " + PRINT__UTF8_COUNT + "){");
+        writeLine("  if(codepoint<0x10000){");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=codepoint&0xffff;");
+        writeLine("  }else if(codepoint<0x110000){");
+        writeLine("    codepoint-=10000;");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0xd800|((codepoint>>10)&0x3ff);");
+        writeLine("    buff[(*" + PRINT__UTF8_COUNT + ")++]=0xdc00|(codepoint&0x3ff);");
+        writeLine("  }else{");
+        writeLine("    fprintf(stderr,\"code-point out of range: %\"PRIu32,codepoint);");
+        writeLine("    exit("+ERR_STR_ENCODING+");");
+        writeLine("  }");
+        writeLine("}");
+        writeLine("static "+cTypeName(Type.Numeric.CHAR32)+" codePointFromUTF16("+cTypeName(Type.Numeric.CHAR16)+"* buff,size_t* off){");
+        writeLine("  if(((buff[*off]&0xdC00)==0xd800)&&((buff[(*off)+1]&0xdC00)==0xdC00)){");
+        writeLine("    "+cTypeName(Type.Numeric.CHAR32)+" ret=buff[(*off)++]&0x3ff;");
+        writeLine("    ret<<=10;");
+        writeLine("    ret|=buff[(*off)++]&0x3ff;");
+        writeLine("    return ret+0x10000;");
+        writeLine("  }else{");
+        writeLine("    return buff[(*off)++];");
+        writeLine("  }");
+        writeLine("}");
         comment("recursive printing of values");
-        writeLine("void " + PRINT_VALUE + "(FILE* log,Type type,const void* value){");//addLater surround strings with "" if not at top level
+        writeLine("void " + PRINT_VALUE + "(FILE* "+ PRINT__STREAM_NAME +",Type type,const void* "+PRINT__VALUE_NAME+"){");//addLater surround strings with "" if not at top level
         writeLine("  Value* data;");
         writeLine("  Type valType;");
+        writeLine("  "+cTypeName(Type.Numeric.CHAR8)+ " " + PRINT__UTF8_BUFF + "[4];");
+        writeLine("  size_t " + PRINT__UTF8_COUNT + ";");
+        writeLine("  "+cTypeName(Type.Numeric.CHAR16)+"* chars16;");
+        writeLine("  "+cTypeName(Type.Numeric.CHAR32)+"* chars32;");
+        writeLine("  size_t off,len;");
         writeLine("  switch(type&" + TYPE_SIG_PREFIX + "MASK){");
         for(Type.Primitive t: Type.Primitive.types()){
-            String[] parts=printParams(t);
             writeLine("    case " + typeSignature(t)+":");
-            writeLine("      fprintf(log,"+parts[0]+","+parts[1]+"value"+parts[2]+");");
+            ArrayList<String> parts=printParams(t);
+            for(String l:parts){
+                writeLine("      "+l);
+            }
             writeLine("      break;");
         }
         writeLine("    case " + TYPE_SIG_PREFIX + "NONE:");
-        writeLine("      fputs(\"\\\"none\\\"\",log);");
+        writeLine("      fputs(\"\\\"none\\\"\","+ PRINT__STREAM_NAME +");");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRING8:");//!!! this implementation assumes that the system encoding is UTF8
-        writeLine("      data=*(("+VALUE_BLOCK_NAME+"**)value);/*value->asPtr*/");
-        writeLine("      fprintf(log,\"%.*s\",(int)(data["+ARRAY_LEN_OFFSET+"]."
+        writeLine("      data=*(("+VALUE_BLOCK_NAME+"**)"+PRINT__VALUE_NAME+");/*"+PRINT__VALUE_NAME+"->asPtr*/");
+        writeLine("      fprintf("+ PRINT__STREAM_NAME +",\"%.*s\",(int)(data["+ARRAY_LEN_OFFSET+"]."
                 +typeFieldName(Type.Numeric.UINT64)+")"+",(char*)(data+"+ARRAY_HEADER+
                 "/*header*/+data["+ARRAY_OFF_OFFSET+"]." +typeFieldName(Type.Numeric.UINT64)+"/*off*/));");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRING16:");
+        writeLine("      data=*(("+VALUE_BLOCK_NAME+"**)"+PRINT__VALUE_NAME+");/*"+PRINT__VALUE_NAME+"->asPtr*/");
+        writeLine("      chars16=(("+cTypeName(Type.Numeric.CHAR16)+"*)(data+"+ARRAY_HEADER+"))/*header size*/" +
+                    "+data["+ARRAY_OFF_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+"/*off*/;");
+        writeLine("      len=data["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+"/*len*/;");
+        writeLine("      off=0;");
+        writeLine("      while(off<len){");
+        writeLine("        "+PRINT__UTF8_COUNT+"=0;");
+        writeLine("        codePointToUTF8(codePointFromUTF16(chars16,&off), "+PRINT__UTF8_BUFF+", &"+PRINT__UTF8_COUNT+");");
+        writeLine("        fprintf("+ PRINT__STREAM_NAME +","+"\"%.*s\",(int)"+PRINT__UTF8_COUNT+", (char*)"+ PRINT__UTF8_BUFF +");");
+        writeLine("      }");
+        writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRING32:");
-        //TODO print wide strings/chars
-        writeLine("      assert(false && \"unimplemented\");");
+        writeLine("      data=*(("+VALUE_BLOCK_NAME+"**)"+PRINT__VALUE_NAME+");/*"+PRINT__VALUE_NAME+"->asPtr*/");
+        writeLine("      chars32=(("+cTypeName(Type.Numeric.CHAR32)+"*)(data+"+ARRAY_HEADER+"))/*header size*/" +
+                    "+data["+ARRAY_OFF_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+"/*off*/;");
+        writeLine("      len=data["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+"/*len*/;");
+        writeLine("      off=0;");
+        writeLine("      while(off<len){");
+        writeLine("        "+PRINT__UTF8_COUNT+"=0;");
+        writeLine("        codePointToUTF8(chars32[off++], "+PRINT__UTF8_BUFF+", &"+PRINT__UTF8_COUNT+");");
+        writeLine("        fprintf("+ PRINT__STREAM_NAME +","+"\"%.*s\",(int)"+PRINT__UTF8_COUNT+", (char*)"+ PRINT__UTF8_BUFF +");");
+        writeLine("      }");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "TYPE:");
-        writeLine("      " + PRINT_TYPE_NAME + "(*((Type*)value),log,false);");
+        writeLine("      " + PRINT_TYPE_NAME + "(*((Type*)"+PRINT__VALUE_NAME+"),"+ PRINT__STREAM_NAME +",false);");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "ANY:");
-        writeLine("      valType=*((Type*)value);");
+        writeLine("      valType=*((Type*)"+PRINT__VALUE_NAME+");");
         writeLine("      if((valType&TYPE_SIG_MASK)<"+min2BlockSignature+"){");
-        writeLine("        " + PRINT_VALUE + "(log,valType,value+sizeof("+VALUE_BLOCK_NAME+")/*content*/);");
+        writeLine("        " + PRINT_VALUE + "("+ PRINT__STREAM_NAME +",valType,"+PRINT__VALUE_NAME+"+sizeof("+VALUE_BLOCK_NAME+")/*content*/);");
         writeLine("      }else{");
         writeLine("        " + PRINT_VALUE +
-                "(log,valType,*(("+VALUE_BLOCK_NAME+"**)(value+sizeof("+VALUE_BLOCK_NAME+")))/*value*/);");
+                "("+ PRINT__STREAM_NAME +",valType,*(("+VALUE_BLOCK_NAME+"**)("+PRINT__VALUE_NAME+"+sizeof("+VALUE_BLOCK_NAME+")))" +
+                    "/*"+PRINT__VALUE_NAME+"*/);");
         writeLine("      }");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "OPTIONAL:");
-        writeLine("      if(*((bool*)value)){");
-        writeLine("        fputs(\"Optional{\",log);");
+        writeLine("      if(*((bool*)"+PRINT__VALUE_NAME+")){");
+        writeLine("        fputs(\"Optional{\","+ PRINT__STREAM_NAME +");");
         writeLine("        valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];");
         writeLine("        if((valType&TYPE_SIG_MASK)<"+min2BlockSignature+"){");
-        writeLine("          " + PRINT_VALUE + "(log,valType,value+sizeof("+VALUE_BLOCK_NAME+")/*value*/);");
+        writeLine("          " + PRINT_VALUE + "("+ PRINT__STREAM_NAME +",valType,"+PRINT__VALUE_NAME+"+sizeof("+VALUE_BLOCK_NAME+")" +
+                    "  /*"+PRINT__VALUE_NAME+"*/);");
         writeLine("        }else{");
         writeLine("          " + PRINT_VALUE +
-                "(log,valType,*(("+VALUE_BLOCK_NAME+"**)(value+sizeof("+VALUE_BLOCK_NAME+")))/*value*/);");
+                "("+ PRINT__STREAM_NAME +",valType,*(("+VALUE_BLOCK_NAME+"**)("+PRINT__VALUE_NAME+"+sizeof("+VALUE_BLOCK_NAME+")))" +
+                    "/*"+PRINT__VALUE_NAME+"*/);");
         writeLine("        }");
-        writeLine("        fputs(\"}\",log);");
+        writeLine("        fputs(\"}\","+ PRINT__STREAM_NAME +");");
         writeLine("      }else{");
-        writeLine("        fputs(\"Optional{}\",log);");
+        writeLine("        fputs(\"Optional{}\","+ PRINT__STREAM_NAME +");");
         writeLine("      }");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "REFERENCE:");
         writeLine("      valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];");
-        writeLine("      " + PRINT_VALUE + "(log,valType,*(("+VALUE_BLOCK_NAME+"**)value)/*content*/);");
+        writeLine("      " + PRINT_VALUE + "("+ PRINT__STREAM_NAME +",valType,*(("+VALUE_BLOCK_NAME+"**)"+PRINT__VALUE_NAME+")/*content*/);");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "ARRAY:");
-        writeLine("      data=*(("+VALUE_BLOCK_NAME+"**)value);/*value->asPtr*/");
+        writeLine("      data=*(("+VALUE_BLOCK_NAME+"**)"+PRINT__VALUE_NAME+");/*"+PRINT__VALUE_NAME+"->asPtr*/");
         writeLine("      valType=typeData[(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK];");
         writeLine("      size_t w;");
         writeLine("      void* min;");
@@ -515,12 +626,12 @@ public class CompileToC {
         writeLine("      min=data+"+ARRAY_HEADER+"/*header size*/+data["+ARRAY_OFF_OFFSET+"]."+
                 typeFieldName(Type.Numeric.UINT64)+"/*off*/;");
         writeLine("      max=min+w*(data["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+")/*len*/;");
-        writeLine("      fputs(\"{\",log);");
+        writeLine("      fputs(\"{\","+ PRINT__STREAM_NAME +");");
         writeLine("      for(void* p=min;p<max;p+=w){");
-        writeLine("        if(p>min){fputs(\",\",log);}");
-        writeLine("        " + PRINT_VALUE + "(log,valType,p/*element*/);");
+        writeLine("        if(p>min){fputs(\",\","+ PRINT__STREAM_NAME +");}");
+        writeLine("        " + PRINT_VALUE + "("+ PRINT__STREAM_NAME +",valType,p/*element*/);");
         writeLine("      }");
-        writeLine("      fputs(\"}\",log);");
+        writeLine("      fputs(\"}\","+ PRINT__STREAM_NAME +");");
         writeLine("      break;");
         //TODO Print Containers
         writeLine("    case " + TYPE_SIG_PREFIX + "TUPLE:");
@@ -535,7 +646,6 @@ public class CompileToC {
         writeLine("  }");
         writeLine("}");
         comment("log-Method");
-        //TODO extract printValue to its own function
         writeLine("void " + ID_LOG + "(" + LOG_TYPE_NAME + " logType,bool append,const Type type,const " +VALUE_BLOCK_NAME+"* value){");
         writeLine("  if(prevType!=null){");
         writeLine("    if((logType!=prevType)||(!append)){");
@@ -676,7 +786,8 @@ public class CompileToC {
                 if(j>0){
                     content.append(',');
                 }
-                content.append("0x").append(Integer.toHexString(((Number)((Value.Primitive)elt).getValue()).intValue()));
+                content.append("0x").append(Integer.toHexString((((Number)((Value.Primitive)elt).getValue()).intValue())&
+                        ((int)((1L<<bitCount)-1))));
                 j++;
             }
             while(j<c){
