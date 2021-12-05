@@ -800,6 +800,8 @@ public class Parser {
         final ArrayList<Type> varTypes = new ArrayList<>();
 
         final HashSet<Type> runtimeTypes =new HashSet<>();
+        final HashSet<Type> runtimeBlockTypes =new HashSet<>();
+        final HashSet<Type.StructOrUnion> runtimeStructs =new HashSet<>();
 
         long maxArgSize=0;
 
@@ -819,7 +821,11 @@ public class Parser {
          * this method is a helper of the compiler
          * @param topLevel true if the supplied type is not contained in any other type*/
         public void addRuntimeType(Type t,boolean topLevel){
-            if(!topLevel){
+            if(t instanceof Type.Struct||t instanceof Type.Union){
+                runtimeStructs.add((Type.StructOrUnion) t);
+            }else if(t instanceof Type.Tuple||t instanceof Type.Proc){
+                runtimeBlockTypes.add(t);
+            }else if(!topLevel){
                 runtimeTypes.add(t);
             }
             //add child types

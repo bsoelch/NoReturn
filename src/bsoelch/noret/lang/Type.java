@@ -3,6 +3,7 @@ package bsoelch.noret.lang;
 import bsoelch.noret.TypeError;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -460,7 +461,15 @@ public class Type {
             super(name,types,names,true);
         }
     }
-    private static abstract class StructOrUnion extends Type{
+    public static class StructEntry{
+        public final String name;
+        public final Type type;
+        public StructEntry(String name,Type type) {
+            this.name = name;
+            this.type = type;
+        }
+    }
+    public static abstract class StructOrUnion extends Type{
         public final boolean isUnion;
         final String structName;
         final String[] fieldNames;
@@ -506,7 +515,7 @@ public class Type {
         public boolean equals(Object o) {
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
-            Struct struct = (Struct) o;
+            StructOrUnion struct = (StructOrUnion) o;
             return Objects.equals(fields, struct.fields);
         }
         @Override
@@ -516,6 +525,14 @@ public class Type {
 
         public Iterable<Type> childTypes() {
             return Arrays.asList(elements);
+        }
+
+        public Iterable<StructEntry> entries(){
+            return IntStream.range(0,elements.length).mapToObj(i->new StructEntry(fieldNames[i],elements[i])).collect(Collectors.toSet());
+        }
+
+        public int elementCount() {
+            return elements.length;
         }
     }
     public static class Proc extends Type{

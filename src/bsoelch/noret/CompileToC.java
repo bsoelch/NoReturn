@@ -6,7 +6,6 @@ import bsoelch.noret.lang.expression.*;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.util.*;
-import java.util.stream.Collectors;
 
 //TODO don't include code for unused types
 public class CompileToC {
@@ -124,9 +123,8 @@ public class CompileToC {
     }
 
     private final BufferedWriter out;
-    private long typeDataOff=0;
-    private final HashMap<Type,Long> typeOffsets=new HashMap<>();
-    private StringBuilder typeDataDeclarations;
+    private final HashMap<Type, Integer> typeOffsets=new HashMap<>();
+    private final HashMap<Type.StructOrUnion, Integer> structOffsets=new HashMap<>();
     private int min2BlockSignature;
     /**minByteSignatures[i]=#{signatures < 2^(i+1)}*/
     private final int[] minByteSignatures =new int[4];
@@ -160,16 +158,14 @@ public class CompileToC {
         return o.toString().replace("\"","\\\"");
     }
 
-    private Long typeOffset(Type t) {
-        Long off = typeOffsets.get(t);
-        if (off == null) {
-            typeOffsets.put(t, typeDataOff);
-            if(typeDataOff>0){
-                typeDataDeclarations.append(',');
-            }
-            typeDataDeclarations.append(typeSignature(t));
-            return typeDataOff++;
-        }
+    private Integer typeOffset(Type t) {
+        Integer off = typeOffsets.get(t);
+        assert off != null;
+        return off;
+    }
+    private Integer structOffset(Type.StructOrUnion t) {
+        Integer off = structOffsets.get(t);
+        assert off != null;
         return off;
     }
 
@@ -207,7 +203,6 @@ public class CompileToC {
                         ret.add(print+"\"%.*s\",(int)"+PRINT__UTF8_COUNT+", (char*)"+ PRINT__UTF8_BUFF +");");
                         return ret;
                     }
-                    //TODO implement big-char to String
                 }else{
                     ret.add(print+"\"%\"PRI"+(((Type.Numeric)type).signed?"i":"u")+((Type.Numeric)type).bitSize()+","+value+");");
                     return ret;
@@ -236,33 +231,46 @@ public class CompileToC {
         }else if(t instanceof Type.AnyType){
             return TYPE_SIG_PREFIX + "ANY";
         }else if(t instanceof Type.Optional){
-            typeSignature(((Type.Optional) t).content);//ensure type-signature exists
-            Long off = typeOffset(((Type.Optional) t).content);
+            Integer off = typeOffset(((Type.Optional) t).content);
             return TYPE_SIG_PREFIX + "OPTIONAL|("+off+"<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Reference){
-            typeSignature(((Type.Reference) t).content);//ensure type-signature exists
-            Long off = typeOffset(((Type.Reference) t).content);
+            Integer off = typeOffset(((Type.Reference) t).content);
             return TYPE_SIG_PREFIX + "REFERENCE|("+off+"<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Array){
-            typeSignature(((Type.Array) t).content);//ensure type-signature exists
-            Long off = typeOffset(((Type.Array) t).content);
+            Integer off = typeOffset(((Type.Array) t).content);
             return TYPE_SIG_PREFIX + "ARRAY|("+off+"<<TYPE_CONTENT_SHIFT)";
-        }else if(t instanceof Type.Tuple){
-            throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
-            //  return "TYPE_SIG_TUPLE|("+off+"<<TYPE_CONTENT_SHIFT)";
+        }else if(t instanceof Type.Tuple){//addLater combine similar cases
+            Integer off = typeOffset(t);
+            int len = ((Type.Tuple) t).getElements().length;
+            if(len>0xffff){//addLater constant
+                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
+            }
+            return TYPE_SIG_PREFIX+ "TUPLE|("+off+"<<TYPE_CONTENT_SHIFT)|" +"("+ len +"<<TYPE_COUNT_SHIFT)";
         }else if(t instanceof Type.Struct){
-            throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
-          //  return "TYPE_SIG_STRUCT|("+off+"<<TYPE_CONTENT_SHIFT)";
+            Integer off = structOffset((Type.StructOrUnion) t);
+            int len = ((Type.StructOrUnion) t).elementCount();
+            if(len>0xffff){
+                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
+            }
+            return TYPE_SIG_PREFIX+ "STRUCT|("+off+"<<TYPE_CONTENT_SHIFT)|" +"("+ len +"<<TYPE_COUNT_SHIFT)";
         }else if(t instanceof Type.Union){
-            throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
-            //  return "TYPE_SIG_UNION|("+off+"<<TYPE_CONTENT_SHIFT)";
+            Integer off = structOffset((Type.StructOrUnion) t);
+            int len = ((Type.StructOrUnion) t).elementCount();
+            if(len>0xffff){
+                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
+            }
+            return TYPE_SIG_PREFIX+ "UNION|("+off+"<<TYPE_CONTENT_SHIFT)|" +"("+ len +"<<TYPE_COUNT_SHIFT)";
         }else if(t instanceof Type.Proc){
-            //TODO block-type signatures
-            throw new UnsupportedOperationException("signatures of Block-Types are currently not implemented");
-            // return "TYPE_SIG_PROC|("+off+"<<TYPE_CONTENT_SHIFT)";
+            Integer off = typeOffset(t);
+            int len = ((Type.Proc) t).getArgTypes().length;
+            if(len>0xffff){
+                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
+            }
+            return TYPE_SIG_PREFIX+ "PROC|("+off+"<<TYPE_CONTENT_SHIFT)|" +"("+ len +"<<TYPE_COUNT_SHIFT)";
         }
         throw new UnsupportedOperationException("unsupported Type :"+t);
     }
+
 
     private static String typeFieldName(Type.Primitive type){
         return "as"+typeName(type,false);
@@ -338,33 +346,57 @@ public class CompileToC {
         writeLine("#define TYPE_COUNT_SHIFT    40");
         writeLine("#define TYPE_COUNT_MASK     0xffff");
         comment("Type data for all composite Types");
-        /*old code, remove when new implementation for compositve types is finished*/
-        writeLine("Type typeData [];");
-        typeDataDeclarations=new StringBuilder("Type typeData []={");
-        /*end of old code*/
-        HashSet<Type> structsAndUnions= context.runtimeTypes.stream().filter(t -> (t instanceof Type.Struct || t instanceof Type.Union))
-                .collect(Collectors.toCollection(HashSet::new));
-        if(structsAndUnions.size()>0){
+        ArrayList<Type> contentTypes=new ArrayList<>();
+        //addLater use (greedy-alg?) [shortest super-string] to reduce the total length of the saved values
+        for(Type t:context.runtimeBlockTypes){
+            typeOffsets.put(t,contentTypes.size());
+            for(Type c:t.childTypes()){
+               contentTypes.add(c);
+            }
+        }
+        for(Type t:context.runtimeTypes){
+            typeOffsets.put(t,contentTypes.size());
+            contentTypes.add(t);
+        }
+        ArrayList<Type.StructEntry> structData=new ArrayList<>();
+        for(Type.StructOrUnion s:context.runtimeStructs){
+            structOffsets.put(s,structData.size());
+            for(Type.StructEntry e:s.entries()){
+                structData.add(e);
+            }
+        }
+        StringBuilder tmp;
+        if(contentTypes.size()>0) {
+            tmp = new StringBuilder("Type typeData []={");
+            boolean first = true;
+            for (Type t : contentTypes) {
+                if (first) {
+                    first = false;
+                } else {
+                    tmp.append(',');
+                }
+                tmp.append(typeSignature(t));
+            }
+            writeLine(tmp.append("};").toString());
+        }
+        if(structData.size()>0){
+            comment("Type data for struct and union types");
             writeLine("typedef struct{");
             writeLine("  char* name;");
             writeLine("  Type  type;");
             writeLine("}NoRetStructEntry;");
-            StringBuilder tmp;
-            long structCount=0;
-            for(Type t:structsAndUnions){
-                tmp=new StringBuilder("NoRetStructEntry struct"+(structCount++)+" []={");
-                //TODO write structs-types
-                tmp.append("}");
+            tmp = new StringBuilder("NoRetStructEntry typeData []={");
+            boolean first = true;
+            for (Type.StructEntry e : structData) {
+                if (first) {
+                    first = false;
+                } else {
+                    tmp.append(',');
+                }
+                tmp.append("{.name=\"").append(e.name).append("\",.type=").append(typeSignature(e.type)).append("}");
             }
-            throw new UnsupportedOperationException("unimplemented");
+            writeLine(tmp.append("};").toString());
         }
-        //procedures are not distinguished at in compiled code
-        HashSet<Type> otherTypes= context.runtimeTypes.stream()
-                .filter(t -> (!(t instanceof Type.Struct || t instanceof Type.Union|| t instanceof Type.Proc)))
-                .collect(Collectors.toCollection(HashSet::new));
-        //sort types by element count
-        //store as array
-
         out.newLine();
         //Value struct
         comment("value-block type");
@@ -382,7 +414,7 @@ public class CompileToC {
         comment("value-block definition");
         writeLine("union " + VALUE_BLOCK_NAME + "Impl{");
         for(Type.Primitive t:Type.Primitive.types()){
-            StringBuilder tmp=new StringBuilder("  ");
+            tmp=new StringBuilder("  ");
             tmp.append(cTypeName(t));
             while(tmp.length()<12){
                 tmp.append(' ');//align entries
@@ -1733,8 +1765,6 @@ public class CompileToC {
         for(Map.Entry<String, Procedure> e:context.procNames.entrySet()){
             writeProcImplementation(asciify(e.getKey()),e.getValue());
         }
-        comment("declarations of all used type Signatures");
-        writeLine(typeDataDeclarations.append("};").toString());//declare type signatures after all NoRet code-sections are compiled
         if(start!=null){
             Type[] startTypes= start.argTypes();
             if(startTypes.length>0){

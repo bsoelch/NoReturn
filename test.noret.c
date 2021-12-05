@@ -45,7 +45,7 @@ typedef uint64_t Type;
 #define TYPE_COUNT_SHIFT    40
 #define TYPE_COUNT_MASK     0xffff
 // Type data for all composite Types
-Type typeData [];
+Type typeData []={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(2<<TYPE_CONTENT_SHIFT),TYPE_SIG_STRING8};
 
 // value-block type
 typedef union ValueImpl Value;
@@ -507,7 +507,7 @@ void* noRet_run(void* initState);
 void* proc_start(Value* argsIn,Value* argsOut){
   // var0:(argsIn+0)
   {// Log: Log[DEBUG]{VarExpression{0}}
-    logValue(DEBUG,false,TYPE_SIG_ARRAY|(2<<TYPE_CONTENT_SHIFT),(argsIn+0));
+    logValue(DEBUG,false,TYPE_SIG_ARRAY|(4<<TYPE_CONTENT_SHIFT),(argsIn+0));
   }
   {// Log: Log[DEBUG]{ValueExpression{"args[0]="}}
     Value tmp0 [1];
@@ -642,7 +642,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}}));
   }
   {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(4<<TYPE_CONTENT_SHIFT)}}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(3<<TYPE_CONTENT_SHIFT)}}));
   }
   Value var8 [1];// (Type:uint64)
   {// Initialize: ValueExpression{3}
@@ -698,8 +698,6 @@ void* proc_start(Value* argsIn,Value* argsOut){
   return ret;
 }
 
-// declarations of all used type Signatures
-Type typeData []={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_STRING8,TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(3<<TYPE_CONTENT_SHIFT)};
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* noRet_run(void* initState){
     Procedure f=*((Procedure*)initState);
