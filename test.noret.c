@@ -45,7 +45,13 @@ typedef uint64_t Type;
 #define TYPE_COUNT_SHIFT    40
 #define TYPE_COUNT_MASK     0xffff
 // Type data for all composite Types
-Type typeData []={TYPE_SIG_I32,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(2<<TYPE_CONTENT_SHIFT),TYPE_SIG_STRING8};
+Type typeData []={TYPE_SIG_I32,TYPE_SIG_I32,TYPE_SIG_I32,TYPE_SIG_ARRAY|(9ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_I32,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(5ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(6ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(9ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_STRING8};
+// Type data for struct and union types
+typedef struct{
+  char* name;
+  Type  type;
+}NoRetStructEntry;
+NoRetStructEntry structData []={{.name="a",.type=TYPE_SIG_I32},{.name="b",.type=TYPE_SIG_I32}};
 
 // value-block type
 typedef union ValueImpl Value;
@@ -104,66 +110,68 @@ void initLogStreams(){
 }
 // recursive printing of types
 void printType(const Type type,FILE* log,bool recursive){
+  size_t off,len;
+  NoRetStructEntry e;
   switch(type&TYPE_SIG_MASK){
     case TYPE_SIG_BOOL:
-      fputs("Type:bool",log);
+      fputs("bool",log);
       break;
     case TYPE_SIG_C8:
-      fputs("Type:char8",log);
+      fputs("char8",log);
       break;
     case TYPE_SIG_I8:
-      fputs("Type:int8",log);
+      fputs("int8",log);
       break;
     case TYPE_SIG_U8:
-      fputs("Type:uint8",log);
+      fputs("uint8",log);
       break;
     case TYPE_SIG_C16:
-      fputs("Type:char16",log);
+      fputs("char16",log);
       break;
     case TYPE_SIG_I16:
-      fputs("Type:int16",log);
+      fputs("int16",log);
       break;
     case TYPE_SIG_U16:
-      fputs("Type:uint16",log);
+      fputs("uint16",log);
       break;
     case TYPE_SIG_C32:
-      fputs("Type:char32",log);
+      fputs("char32",log);
       break;
     case TYPE_SIG_F32:
-      fputs("Type:float32",log);
+      fputs("float32",log);
       break;
     case TYPE_SIG_I32:
-      fputs("Type:int32",log);
+      fputs("int32",log);
       break;
     case TYPE_SIG_U32:
-      fputs("Type:uint32",log);
+      fputs("uint32",log);
       break;
     case TYPE_SIG_F64:
-      fputs("Type:float64",log);
+      fputs("float64",log);
       break;
     case TYPE_SIG_I64:
-      fputs("Type:int64",log);
+      fputs("int64",log);
       break;
     case TYPE_SIG_U64:
-      fputs("Type:uint64",log);
+      fputs("uint64",log);
       break;
     case TYPE_SIG_STRING8:
-      fputs("Type:string8",log);
+      fputs("string8",log);
       break;
     case TYPE_SIG_STRING16:
-      fputs("Type:string16",log);
+      fputs("string16",log);
       break;
     case TYPE_SIG_STRING32:
-      fputs("Type:string32",log);
+      fputs("string32",log);
       break;
     case TYPE_SIG_TYPE:
-      fputs("Type:type",log);
+      fputs("type",log);
       break;
     case TYPE_SIG_NONE:
-      fputs("Type:\"none\"",log);
+      fputs("\"none\"",log);
       break;
     case TYPE_SIG_ANY:
-      fputs("Type:any",log);
+      fputs("any",log);
       break;
     case TYPE_SIG_OPTIONAL:
       if(recursive){fputs("(",log);}
@@ -181,13 +189,41 @@ void printType(const Type type,FILE* log,bool recursive){
       fputs(recursive?"[])":"[]",log);
       break;
     case TYPE_SIG_TUPLE:
+      fputs("tuple{",log);
+      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;
+      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;
+      for(size_t i=off;i<off+len;i++){
+        if(i>off){fputs(", ",log);};
+        printType(typeData[i],log,false);
+      }
+      fputs("}",log);
+      break;
+    case TYPE_SIG_PROC:
+      fputs("(",log);
+      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;
+      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;
+      for(size_t i=off;i<off+len;i++){
+        if(i>off){fputs(", ",log);};
+        printType(typeData[i],log,false);
+      }
+      fputs(")=>?",log);
+      break;
     case TYPE_SIG_STRUCT:
     case TYPE_SIG_UNION:
-    case TYPE_SIG_PROC:
-      assert(false && " unimplemented ");
+      fputs(((type&TYPE_SIG_MASK)==TYPE_SIG_STRUCT)?"struct{":"union{",log);
+      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;
+      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;
+      for(size_t i=off;i<off+len;i++){
+        if(i>off){fputs(", ",log);};
+        e=structData[i];
+        printType(e.type,log,true);
+        fprintf(log,": %s",e.name);
+      }
+      fputs("}",log);
       break;
     default:
-      assert(false && " unimplemented ");
+      fprintf(stderr,"unknown type signature:%"PRIu64,type&TYPE_SIG_MASK);
+      exit(2);
       break;
   }
 }
@@ -209,7 +245,7 @@ static void codePointToUTF8(uint32_t codepoint,uint8_t* buff,size_t* count){
     buff[(*count)++]=0x80|(codepoint&0x3f);
   }else{
     fprintf(stderr,"code-point out of range: %"PRIu32,codepoint);
-    exit(3);
+    exit(4);
   }
 }
 static uint32_t codePointFromUTF8(uint8_t* buff,size_t* off){
@@ -225,7 +261,7 @@ static uint32_t codePointFromUTF8(uint8_t* buff,size_t* off){
     while(c>0){
       if((buff[(*off)]&0xc0)!=0x80){
         fprintf(stderr,"format error in UTF8-string");
-        exit(3);
+        exit(4);
       }
       ret<<=6;
       ret|=buff[(*off)++]&0x3f;
@@ -243,7 +279,7 @@ static void codePointToUTF16(uint32_t codepoint,uint16_t* buff,size_t* count){
     buff[(*count)++]=0xdc00|(codepoint&0x3ff);
   }else{
     fprintf(stderr,"code-point out of range: %"PRIu32,codepoint);
-    exit(3);
+    exit(4);
   }
 }
 static uint32_t codePointFromUTF16(uint16_t* buff,size_t* off){
@@ -401,11 +437,14 @@ void printValue(FILE* log,Type type,const void* value){
     case TYPE_SIG_TUPLE:
     case TYPE_SIG_UNION:
     case TYPE_SIG_STRUCT:
-    case TYPE_SIG_PROC:
       assert(false && " unimplemented ");
       break;
+    case TYPE_SIG_PROC:
+      fputs("[procedure]",log);
+      break;
     default:
-      assert(false && " unreachable ");
+      fprintf(stderr,"unknown type signature:%"PRIu64,type&TYPE_SIG_MASK);
+      exit(2);
       break;
   }
 }
@@ -463,7 +502,7 @@ Value* getElement(Value* array,uint64_t index,uint64_t width){
     return (array+3)+(array[0].asU64+index)*width;
   }else{
     fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
-    exit(2);
+    exit(3);
   }
 }
 // read a raw-element with width byteWidth from an Array
@@ -472,42 +511,42 @@ void* getRawElement(Value* array,uint64_t index,int byteWidth){
     return ((void*)(array+3))+(array[0].asU64+index)*byteWidth;
   }else{
     fprintf(stderr,"array index out of range:%"PRIu64" length:%"PRIu64"\n",index,array[2].asU64);
-    exit(2);
+    exit(3);
   }
 }
 
-// const Type:struct_test : aStruct = {.a=0,.b=1}
+// const struct{int32: a, int32: b} : aStruct = {.a=0,.b=1}
 const Value const_aStruct []={{.asI32=0},{.asI32=1}};
-// const Type:int8 : constant = 42
+// const int8 : constant = 42
 const Value const_constant []={{.asI8=42}};
-// const Type:any : array_test = {{1,2,3},{4,5},{6}}
+// const any : array_test = {{1,2,3},{4,5},{6}}
 static Value tmp_const_array__test1[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU64=3/*len*/},{.raw32={1,2}},{.raw32={3,0}}};
 static Value tmp_const_array__test2[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=2/*len*/},{.raw32={4,5}}};
 static Value tmp_const_array__test3[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=1/*len*/},{.raw32={6,0}}};
 static Value tmp_const_array__test0[]={{.asU64=0/*off*/},{.asU64=3/*cap*/},{.asU64=3/*len*/},{.asPtr=(tmp_const_array__test1)},{.asPtr=(tmp_const_array__test2)},{.asPtr=(tmp_const_array__test3)}};
-const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(1<<TYPE_CONTENT_SHIFT)},{.asPtr=(tmp_const_array__test0)}};
-// const Type:string8[] : str_test = {"str1","str2"}
+const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(5ULL<<TYPE_CONTENT_SHIFT)},{.asPtr=(tmp_const_array__test0)}};
+// const string8[] : str_test = {"str1","str2"}
 static Value tmp_const_str__test1[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=4/*len*/},{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}}};
 static Value tmp_const_str__test2[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=4/*len*/},{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}}};
 static Value tmp_const_str__test0[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU64=2/*len*/},{.asPtr=(tmp_const_str__test1)},{.asPtr=(tmp_const_str__test2)}};
 const Value const_str__test []={{.asPtr=(tmp_const_str__test0)}};
-// const Type:int32[] : y = {2112454933,2,3}
+// const int32[] : y = {2112454933,2,3}
 static Value tmp_const_y0[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU64=3/*len*/},{.raw32={2112454933,2}},{.raw32={3,0}}};
 const Value const_y []={{.asPtr=(tmp_const_y0)}};
-// const Type:(((int32[])[])?)[] : type_sig_test = {}
+// const (((int32[])[])?)[] : type_sig_test = {}
 static Value tmp_const_type__sig__test0[]={{.asU64=0/*off*/},{.asU64=0/*cap*/},{.asU64=0/*len*/}};
 const Value const_type__sig__test []={{.asPtr=(tmp_const_type__sig__test0)}};
 
-// start(Type:string8[])
+// start(string8[])
 void* proc_start(Value* argsIn,Value* argsOut);
 //  main procedure handling function (written in a way that allows easy usage in pthreads)
 void* noRet_run(void* initState);
 
-// start(Type:string8[])
+// start(string8[])
 void* proc_start(Value* argsIn,Value* argsOut){
   // var0:(argsIn+0)
   {// Log: Log[DEBUG]{VarExpression{0}}
-    logValue(DEBUG,false,TYPE_SIG_ARRAY|(4<<TYPE_CONTENT_SHIFT),(argsIn+0));
+    logValue(DEBUG,false,TYPE_SIG_ARRAY|(9ULL<<TYPE_CONTENT_SHIFT),(argsIn+0));
   }
   {// Log: Log[DEBUG]{ValueExpression{"args[0]="}}
     Value tmp0 [1];
@@ -541,7 +580,10 @@ void* proc_start(Value* argsIn,Value* argsOut){
     }
     logValue(DEBUG,true,TYPE_SIG_STRING8,tmp0);
   }
-  Value var1 [1];// (Type:string8)
+  {// Log: Log[DEFAULT]{ValueExpression{struct{int32: a, int32: b}}}
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_STRUCT|(0ULL<<TYPE_CONTENT_SHIFT)|(2ULL<<TYPE_COUNT_SHIFT)}}));
+  }
+  Value var1 [1];// (string8)
   {// Initialize: ValueExpression{"UTF8-String:a°💻"}
     Value tmp0 [1];
     {
@@ -554,7 +596,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
     }
     memcpy(var1,tmp0,1*sizeof(Value));
   }
-  Value var2 [1];// (Type:string16)
+  Value var2 [1];// (string16)
   {// Initialize: ValueExpression{"UTF16-String:a°💻"}
     Value tmp0 [1];
     {
@@ -567,7 +609,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
     }
     memcpy(var2,tmp0,1*sizeof(Value));
   }
-  Value var3 [1];// (Type:string32)
+  Value var3 [1];// (string32)
   {// Initialize: ValueExpression{"UTF32-String:a°💻"}
     Value tmp0 [1];
     {
@@ -607,25 +649,34 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log: Log[DEFAULT]{ValueExpression{'💻'}}
     logValue(DEFAULT,false,TYPE_SIG_C32,((Value[]){(Value){.asC32=128187}}));
   }
-  Value var4 [2];// (Type:any)
-  {// Initialize: TypeCast{Type:any:ValueExpression{3}}
+  Value var4 [2];// (any)
+  {// Initialize: TypeCast{any:ValueExpression{3}}
     memcpy(var4,((Value[]){(Value){.asType=TYPE_SIG_I32},(Value){.asI32=((int32_t)(3))}}),2*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{GetField{VarExpression{4}.type}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,var4);
   }
-  Value var5 [3];// (Type:tuple{Type:int32, Type:int32, Type:int32})
+  Value var5 [3];// (tuple{int32, int32, int32})
   {// Initialize: ValueExpression{{1,2,3}}
     memcpy(var5,((Value[]){(Value){.asI32=1},(Value){.asI32=2},(Value){.asI32=3}}),3*sizeof(Value));
+  }
+  {// Log: Log[DEFAULT]{GetField{VarExpression{5}.type}}
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_TUPLE|(0ULL<<TYPE_CONTENT_SHIFT)|(3ULL<<TYPE_COUNT_SHIFT)}}));
   }
   {// Log: Log[DEFAULT]{GetField{VarExpression{5}.length}}
     logValue(DEFAULT,false,TYPE_SIG_U64,((Value[]){(Value){.asU64=3}}));
   }
-  Value var6 [1];// (Type:int32)
-  {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{Type:int32:GetField{VarExpression{0}.length}}}
+  {// Log: Log[DEFAULT]{this}
+    logValue(DEFAULT,false,TYPE_SIG_PROC|(3ULL<<TYPE_CONTENT_SHIFT)|(1ULL<<TYPE_COUNT_SHIFT),((Value[]){(Value){.asProc=&proc_start}}));
+  }
+  {// Log: Log[DEFAULT]{GetField{this.type}}
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_PROC|(3ULL<<TYPE_CONTENT_SHIFT)|(1ULL<<TYPE_COUNT_SHIFT)}}));
+  }
+  Value var6 [1];// (int32)
+  {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{int32:GetField{VarExpression{0}.length}}}
     memcpy(var6,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(1))+((int32_t)(((argsIn+0)[0].asPtr+2)[0].asU64))))}}),1*sizeof(Value));
   }
-  Value var7 [1];// (Type:int32)
+  Value var7 [1];// (int32)
   {// Initialize: BinOp{BinOp{VarExpression{6} MULT VarExpression{6}} MINUS BinOp{VarExpression{6} INT_DIV ValueExpression{2}}}
     memcpy(var7,((Value[]){(Value){.asI32=((int32_t)(((int32_t)(var6[0].asI32*var6[0].asI32))-((int32_t)(var6[0].asI32/((int32_t)(2))))))}}),1*sizeof(Value));
   }
@@ -633,25 +684,25 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_I32,var7);
   }
   {// Log: Log[DEFAULT]{ValueExpression{{2112454933,2,3}}}
-    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),const_y);
+    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),const_y);
   }
   {// Log: Log[DEFAULT]{ValueExpression{2112454933}}
     logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=2112454933}}));
   }
-  {// Log: Log[DEFAULT]{ValueExpression{Type:int32[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT)}}));
+  {// Log: Log[DEFAULT]{ValueExpression{int32[]}}
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT)}}));
   }
-  {// Log: Log[DEFAULT]{ValueExpression{Type:(((int32[])[])?)[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(3<<TYPE_CONTENT_SHIFT)}}));
+  {// Log: Log[DEFAULT]{ValueExpression{(((int32[])[])?)[]}}
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(7ULL<<TYPE_CONTENT_SHIFT)}}));
   }
-  Value var8 [1];// (Type:uint64)
+  Value var8 [1];// (uint64)
   {// Initialize: ValueExpression{3}
     memcpy(var8,((Value[]){(Value){.asU64=3}}),1*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{8}}
     logValue(DEFAULT,false,TYPE_SIG_U64,var8);
   }
-  Value var9 [1];// (Type:int32[])
+  Value var9 [1];// (int32[])
   {// Initialize: ValueExpression{{1,2,3,42}}
     Value tmp0 [1];
     {
@@ -671,19 +722,22 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=*((int32_t*)getRawElement(var9->asPtr,((int32_t)(0)),4))}}));
   }
   {// Log: Log[DEFAULT]{VarExpression{9}}
-    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(0<<TYPE_CONTENT_SHIFT),var9);
+    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),var9);
   }
-  {// Log: Log[DEFAULT]{ValueExpression{Type:"none"}}
+  {// Log: Log[DEFAULT]{ValueExpression{"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_NONE}}));
   }
-  Value var10 [2];// (Type:int32?)
-  {// Initialize: TypeCast{Type:int32?:ValueExpression{4}}
+  {// Log: Log[DEFAULT]{ValueExpression{tuple{}}}
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_TUPLE|(0ULL<<TYPE_CONTENT_SHIFT)|(0ULL<<TYPE_COUNT_SHIFT)}}));
+  }
+  Value var10 [2];// (int32?)
+  {// Initialize: TypeCast{int32?:ValueExpression{4}}
     memcpy(var10,((Value[]){(Value){.asBool=true},(Value){.asI32=((int32_t)(4))}}),2*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{10}}
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),var10);
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(4ULL<<TYPE_CONTENT_SHIFT),var10);
   }
-  {// Log: Log[DEFAULT]{IfExpr{TypeCast{Type:bool:VarExpression{10}}?TypeCast{Type:int32?:GetField{VarExpression{10}.value}}:TypeCast{Type:int32?:ValueExpression{none}}}}
+  {// Log: Log[DEFAULT]{IfExpr{TypeCast{bool:VarExpression{10}}?TypeCast{int32?:GetField{VarExpression{10}.value}}:TypeCast{int32?:ValueExpression{none}}}}
     Value tmp0 [2];
     {
       if(((var10)[0].asBool)){
@@ -692,7 +746,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
         memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asPtr=NULL/*none*/}}))[0]}),2*sizeof(Value));
       }
     }
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(0<<TYPE_CONTENT_SHIFT),tmp0);
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(4ULL<<TYPE_CONTENT_SHIFT),tmp0);
   }
   Procedure ret=NULL;
   return ret;

@@ -185,7 +185,7 @@ public class Type {
 
     @Override
     public String toString() {
-        return "Type:"+name;
+        return name;
     }
 
     public static Type commonSupertype(Type t1, Type t2){
@@ -483,12 +483,12 @@ public class Type {
                 if(i>0){
                     ret.append(", ");
                 }
-                ret.append(types[i]).append(": ").append(names[i]);
+                ret.append(types[i].wrappedName()).append(": ").append(names[i]);
             }
             return ret.append('}').toString();
         }
         private StructOrUnion(String name, Type[] types, String[] names,boolean isUnion){
-            super(name==null?structName(types,names,isUnion):name,
+            super(structName(types,names,isUnion),
                     isUnion?Stream.of(types).mapToInt(t->t.blockCount).max().orElse(0):Stream.of(types).mapToInt(t->t.blockCount).max().orElse(0)
                     , isVarSize(types), false);
             structName=name;
@@ -528,7 +528,7 @@ public class Type {
         }
 
         public Iterable<StructEntry> entries(){
-            return IntStream.range(0,elements.length).mapToObj(i->new StructEntry(fieldNames[i],elements[i])).collect(Collectors.toSet());
+            return IntStream.range(0,elements.length).mapToObj(i->new StructEntry(fieldNames[i],elements[i])).collect(Collectors.toList());
         }
 
         public int elementCount() {

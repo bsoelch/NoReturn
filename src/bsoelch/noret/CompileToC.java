@@ -42,8 +42,9 @@ public class CompileToC {
 
     public static final int ERR_NONE  = 0;
     public static final int ERR_MEM   = 1;
-    public static final int ERR_INDEX = 2;
-    public static final int ERR_STR_ENCODING=3;
+    public static final int ERR_TYPE  = 2;
+    public static final int ERR_INDEX = 3;
+    public static final int ERR_STR_ENCODING=4;
 
     /* TODO rewrite DataOut
         constant memory may keep the original approach
@@ -232,41 +233,41 @@ public class CompileToC {
             return TYPE_SIG_PREFIX + "ANY";
         }else if(t instanceof Type.Optional){
             Integer off = typeOffset(((Type.Optional) t).content);
-            return TYPE_SIG_PREFIX + "OPTIONAL|("+off+"<<TYPE_CONTENT_SHIFT)";
+            return TYPE_SIG_PREFIX + "OPTIONAL|("+off+"ULL<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Reference){
             Integer off = typeOffset(((Type.Reference) t).content);
-            return TYPE_SIG_PREFIX + "REFERENCE|("+off+"<<TYPE_CONTENT_SHIFT)";
+            return TYPE_SIG_PREFIX + "REFERENCE|("+off+"ULL<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Array){
             Integer off = typeOffset(((Type.Array) t).content);
-            return TYPE_SIG_PREFIX + "ARRAY|("+off+"<<TYPE_CONTENT_SHIFT)";
+            return TYPE_SIG_PREFIX + "ARRAY|("+off+"ULL<<TYPE_CONTENT_SHIFT)";
         }else if(t instanceof Type.Tuple){//addLater combine similar cases
             Integer off = typeOffset(t);
             int len = ((Type.Tuple) t).getElements().length;
             if(len>0xffff){//addLater constant
                 throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
             }
-            return TYPE_SIG_PREFIX+ "TUPLE|("+off+"<<TYPE_CONTENT_SHIFT)|" +"("+ len +"<<TYPE_COUNT_SHIFT)";
+            return TYPE_SIG_PREFIX+ "TUPLE|("+off+"ULL<<TYPE_CONTENT_SHIFT)|" +"("+ len +"ULL<<TYPE_COUNT_SHIFT)";
         }else if(t instanceof Type.Struct){
             Integer off = structOffset((Type.StructOrUnion) t);
             int len = ((Type.StructOrUnion) t).elementCount();
             if(len>0xffff){
                 throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
             }
-            return TYPE_SIG_PREFIX+ "STRUCT|("+off+"<<TYPE_CONTENT_SHIFT)|" +"("+ len +"<<TYPE_COUNT_SHIFT)";
+            return TYPE_SIG_PREFIX+ "STRUCT|("+off+"ULL<<TYPE_CONTENT_SHIFT)|" +"("+ len +"ULL<<TYPE_COUNT_SHIFT)";
         }else if(t instanceof Type.Union){
             Integer off = structOffset((Type.StructOrUnion) t);
             int len = ((Type.StructOrUnion) t).elementCount();
             if(len>0xffff){
                 throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
             }
-            return TYPE_SIG_PREFIX+ "UNION|("+off+"<<TYPE_CONTENT_SHIFT)|" +"("+ len +"<<TYPE_COUNT_SHIFT)";
+            return TYPE_SIG_PREFIX+ "UNION|("+off+"ULL<<TYPE_CONTENT_SHIFT)|" +"("+ len +"ULL<<TYPE_COUNT_SHIFT)";
         }else if(t instanceof Type.Proc){
             Integer off = typeOffset(t);
             int len = ((Type.Proc) t).getArgTypes().length;
             if(len>0xffff){
                 throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
             }
-            return TYPE_SIG_PREFIX+ "PROC|("+off+"<<TYPE_CONTENT_SHIFT)|" +"("+ len +"<<TYPE_COUNT_SHIFT)";
+            return TYPE_SIG_PREFIX+ "PROC|("+off+"ULL<<TYPE_CONTENT_SHIFT)|" +"("+ len +"ULL<<TYPE_COUNT_SHIFT)";
         }
         throw new UnsupportedOperationException("unsupported Type :"+t);
     }
@@ -385,7 +386,7 @@ public class CompileToC {
             writeLine("  char* name;");
             writeLine("  Type  type;");
             writeLine("}NoRetStructEntry;");
-            tmp = new StringBuilder("NoRetStructEntry typeData []={");
+            tmp = new StringBuilder("NoRetStructEntry structData []={");
             boolean first = true;
             for (Type.StructEntry e : structData) {
                 if (first) {
@@ -459,6 +460,8 @@ public class CompileToC {
         writeLine("}");
         comment("recursive printing of types");
         writeLine("void " + PRINT_TYPE_NAME + "(const Type type,FILE* log,bool recursive){");
+        writeLine("  size_t off,len;");
+        writeLine("  NoRetStructEntry e;");
         writeLine("  switch(type&" + TYPE_SIG_PREFIX + "MASK){");
         for(Type.Primitive t:Type.Primitive.types()){
             writeLine("    case "+typeSignature(t)+":");
@@ -499,13 +502,41 @@ public class CompileToC {
         writeLine("      fputs(recursive?\"[])\":\"[]\",log);");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "TUPLE:");
+        writeLine("      fputs(\"tuple{\",log);");
+        writeLine("      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;");
+        writeLine("      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;");
+        writeLine("      for(size_t i=off;i<off+len;i++){");
+        writeLine("        if(i>off){fputs(\", \",log);};");//no wrapping in tuple elements
+        writeLine("        " + PRINT_TYPE_NAME + "(typeData[i],log,false);");
+        writeLine("      }");
+        writeLine("      fputs(\"}\",log);");
+        writeLine("      break;");
+        writeLine("    case " + TYPE_SIG_PREFIX + "PROC:");
+        writeLine("      fputs(\"(\",log);");
+        writeLine("      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;");
+        writeLine("      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;");
+        writeLine("      for(size_t i=off;i<off+len;i++){");
+        writeLine("        if(i>off){fputs(\", \",log);};");//no wrapping in function arguments
+        writeLine("        " + PRINT_TYPE_NAME + "(typeData[i],log,false);");
+        writeLine("      }");
+        writeLine("      fputs(\")=>?\",log);");
+        writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRUCT:");
         writeLine("    case " + TYPE_SIG_PREFIX + "UNION:");
-        writeLine("    case " + TYPE_SIG_PREFIX + "PROC:");
-        writeLine("      assert(false && \" unimplemented \");");
+        writeLine("      fputs(((type&" + TYPE_SIG_PREFIX + "MASK)=="+TYPE_SIG_PREFIX+"STRUCT)?\"struct{\":\"union{\",log);");
+        writeLine("      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;");
+        writeLine("      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;");
+        writeLine("      for(size_t i=off;i<off+len;i++){");
+        writeLine("        if(i>off){fputs(\", \",log);};");
+        writeLine("        e=structData[i];");
+        writeLine("        " + PRINT_TYPE_NAME + "(e.type,log,true);");
+        writeLine("        fprintf(log,\": %s\",e.name);");
+        writeLine("      }");
+        writeLine("      fputs(\"}\",log);");
         writeLine("      break;");
         writeLine("    default:");
-        writeLine("      assert(false && \" unimplemented \");");
+        writeLine("      fprintf(stderr,\"unknown type signature:%\"PRIu64,type&" + TYPE_SIG_PREFIX + "MASK);");
+        writeLine("      exit("+ERR_TYPE+");");
         writeLine("      break;");
         writeLine("  }");
         writeLine("}");
@@ -695,11 +726,14 @@ public class CompileToC {
         writeLine("    case " + TYPE_SIG_PREFIX + "TUPLE:");
         writeLine("    case " + TYPE_SIG_PREFIX + "UNION:");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRUCT:");
-        writeLine("    case " + TYPE_SIG_PREFIX + "PROC:");
         writeLine("      assert(false && \" unimplemented \");");
         writeLine("      break;");
+        writeLine("    case " + TYPE_SIG_PREFIX + "PROC:");
+        writeLine("      fputs(\"[procedure]\","+ PRINT__STREAM_NAME +");");
+        writeLine("      break;");
         writeLine("    default:");
-        writeLine("      assert(false && \" unreachable \");");
+        writeLine("      fprintf(stderr,\"unknown type signature:%\"PRIu64,type&" + TYPE_SIG_PREFIX + "MASK);");
+        writeLine("      exit("+ERR_TYPE+");");
         writeLine("      break;");
         writeLine("  }");
         writeLine("}");
@@ -900,7 +934,7 @@ public class CompileToC {
                 }
             }
             dataOut.addValueBuilder(loc,content,v.getType(),((Value.ArrayOrTuple) v).elements().length);
-        }else if(v.getType() instanceof Type.Tuple){//addLater? compress storage of tuples/structs?
+        }else if(v.getType() instanceof Type.Tuple){//TODO compress storage of tuples/structs?
             isFirst=true;
             for(Value elt:(Value.ArrayOrTuple)v){
                 writeConstValueAsUnion(out,elt, dataOut, isFirst, prefix);
@@ -1451,7 +1485,7 @@ public class CompileToC {
             if(unwrap){
                 throw new RuntimeException("Cannot unwrap procedures");
             }
-            line.append(CAST_BLOCK+"{.asProc=&" + PROC_PREFIX).append(procName).append("}");
+            line.append("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asProc=&" + PROC_PREFIX).append(procName).append("}})");
             return tmpCount;
         }else if(expr instanceof ValueExpression){
             if(((ValueExpression) expr).constId!=null){
@@ -1551,7 +1585,8 @@ public class CompileToC {
                 if(((GetField) expr).value.expectedType() instanceof Type.AnyType){
                     tmpCount=writeExpression(indent+"    ",initLines,line,((GetField) expr).value,false,tmpCount, procName, varNames);
                 }else{
-                    line.append(CAST_BLOCK + "{.asType=").append(typeSignature(((GetField) expr).value.expectedType())).append('}');
+                    line.append("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK + "{.asType=").append(typeSignature(((GetField) expr).value.expectedType()))
+                            .append("}})");
                     if(unwrap){
                         line.append(unwrapSuffix(expr.expectedType()));
                     }
