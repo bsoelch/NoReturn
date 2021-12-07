@@ -1102,7 +1102,6 @@ public class Parser {
                     tokens.get(i+1).tokenType==ParserTokenType.OPTION){
                 tmp=((TypeToken)tokens.get(i)).type;
                 tokens.remove(i+1);
-                //addLater? caching of Types
                 tokens.set(i,new TypeToken(new Type.Optional(tmp),tokens.get(i).pos));
                 i--;
             }else if(tokens.get(i).tokenType ==ParserTokenType.TYPE&&
@@ -1335,7 +1334,7 @@ public class Parser {
                 tokens.get(i).tokenType==ParserTokenType.EXPRESSION){//typecast
                 tokens.set(i-1,new ExprToken(TypeCast.create(
                         ((TypeToken)tokens.get(i-1)).type,
-                        ((ExprToken)tokens.get(i)).expr, true, context),tokens.get(i-1).pos));
+                        ((ExprToken)tokens.get(i)).expr, context),tokens.get(i-1).pos));
                 tokens.remove(i--);
             }
         }
@@ -1467,9 +1466,9 @@ public class Parser {
                 .evaluate(null,new ArrayList<>()).get().castTo(constType));
     }
 
-    //TODO update types of values depending on maximum range of parameters
+    //addLater? update types of values depending on maximum range of parameters
     // i.e. don't use type any for values that are always an integer
-    //TODO detect variables with predictable value
+    //addLater detect variables with predictable value
     private void readProcDef(String name,Tokenizer tokens,ParserContext context) throws IOException {
         ParserToken token;
         ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();
@@ -1775,7 +1774,7 @@ public class Parser {
                 //Type-check parameters
                 if(Type.canAssign(outTypes[i],argBuffer.get(i).expectedType(),generics)){
                     //ensure arguments are cast to correct type addLater cast contents of generics to correct type
-                    argArray[i]=TypeCast.create(outTypes[i],argBuffer.get(i),false, context);
+                    argArray[i]=TypeCast.create(outTypes[i],argBuffer.get(i), context);
                 }else{
                     throw new TypeError("Cannot assign "+ argBuffer.get(i).expectedType()+" to "+outTypes[i]+" generics:"+generics);
                 }

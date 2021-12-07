@@ -650,8 +650,8 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_C32,((Value[]){(Value){.asC32=128187}}));
   }
   Value var4 [2];// (any)
-  {// Initialize: TypeCast{any:ValueExpression{3}}
-    memcpy(var4,((Value[]){(Value){.asType=TYPE_SIG_I32},(Value){.asI32=((int32_t)(3))}}),2*sizeof(Value));
+  {// Initialize: ValueExpression{3}
+    memcpy(var4,((Value[]){(Value){.asType=TYPE_SIG_I32},(Value){.asI32=3}}),2*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{GetField{VarExpression{4}.type}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,var4);
@@ -731,19 +731,19 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_TUPLE|(0ULL<<TYPE_CONTENT_SHIFT)|(0ULL<<TYPE_COUNT_SHIFT)}}));
   }
   Value var10 [2];// (int32?)
-  {// Initialize: TypeCast{int32?:ValueExpression{4}}
-    memcpy(var10,((Value[]){(Value){.asBool=true},(Value){.asI32=((int32_t)(4))}}),2*sizeof(Value));
+  {// Initialize: ValueExpression{Optional:{4}}
+    memcpy(var10,((Value[]){(Value){.asBool=true},(Value){.asI32=4}}),2*sizeof(Value));
   }
   {// Log: Log[DEFAULT]{VarExpression{10}}
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(4ULL<<TYPE_CONTENT_SHIFT),var10);
   }
-  {// Log: Log[DEFAULT]{IfExpr{TypeCast{bool:VarExpression{10}}?TypeCast{int32?:GetField{VarExpression{10}.value}}:TypeCast{int32?:ValueExpression{none}}}}
+  {// Log: Log[DEFAULT]{IfExpr{TypeCast{bool:VarExpression{10}}?TypeCast{int32?:GetField{VarExpression{10}.value}}:ValueExpression{Optional:{}}}}
     Value tmp0 [2];
     {
       if(((var10)[0].asBool)){
         memcpy(tmp0,((Value[]){(Value){.asBool=true},(Value){.asI32=((var10)+1)[0].asI32}}),2*sizeof(Value));
       }else{
-        memcpy(tmp0,((Value[]){(Value){.asBool=false},(((Value[]){(Value){.asPtr=NULL/*none*/}}))[0]}),2*sizeof(Value));
+        memcpy(tmp0,((Value[]){(Value){.asBool=false},(Value){.asPtr=NULL/*none*/}}),2*sizeof(Value));
       }
     }
     logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(4ULL<<TYPE_CONTENT_SHIFT),tmp0);

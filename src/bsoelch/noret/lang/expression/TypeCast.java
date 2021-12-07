@@ -11,16 +11,15 @@ public class TypeCast implements Expression{
     public final Type type;
 
     /**
-     * @param evalConstants if false evaluation of constants is disabled (for ensuring the value in valDefs
-     *                      and assignments is cast to the correct type)
      * @param context ParserContext of the Parser that parsed this expression*/
-    public static Expression create(Type castType, Expression value, boolean evalConstants, Parser.ParserContext context){
+    public static Expression create(Type castType, Expression value, Parser.ParserContext context){
         if(!Type.canCast(castType,value.expectedType(),null)){
             throw new TypeError("Values of type "+value.expectedType()+ " cannot be cast to "+castType);
         }
-        //TODO? check if evalConstants flag is necessary
-        if(value instanceof ValueExpression&&evalConstants){
-            return ValueExpression.create(((ValueExpression) value).value.castTo(castType), null);
+        if(value instanceof ValueExpression){
+            Value value1 = ((ValueExpression) value).value.castTo(castType);
+            assert value1.getType().equals(castType);
+            return ValueExpression.create(value1, null);
         }
         if(value.expectedType().equals(castType)){
             return value;

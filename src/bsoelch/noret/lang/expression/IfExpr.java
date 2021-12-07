@@ -13,14 +13,14 @@ public class IfExpr implements Expression {
     final Type expectedOutput;
 
     public static Expression create(Expression cond, Expression ifVal, Expression elseVal, Parser.ParserContext context){
-        cond=TypeCast.create(Type.Primitive.BOOL,cond,true,context);
+        cond=TypeCast.create(Type.Primitive.BOOL,cond, context);
         if(cond instanceof ValueExpression){//constant folding
             return ((Boolean)((Value.Primitive)((ValueExpression) cond).value.castTo(Type.Primitive.BOOL)).getValue())?
                     ifVal:elseVal;
         }
         Type expectedOut=Type.commonSupertype(ifVal.expectedType(),elseVal.expectedType());
-        ifVal = TypeCast.create(expectedOut,ifVal,true, context);
-        elseVal = TypeCast.create(expectedOut,elseVal,false, context);
+        ifVal = TypeCast.create(expectedOut,ifVal, context);
+        elseVal = TypeCast.create(expectedOut,elseVal, context);
         return new IfExpr(cond,expectedOut, ifVal, elseVal);
     }
 

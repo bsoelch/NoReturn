@@ -14,7 +14,7 @@ public class ValDef implements Action {
         if(Type.canAssign(type,initValue.expectedType(),null)){
             this.type = type;
             //ensure values are cast to the correct type
-            this.initValue =TypeCast.create(type,initValue, false,context);
+            this.initValue =TypeCast.create(type,initValue, context);
         }else{
             throw new TypeError("Cannot assign "+initValue.expectedType()+" to "+type);
         }

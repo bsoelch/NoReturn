@@ -16,7 +16,7 @@ public class Assignment implements Action {
             throw new SyntaxError(target+" cannot be modified");
         }
         //ensure values are cast to the correct type
-        this.expr = TypeCast.create(target.expectedType(),expr, false, context);
+        this.expr = TypeCast.create(target.expectedType(),expr, context);
     }
 
     @Override

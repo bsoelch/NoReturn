@@ -829,7 +829,16 @@ public class CompileToC {
         if(!isFirst){
             out.append(',');
         }
-        if(v.getType() instanceof Type.AnyType){
+        if(v.getType() == Type.Primitive.BOOL){
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.").append(typeFieldName(Type.Primitive.BOOL)).append("=")
+                    .append(((Value.Primitive) v).getValue()).append("}");
+        }else if(v.getType() == Type.TYPE){
+            if(prefix){out.append(CAST_BLOCK); }
+            out.append("{.asType=").append(typeSignature(((Value.TypeValue)v).value)).append("}");
+        }else if(v.getType() instanceof Type.Numeric){
+            writeNumber(out, v,  prefix);
+        }else if(v.getType() instanceof Type.AnyType){
             Type contentType = ((Value.AnyValue) v).content.getType();
             if(prefix){out.append(CAST_BLOCK); }
             out.append("{.asType=").append(typeSignature(contentType)).append("}");
@@ -839,21 +848,28 @@ public class CompileToC {
                 }
                 String loc=dataOut.nextName();
                 out.append("{.asPtr=(").append(loc).append(")}");
-                StringBuilder content=dataOut.newValueBuilder(loc,((Value.AnyValue) v).content.getType(),1,prefix);
+                StringBuilder content=dataOut.newValueBuilder(loc,contentType,1,prefix);
                 writeConstValueAsUnion(content, ((Value.AnyValue) v).content, dataOut, !dataOut.constant, prefix);
-                dataOut.addValueBuilder(loc,content,((Value.AnyValue) v).content.getType(),1);
+                dataOut.addValueBuilder(loc,content,contentType,1);
             }else{
                 writeConstValueAsUnion(out,((Value.AnyValue) v).content,dataOut,false, prefix);
             }
-        }else if(v.getType() == Type.Primitive.BOOL){
+        }else if(v.getType() instanceof Type.Optional){
+            Value content = ((Value.Optional) v).content;
             if(prefix){out.append(CAST_BLOCK); }
-            out.append("{.").append(typeFieldName(Type.Primitive.BOOL)).append("=")
-                    .append(((Value.Primitive) v).getValue()).append("}");
-        }else if(v.getType() == Type.TYPE){
-            if(prefix){out.append(CAST_BLOCK); }
-            out.append("{.asType=").append(typeSignature(((Value.TypeValue)v).value)).append("}");
-        }else if(v.getType() instanceof Type.Numeric){
-            writeNumber(out, v,  prefix);
+            out.append("{.").append(typeFieldName(Type.Primitive.BOOL)).append("=").append(content != Value.NONE).append("}");
+            if(content.getType().blockCount>1) {
+                if (prefix) {
+                    out.append(CAST_BLOCK);
+                }
+                String loc=dataOut.nextName();
+                out.append("{.asPtr=(").append(loc).append(")}");
+                StringBuilder tmp=dataOut.newValueBuilder(loc,content.getType(),1,prefix);
+                writeConstValueAsUnion(tmp, content, dataOut, !dataOut.constant, prefix);
+                dataOut.addValueBuilder(loc,tmp,content.getType(),1);
+            }else{
+                writeConstValueAsUnion(out,content,dataOut,false, prefix);
+            }
         }else if(v.getType() instanceof Type.NoRetString){
             if(prefix){out.append(CAST_BLOCK); }
             String loc=dataOut.nextName();
@@ -1502,38 +1518,48 @@ public class CompileToC {
                     line.append(unwrapSuffix(expr.expectedType()));
                 }
                 return tmpCount;
-            }else if(expr.expectedType().varSize){
-                if(unwrap){
-                    throw new RuntimeException("Cannot unwrap "+expr.expectedType());
-                }
-                int blockCount=expr.expectedType().blockCount;
-                DataOut data= new DataOut("tmp", tmpCount + 1,false);
-                StringBuilder tmp;
-                initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
-                tmp=new StringBuilder("  memcpy(tmp"+tmpCount+",("+VALUE_BLOCK_NAME+"[]){");
-                writeConstValueAsUnion(tmp,((ValueExpression)expr).getValue(),data,true, true);
-                tmp.append("},").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"));");
-                initLines.add(indent+"{");
-                for(String l:data.prefixLines){
-                    initLines.add(indent+"  "+l);
-                }
-                initLines.add(indent+tmp);
-                initLines.add(indent+"}");
-                line.append("tmp").append(tmpCount);
-                return tmpCount+1;
             }else{
-                if(unwrap){
-                    if(!(expr.expectedType() instanceof Type.Primitive)){
+                boolean needsExternalData;
+                if(((ValueExpression)expr).getValue() instanceof Value.AnyValue){
+                    //special handling for AnyValues, needsExternalData depends on content
+                    Value content=((Value.AnyValue) ((ValueExpression)expr).getValue()).content;
+                    needsExternalData=content.getType().blockCount>1||content.getType().needsExternalData;
+                }else{
+                    needsExternalData=expr.expectedType().needsExternalData;
+                }
+                if(needsExternalData){
+                    if(unwrap){
                         throw new RuntimeException("Cannot unwrap "+expr.expectedType());
                     }
-                    line.append("((").append(cTypeName((Type.Primitive)expr.expectedType())).append(")(")
-                            .append(((ValueExpression)expr).getValue().stringValue()).append("))");
+                    int blockCount=expr.expectedType().blockCount;
+                    DataOut data= new DataOut("tmp", tmpCount + 1,false);
+                    StringBuilder tmp;
+                    initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
+                    tmp=new StringBuilder("  memcpy(tmp"+tmpCount+",("+VALUE_BLOCK_NAME+"[]){");
+                    writeConstValueAsUnion(tmp,((ValueExpression)expr).getValue(),data,true, true);
+                    tmp.append("},").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"));");
+                    initLines.add(indent+"{");
+                    for(String l:data.prefixLines){
+                        initLines.add(indent+"  "+l);
+                    }
+                    initLines.add(indent+tmp);
+                    initLines.add(indent+"}");
+                    line.append("tmp").append(tmpCount);
+                    return tmpCount+1;
                 }else{
-                    line.append("(("+VALUE_BLOCK_NAME+"[]){");
-                    writeConstValueAsUnion(line,((ValueExpression)expr).getValue(),null,true, true);
-                    line.append("})");
+                    if(unwrap){
+                        if(!(expr.expectedType() instanceof Type.Primitive)){
+                            throw new RuntimeException("Cannot unwrap "+expr.expectedType());
+                        }
+                        line.append("((").append(cTypeName((Type.Primitive)expr.expectedType())).append(")(")
+                                .append(((ValueExpression)expr).getValue().stringValue()).append("))");
+                    }else{
+                        line.append("(("+VALUE_BLOCK_NAME+"[]){");
+                        writeConstValueAsUnion(line,((ValueExpression)expr).getValue(),null,true, true);
+                        line.append("})");
+                    }
+                    return tmpCount;
                 }
-                return tmpCount;
             }
         }else if(expr instanceof BinOp){
             String[] parts=binOpParts(((BinOp) expr),unwrap);

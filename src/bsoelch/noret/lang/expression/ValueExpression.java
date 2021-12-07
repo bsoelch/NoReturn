@@ -18,7 +18,7 @@ public class ValueExpression implements Expression {
     }
 
     public boolean isVarSizeConstant(){
-        return constId!=null&&value.getType().varSize;
+        return constId!=null&&value.getType().needsExternalData;
     }
 
     @Override

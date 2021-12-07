@@ -38,7 +38,7 @@ public class Type {
             }
         }
     }
-    /** Generics types in NoRet allow forcing the calle of a procedure to use the same type for two different arguments,
+    /** Generics types in NoRet allow forcing the callee of a procedure to use the same type for two different arguments,
      *      * they allow signatures like ($a,($a)=>?)=>? that make it easier to call a restricted function
      * */
     public static class AnyType extends Type{
@@ -157,14 +157,14 @@ public class Type {
     /**number of blocks needed (in compiled code) to store a value of this type*/
     public final int blockCount;
     /**true if values of this type have a variable encoding size*/
-    public final boolean varSize;
+    public final boolean needsExternalData;
     /**true if this type is no composition of smaller types*/
     public final boolean isAtomic;
 
-    private Type(String name, int blockCount, boolean varSize, boolean isAtomic){
+    private Type(String name, int blockCount, boolean needsExternalData, boolean isAtomic){
         this.name=name;
         this.blockCount = blockCount;
-        this.varSize = varSize;
+        this.needsExternalData = needsExternalData;
         this.isAtomic = isAtomic;
         synchronized (waitingForTypeType) {
             if(TYPE!=null){
@@ -314,7 +314,7 @@ public class Type {
     }
 
     //TODO ensure that no Value is assigned without castTo()
-    // castTo should only return a value with eactly the supplied type (setting generics to any)
+    // castTo should only return a value with exactly the supplied type (setting generics to any)
     public static boolean canAssign(Type to,Type from, HashMap<String, GenericBound> generics){
         return canAssign(to, from,false, generics);
     }
@@ -326,7 +326,7 @@ public class Type {
     public static class Optional extends Type{
         public final Type content;
         public Optional(Type content) {
-            super(content.wrappedName()+"?", 2, content.varSize, false);
+            super(content.wrappedName()+"?", 2, content.needsExternalData||(content.blockCount>1), false);
             this.content=content;
             fields.put(FIELD_NAME_VALUE,content);
         }
@@ -410,7 +410,7 @@ public class Type {
         return Arrays.stream(types).mapToInt(t->t.blockCount).sum();
     }
     private static boolean isVarSize(Type[] types) {
-        return Arrays.stream(types).anyMatch(t->t.varSize);
+        return Arrays.stream(types).anyMatch(t->t.needsExternalData);
     }
     public static class Tuple extends Type{
         final String tupleName;
@@ -585,7 +585,7 @@ public class Type {
         }
     }
 
-
+    //TODO reintroduce Directories
 
     public static class GenericBound{
         Type assignableFrom;
