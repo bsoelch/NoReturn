@@ -1640,6 +1640,27 @@ public class Parser {
                     }else if(tokenBuffer.isEmpty()&&bracketStack.isEmpty()&&token.tokenType==ParserTokenType.WORD&&
                             ((NamedToken)token).value.equals("assert")){
                         assertPos=token.pos;
+                        token= tokens.getNextToken();
+                        if(token==null){
+                            throw new SyntaxError("unexpected end of file");
+                        }
+                        updateBracketStack(token,bracketStack);
+                        tokenBuffer.add(token);
+                        if(token.tokenType==ParserTokenType.EXPRESSION&&
+                                ((ExprToken)token).expr instanceof ValueExpression&&
+                                ((ExprToken)token).expr.expectedType() instanceof Type.NoRetString){
+                            defName=((ValueExpression) ((ExprToken) token).expr).getValue().stringValue();
+                            token=tokens.getNextToken();
+                            if(token==null){
+                                throw new SyntaxError("unexpected end of file");
+                            }else if(token.tokenType!=ParserTokenType.SEPARATOR){
+                                defName=null;
+                                updateBracketStack(token,bracketStack);
+                                tokenBuffer.add(token);
+                            }else{
+                                tokenBuffer.clear();
+                            }
+                        }
                         state=ActionParserState.ASSERT;
                     }else{//addLater exit, if-else, match
                         /*
@@ -1710,7 +1731,7 @@ public class Parser {
                                 throw new SyntaxError("assertion failed: "+assertPos);
                             }
                         }else{
-                            actions.add(new Assertion(expr,assertPos.toString()));
+                            actions.add(new Assertion(expr,defName));
                             tokenBuffer.clear();
                             state=ActionParserState.ROOT;
                         }

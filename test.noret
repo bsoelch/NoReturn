@@ -9,6 +9,7 @@ const struct_test:aStruct={.a=0,.b=1};
 ## struct struct_test{tuple{int32,int64}:a,union{int32:c,float64:d}:b};
 
 start(string8[]):(args)=>{
+    assert "args.length<3" : args.length<3;
     log.debug args;
     log.debug "args[0]=";
     _log.debug args.length>0?args[0]:"No Arguments Provided";

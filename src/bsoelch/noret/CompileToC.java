@@ -45,6 +45,7 @@ public class CompileToC {
     public static final int ERR_TYPE  = 2;
     public static final int ERR_INDEX = 3;
     public static final int ERR_STR_ENCODING=4;
+    public static final int ERR_ASSERT = 5;
 
     /* TODO rewrite DataOut
         constant memory may keep the original approach
@@ -1062,7 +1063,7 @@ public class CompileToC {
                     writeLine("  }");
                     valCount++;
                 }else if(a instanceof Assignment){
-                    comment("  {","Assign: "+a);
+                    comment("  {",a.toString());
                     line.setLength(0);
                     if(((Assignment) a).target.expectedType() instanceof Type.Primitive){
                         line.append("    ");
@@ -1087,7 +1088,7 @@ public class CompileToC {
                     writeLine(line.append(';').toString());
                     writeLine("  }");
                 }else if(a instanceof LogAction){
-                    comment("  {","Log: "+a);
+                    comment("  {",a.toString());
                     line.setLength(0);
                     line.append("    " + ID_LOG + "(").append(((LogAction) a).type.type).append(",")
                             .append(((LogAction) a).type.append).append(',')
@@ -1099,6 +1100,24 @@ public class CompileToC {
                     }
                     initLines.clear();
                     writeLine(line.append(");").toString());
+                    writeLine("  }");
+                }else if(a instanceof Assertion){
+                    comment("  {",a.toString());
+                    line.setLength(0);
+                    line.append("    if(!(");
+                    writeExpression("    ",initLines,line,((Assertion) a).expr,true,0, name, argNames);
+                    for(String l:initLines){
+                        writeLine(l);
+                    }
+                    initLines.clear();
+                    writeLine(line.append(")){").toString());
+                    if(((Assertion) a).assertMsg!=null) {
+                        writeLine("      fprintf(stderr,\"assertion failed: %s\\n\",\"" + ((Assertion) a).assertMsg + "\");");
+                    }else{
+                        writeLine("      fputs(\"assertion failed\\n\",stderr);");
+                    }
+                    writeLine("      exit("+ERR_ASSERT+");");
+                    writeLine("    }");
                     writeLine("  }");
                 }else{
                     throw new UnsupportedOperationException("Unsupported ActionType: "+a.getClass().getSimpleName());

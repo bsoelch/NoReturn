@@ -17,12 +17,12 @@ public class Assertion implements Action {
     public void execute(Procedure parent, ArrayList<Value> context) {
         Value value = expr.evaluate(parent, context).get();
         if(!(Boolean)((Value.Primitive)value).getValue()){
-            throw new NoRetRuntimeError("assertion Failed: "+assertMsg);
+            throw new NoRetRuntimeError("assertion failed "+(assertMsg!=null?":"+assertMsg:""));
         }
     }
 
     @Override
     public String toString() {
-        return "Assert{"+expr+"}(" +assertMsg+')';
+        return "Assert"+(assertMsg!=null?"(\"" +assertMsg+"\")":"")+"{"+expr+"}";
     }
 }
