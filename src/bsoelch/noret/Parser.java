@@ -538,6 +538,18 @@ public class Parser {
                                     case 'r':
                                         buffer.append('\r');
                                         break;
+                                    case 'b':
+                                        buffer.append('\b');
+                                        break;
+                                    case 'f':
+                                        buffer.append('\f');
+                                        break;
+                                    case '0':
+                                        buffer.append('\0');
+                                        break;
+                                    case 'u':
+                                    case 'U':
+                                        throw new UnsupportedOperationException("unicode-escape sequence are currently not implemented");
                                     //addLater more escape sequences
                                     default:
                                         throw new IllegalArgumentException("The escape sequence: '\\"+c+"' is not supported");
@@ -1147,8 +1159,6 @@ public class Parser {
         context.defType(name,typeFromTokens(context,typeTokens, null));
     }
 
-    //addLater convert all type-names to type-values
-    // allows expressions like a.type==int32?
     private Expression expressionFromTokens(String procName,Type.Proc procType,ParserContext context, ArrayList<ParserToken> tokens){
         //1. read brackets
         // (<Expr>)
@@ -1338,6 +1348,12 @@ public class Parser {
                 tokens.remove(i--);
             }
         }
+        //3b. replace remaining TypeCasts with TypeValues
+        for(int i=0;i<tokens.size();i++){
+            if(tokens.get(i).tokenType==ParserTokenType.TYPE){//typecast
+                tokens.set(i,new ExprToken(new Value.TypeValue(((TypeToken)tokens.get(i)).type),null,tokens.get(i).pos));
+            }
+        }
         //4. unary operators: left: + - ~ !
         for(int i=tokens.size()-2;i>=0;i--){
             if(tokens.get(i+1).tokenType==ParserTokenType.EXPRESSION&&
@@ -1447,7 +1463,6 @@ public class Parser {
             tokenBuffer.add(token);
         }
         constType=typeFromTokens(context,tokenBuffer, null);
-        //addLater restrict usage of generics in constants (only in proc-arguments)
         tokenBuffer.clear();
         if((token=tokens.getNextToken())==null||token.tokenType!=ParserTokenType.WORD){
             throw new SyntaxError("invalid syntax for const definition, expected const <Type>:<Name>=<Expr>;");

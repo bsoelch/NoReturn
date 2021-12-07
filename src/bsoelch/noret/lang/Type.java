@@ -208,7 +208,7 @@ public class Type {
                 return new Optional(t1);
             }
         }
-        //addLater better calculation for common supertype ? use union
+        //addLater better calculation for common supertype
         return AnyType.ANY;
     }
 
@@ -313,8 +313,6 @@ public class Type {
         return false;
     }
 
-    //TODO ensure that no Value is assigned without castTo()
-    // castTo should only return a value with exactly the supplied type (setting generics to any)
     public static boolean canAssign(Type to,Type from, HashMap<String, GenericBound> generics){
         return canAssign(to, from,false, generics);
     }

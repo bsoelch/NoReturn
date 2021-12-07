@@ -37,7 +37,9 @@ public abstract class Value{
 
         @Override
         public Value castTo(Type t) {
-            if(Type.canCast(t,content.type,null)){
+            if(t instanceof Type.AnyType){
+                return this;
+            }else if(Type.canCast(t,content.type,null)){
                 return content.castTo(t);
             }else{
                 return super.castTo(t);
@@ -200,6 +202,7 @@ public abstract class Value{
     public static Value createPrimitive(Type.Primitive type, Object value){
         //addLater? typeCheck value
         if(type instanceof Type.Numeric){
+            assert value instanceof Number;
             return new NumericValue((Type.Numeric) type,value);
         }else{
             return new Primitive(type,value);
@@ -651,7 +654,6 @@ public abstract class Value{
             for(int i=0;i<types.length;i++){
                 types[i]=elements[i].type;
             }
-            //TODO type-caching
             return new Type.Struct(null,types,names);
         }
         public Struct(Value[] elements,String[] names) {
@@ -744,10 +746,20 @@ public abstract class Value{
             initSetters();
         }
 
-        //TODO handle different field types (raw type casting)
+        private Value getAs(Type t){
+            if(t.equals(content.type)){
+                return content;
+            }else{
+                //TODO handle different field types (raw type casting)
+                // - raw-casting between (arrays/structs/tuples of) primitive of identical size
+                // - raw-casting to primitives of equal or smaller size
+                throw new UnsupportedOperationException("raw-casting is currently unimplemented");
+            }
+        }
+
         private void initGetters() {
-            for(String name:((Type.Union)type).fieldNames){
-                getters.put(name,()->content);
+            for(Type.StructEntry e:((Type.Union)type).entries()){
+                getters.put(e.name,()->getAs(e.type));
             }
         }
         private void initSetters() {
