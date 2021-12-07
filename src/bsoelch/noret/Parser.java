@@ -905,7 +905,7 @@ public class Parser {
         ROOT,BRACKET, ARRAY,STRUCT_NAME,STRUCT_VALUE,INDEX,RANGE
     }
     enum ActionParserState{
-        ROOT,ASSIGN_EXPR,DEF_EXPR,LOG
+        ROOT,ASSIGN_EXPR,DEF_EXPR, ASSERT, LOG
     }
 
     ParserContext context;
@@ -1571,6 +1571,7 @@ public class Parser {
         Expression assignTarget=null;
         bracketStack.clear();
         LogType logType=null;
+        TokenPosition assertPos=null;
         while((token=tokens.getNextToken())!=null&&
                 (bracketStack.size()>0||token.tokenType !=ParserTokenType.CLOSE_CR_BRACKET)){
             updateBracketStack(token,bracketStack);
@@ -1638,8 +1639,8 @@ public class Parser {
                         state=ActionParserState.LOG;
                     }else if(tokenBuffer.isEmpty()&&bracketStack.isEmpty()&&token.tokenType==ParserTokenType.WORD&&
                             ((NamedToken)token).value.equals("assert")){
-                        //addLater assert
-                        throw new UnsupportedEncodingException("assert-statements are currently not supported");
+                        assertPos=token.pos;
+                        state=ActionParserState.ASSERT;
                     }else{//addLater exit, if-else, match
                         /*
                             if <expr> :
@@ -1696,6 +1697,23 @@ public class Parser {
                         actions.add(new LogAction(logType,expr,context));
                         tokenBuffer.clear();
                         state=ActionParserState.ROOT;
+                    }else{
+                        tokenBuffer.add(token);
+                    }
+                    break;
+                case ASSERT:
+                    if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
+                        Expression expr=TypeCast.create(Type.Primitive.BOOL,
+                                expressionFromTokens(name,procType,context,tokenBuffer),context);
+                        if(expr instanceof ValueExpression){//compile time assert
+                            if(!(Boolean)((Value.Primitive)((ValueExpression) expr).getValue()).getValue()){
+                                throw new SyntaxError("assertion failed: "+assertPos);
+                            }
+                        }else{
+                            actions.add(new Assertion(expr,assertPos.toString()));
+                            tokenBuffer.clear();
+                            state=ActionParserState.ROOT;
+                        }
                     }else{
                         tokenBuffer.add(token);
                     }
