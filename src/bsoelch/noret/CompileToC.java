@@ -91,14 +91,14 @@ public class CompileToC {
                 if(type instanceof Type.Array||type instanceof Type.NoRetString){
                     //off
                     if(prefix) {sb.append(CAST_BLOCK);}
-                    sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=0/*off*/},");
+                    sb.append("{.").append(typeFieldName(Type.Numeric.SIZE)).append("=0/*off*/},");
                     //cap
                     if(prefix) {sb.append(CAST_BLOCK);}
-                    sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=")
+                    sb.append("{.").append(typeFieldName(Type.Numeric.SIZE)).append("=")
                             .append(getMinCap(type,elementCount)).append("/*cap*/},");
                     //len
                     if(prefix) {sb.append(CAST_BLOCK);}
-                    sb.append("{.").append(typeFieldName(Type.Numeric.UINT64)).append("=").append(elementCount).append("/*len*/}");
+                    sb.append("{.").append(typeFieldName(Type.Numeric.SIZE)).append("=").append(elementCount).append("/*len*/}");
                 }else{
                     //TODO implement storage of other value-types
                     throw new UnsupportedOperationException("unimplemented");
@@ -115,9 +115,9 @@ public class CompileToC {
             }else{
                 prefixLines.add(VALUE_BLOCK_NAME+"* "+name+"=malloc(("+(getMinCap(type, elementCount)+ARRAY_HEADER)+
                         ")*sizeof("+VALUE_BLOCK_NAME+"));");
-                prefixLines.add(name+"["+ARRAY_OFF_OFFSET+"]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0}; /*off*/");//TODO padding
-                prefixLines.add(name+"["+ARRAY_CAP_OFFSET+"]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"="+getMinCap(type, elementCount)+"}; /*cap*/");
-                prefixLines.add(name+"["+ARRAY_LEN_OFFSET+"]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"="+elementCount+"}; /*len*/");
+                prefixLines.add(name+"["+ARRAY_OFF_OFFSET+"]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.SIZE)+"=0}; /*off*/");//TODO padding
+                prefixLines.add(name+"["+ARRAY_CAP_OFFSET+"]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.SIZE)+"="+getMinCap(type, elementCount)+"}; /*cap*/");
+                prefixLines.add(name+"["+ARRAY_LEN_OFFSET+"]="+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.SIZE)+"="+elementCount+"}; /*len*/");
                 prefixLines.add(builder.append("},(").append(getMinCap(type, elementCount)).append(")*sizeof("+VALUE_BLOCK_NAME+"));").toString());
             }
         }
@@ -335,10 +335,10 @@ public class CompileToC {
         writeLine("#define " + TYPE_SIG_PREFIX + "PROC       0x"+Integer.toHexString(count++));//signature[u32-off][u16-size]
         min2BlockSignature=count;
         //2-block types
-        //addLater handle union and struct differently (depending on sum of lengths of contents)
         writeLine("#define " + TYPE_SIG_PREFIX + "OPTIONAL   0x"+Integer.toHexString(count++));//content[u32-off]
         writeLine("#define " + TYPE_SIG_PREFIX + "ANY        0x"+Integer.toHexString(count++));
         //var-block types
+        //addLater handle union and struct differently (depending on sum of lengths of contents)
         writeLine("#define " + TYPE_SIG_PREFIX + "UNION      0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
         writeLine("#define " + TYPE_SIG_PREFIX + "STRUCT     0x"+Integer.toHexString(count++));//contents[u32-off][u16-size]
         assert count<=0xff;
@@ -632,14 +632,14 @@ public class CompileToC {
         writeLine("    case " + TYPE_SIG_PREFIX + "STRING8:");//!!! this implementation assumes that the system encoding is UTF8
         writeLine("      data=*(("+VALUE_BLOCK_NAME+"**)"+PRINT__VALUE_NAME+");/*"+PRINT__VALUE_NAME+"->asPtr*/");
         writeLine("      fprintf("+ PRINT__STREAM_NAME +",\"%.*s\",(int)(data["+ARRAY_LEN_OFFSET+"]."
-                +typeFieldName(Type.Numeric.UINT64)+")"+",(char*)(data+"+ARRAY_HEADER+
-                "/*header*/+data["+ARRAY_OFF_OFFSET+"]." +typeFieldName(Type.Numeric.UINT64)+"/*off*/));");
+                +typeFieldName(Type.Numeric.SIZE)+")"+",(char*)(data+"+ARRAY_HEADER+
+                "/*header*/+data["+ARRAY_OFF_OFFSET+"]." +typeFieldName(Type.Numeric.SIZE)+"/*off*/));");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRING16:");
         writeLine("      data=*(("+VALUE_BLOCK_NAME+"**)"+PRINT__VALUE_NAME+");/*"+PRINT__VALUE_NAME+"->asPtr*/");
         writeLine("      chars16=(("+cTypeName(Type.Numeric.CHAR16)+"*)(data+"+ARRAY_HEADER+"))/*header size*/" +
-                    "+data["+ARRAY_OFF_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+"/*off*/;");
-        writeLine("      len=data["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+"/*len*/;");
+                    "+data["+ARRAY_OFF_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+"/*off*/;");
+        writeLine("      len=data["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+"/*len*/;");
         writeLine("      off=0;");
         writeLine("      while(off<len){");
         writeLine("        "+PRINT__UTF8_COUNT+"=0;");
@@ -650,8 +650,8 @@ public class CompileToC {
         writeLine("    case " + TYPE_SIG_PREFIX + "STRING32:");
         writeLine("      data=*(("+VALUE_BLOCK_NAME+"**)"+PRINT__VALUE_NAME+");/*"+PRINT__VALUE_NAME+"->asPtr*/");
         writeLine("      chars32=(("+cTypeName(Type.Numeric.CHAR32)+"*)(data+"+ARRAY_HEADER+"))/*header size*/" +
-                    "+data["+ARRAY_OFF_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+"/*off*/;");
-        writeLine("      len=data["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+"/*len*/;");
+                    "+data["+ARRAY_OFF_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+"/*off*/;");
+        writeLine("      len=data["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+"/*len*/;");
         writeLine("      off=0;");
         writeLine("      while(off<len){");
         writeLine("        "+PRINT__UTF8_COUNT+"=0;");
@@ -713,8 +713,8 @@ public class CompileToC {
         writeLine("        w=2*sizeof("+VALUE_BLOCK_NAME+");");
         writeLine("      }");
         writeLine("      min=data+"+ARRAY_HEADER+"/*header size*/+data["+ARRAY_OFF_OFFSET+"]."+
-                typeFieldName(Type.Numeric.UINT64)+"/*off*/;");
-        writeLine("      max=min+w*(data["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.UINT64)+")/*len*/;");
+                typeFieldName(Type.Numeric.SIZE)+"/*off*/;");
+        writeLine("      max=min+w*(data["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+")/*len*/;");
         writeLine("      fputs(\"{\","+ PRINT__STREAM_NAME +");");
         writeLine("      for(void* p=min;p<max;p+=w){");
         writeLine("        if(p>min){fputs(\",\","+ PRINT__STREAM_NAME +");}");
@@ -775,20 +775,25 @@ public class CompileToC {
         writeLine("}");
         out.newLine();
         comment("read an element from an Array");
-        writeLine(VALUE_BLOCK_NAME+ "* " + ARRAY_GET_NAME + "(" +VALUE_BLOCK_NAME+"* array,uint64_t index,uint64_t width){");
-        writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"].asU64){");
-        writeLine("    return (array+"+ARRAY_HEADER+")+(array["+ARRAY_OFF_OFFSET+"].asU64+index)*width;");
+        writeLine(VALUE_BLOCK_NAME+ "* " + ARRAY_GET_NAME + "(" +VALUE_BLOCK_NAME+
+                "* array,uint64_t index,uint64_t width){");
+        writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+"){");
+        writeLine("    return (array+"+ARRAY_HEADER+")+(array["+ARRAY_OFF_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+
+                "+index)*width;");
         writeLine("  }else{");
-        writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index,array["+ARRAY_LEN_OFFSET+"].asU64);");
+        writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\"," +
+                "index,array["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+");");
         writeLine("    exit("+ERR_INDEX+");");
         writeLine("  }");
         writeLine("}");
         comment("read a raw-element with width byteWidth from an Array");
         writeLine("void* " + ARRAY_GET_RAW_NAME + "(" +VALUE_BLOCK_NAME+"* array,uint64_t index,int byteWidth){");
-        writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"].asU64){");
-        writeLine("    return ((void*)(array+"+ARRAY_HEADER+"))+(array["+ARRAY_OFF_OFFSET+"].asU64+index)*byteWidth;");
+        writeLine("  if(index<array["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+"){");
+        writeLine("    return ((void*)(array+"+ARRAY_HEADER+"))+(array["+ARRAY_OFF_OFFSET+"]."+
+                typeFieldName(Type.Numeric.SIZE)+"+index)*byteWidth;");
         writeLine("  }else{");
-        writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index,array["+ARRAY_LEN_OFFSET+"].asU64);");
+        writeLine("    fprintf(stderr,\"array index out of range:%\"PRIu64\" length:%\"PRIu64\"\\n\",index," +
+                "array["+ARRAY_LEN_OFFSET+"]."+typeFieldName(Type.Numeric.SIZE)+");");
         writeLine("    exit("+ERR_INDEX+");");
         writeLine("  }");
         writeLine("}");
@@ -842,7 +847,8 @@ public class CompileToC {
             }
         }else if(v.getType() == Type.Primitive.BOOL){
             if(prefix){out.append(CAST_BLOCK); }
-            out.append("{.asBool=").append(((Value.Primitive) v).getValue()).append("}");
+            out.append("{.").append(typeFieldName(Type.Primitive.BOOL)).append("=")
+                    .append(((Value.Primitive) v).getValue()).append("}");
         }else if(v.getType() == Type.TYPE){
             if(prefix){out.append(CAST_BLOCK); }
             out.append("{.asType=").append(typeSignature(((Value.TypeValue)v).value)).append("}");
@@ -1120,7 +1126,8 @@ public class CompileToC {
                         //static procedure
                         break;
                     }else{
-                        writeLine("  if("+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[0].asBool){");
+                        writeLine("  if("+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[0]." +
+                                ""+typeFieldName(Type.Primitive.BOOL)+"){");
                         writeLine("    "+VALUE_BLOCK_NAME+"* newArgs=malloc(MAX_ARG_SIZE*sizeof("+VALUE_BLOCK_NAME+"));");
                         writeLine("    if(newArgs==NULL){");//check pointer
                         writeLine("      fputs(\"out of memory\\n\",stderr);");
@@ -1144,7 +1151,8 @@ public class CompileToC {
                 writeLine("  "+PROCEDURE_TYPE+" ret=NULL;");
                 for(int i=0;i<children.size();i++){
                     comment("  ","Call:"+children.get(i));
-                    writeLine("  if("+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[0].asBool){");
+                    writeLine("  if("+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[0]."+
+                            typeFieldName(Type.Primitive.BOOL)+"){");
                     writeLine("    if(ret==NULL){");
                     writeArgs("      ",childArgs.get(i), initLines, line, name, argNames, "argsOut");
                     writeLine("      ret="+argNames[((Procedure.DynamicProcChild)children.get(i)).varId]+"[1].asProc;");
@@ -1605,7 +1613,7 @@ public class CompileToC {
                 }else if((((GetField) expr).value.expectedType() instanceof Type.Tuple)){
                     if(!unwrap){
                         line.append("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK + "{.")
-                                .append(typeFieldName(Type.Numeric.UINT64)).append("=");
+                                .append(typeFieldName(Type.Numeric.SIZE)).append("=");
                     }
                     line.append(((Type.Tuple) ((GetField) expr).value.expectedType()).getElements().length);
                     if(!unwrap){
@@ -1747,9 +1755,9 @@ public class CompileToC {
             writeLine("    fputs(\"out of memory\\n\",stderr);");
             writeLine("    return "+ERR_MEM+";");
             writeLine("  }");
-            writeLine("  argArray["+ARRAY_OFF_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0 /*off*/};");
-            writeLine("  argArray["+ARRAY_CAP_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1) /*cap*/};");
-            writeLine("  argArray["+ARRAY_LEN_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(argc-1) /*len*/};");
+            writeLine("  argArray["+ARRAY_OFF_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.SIZE)+"=0 /*off*/};");
+            writeLine("  argArray["+ARRAY_CAP_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.SIZE)+"=(argc-1) /*cap*/};");
+            writeLine("  argArray["+ARRAY_LEN_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.SIZE)+"=(argc-1) /*len*/};");
             writeLine("  initArgs[0] = "+CAST_BLOCK+"{.asPtr=argArray};");
             writeLine("  for(int i=1;i<argc;i++){");//skip first argument
             writeLine("    int l=strlen(argv[i]);");
@@ -1758,9 +1766,9 @@ public class CompileToC {
             writeLine("      fputs(\"out of memory\\n\",stderr);");
             writeLine("      return "+ERR_MEM+";");
             writeLine("    }");
-            writeLine("    tmp["+ARRAY_OFF_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=0/*off*/};");
-            writeLine("    tmp["+ARRAY_CAP_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=(l+7)/8 /*cap*/};");
-            writeLine("    tmp["+ARRAY_LEN_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.UINT64)+"=l /*len*/};");
+            writeLine("    tmp["+ARRAY_OFF_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.SIZE)+"=0/*off*/};");
+            writeLine("    tmp["+ARRAY_CAP_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.SIZE)+"=(l+7)/8 /*cap*/};");
+            writeLine("    tmp["+ARRAY_LEN_OFFSET+"] = "+CAST_BLOCK+"{."+typeFieldName(Type.Numeric.SIZE)+"=l /*len*/};");
             //store lengths of arguments
             writeLine("    argArray[i+"+(ARRAY_HEADER-1)+"] = "+CAST_BLOCK+"{.asPtr=tmp};");//pointer to data
             comment("    off="+ARRAY_HEADER+";","reuse off variable");

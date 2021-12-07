@@ -94,6 +94,8 @@ public class Type {
         public static final Numeric UINT32    = new Numeric("uint32",2,false,false,false);
         public static final Numeric INT64     = new Numeric("int64",3,true,false,false);
         public static final Numeric UINT64    = new Numeric("uint64",3,false,false,false);
+        /**type of array-sizes */
+        public static final Numeric SIZE      = UINT64;
 
         public static final Numeric CHAR8     = new Numeric("char8",0,false,false,true);
         public static final Numeric CHAR16    = new Numeric("char16",1,false,false,true);
@@ -134,7 +136,7 @@ public class Type {
             super("string"+ charBits,1,true, true);
             this.charBits = charBits;
             this.charType=charType;
-            fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
+            fields.put(FIELD_NAME_LENGTH,Numeric.SIZE);
             stringTypes.put(name,this);
         }
 
@@ -382,7 +384,7 @@ public class Type {
         public Array(Type content) {
             super(content.wrappedName()+"[]", 1, true, false);
             this.content=content;
-            fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
+            fields.put(FIELD_NAME_LENGTH,Numeric.SIZE);
         }
         String wrappedName(){
             return "("+name+")";
@@ -427,7 +429,7 @@ public class Type {
             super(name==null?tupleName(elements):name, calculateBlockCount(elements), isVarSize(elements), false);
             this.tupleName=name;
             this.elements=elements;
-            fields.put(FIELD_NAME_LENGTH,Numeric.UINT64);
+            fields.put(FIELD_NAME_LENGTH,Numeric.SIZE);
         }
         public Type[] getElements() {
             return elements;

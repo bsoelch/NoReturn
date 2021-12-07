@@ -15,10 +15,10 @@ public class GetIndex implements Expression{
         Type indType = index.expectedType();
         Type type;
         if(valType instanceof Type.NoRetString){
-            if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
+            if(Type.canAssign(Type.Numeric.SIZE, indType,null)){
                 type = ((Type.NoRetString) valType).charType;
             }else if(Type.canAssign(valType, indType,null)){
-                type = Type.Numeric.UINT64;//index of substring
+                type = Type.Numeric.SIZE;//index of substring
             }else{
                 throw new TypeError("Invalid type for string index:"+
                         indType+ " string indices have to be unsigned integers or strings of the same type");
@@ -26,7 +26,7 @@ public class GetIndex implements Expression{
         }else {
             //TODO addArray-access for tuples
             if(valType instanceof Type.Array){
-                if(Type.canAssign(Type.Numeric.UINT64, indType,null)){
+                if(Type.canAssign(Type.Numeric.SIZE, indType,null)){
                     type =((Type.Array) valType).content;
                 }else{
                     throw new TypeError("Invalid type for array index:"+

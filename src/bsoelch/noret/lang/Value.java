@@ -320,11 +320,11 @@ public abstract class Value{
             this.utf16String=value;
             this.utf32Codepoints=value.codePoints().toArray();
             if(stringType== Type.NoRetString.STRING8){
-                getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.UINT64,utf8Bytes.length));
+                getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.SIZE,utf8Bytes.length));
             }else if(stringType== Type.NoRetString.STRING16){
-                getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.UINT64,utf16String.length()));
+                getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.SIZE,utf16String.length()));
             }else if(stringType== Type.NoRetString.STRING32){
-                getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.UINT64,utf32Codepoints.length));
+                getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.SIZE,utf32Codepoints.length));
             }else{
                 assert false;//"Unreachable"
             }
@@ -367,7 +367,7 @@ public abstract class Value{
 
         @Override
         public Value getAtIndex(Value index) {
-            long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
+            long lIndex=((Number)((NumericValue)index.castTo(Type.Numeric.SIZE)).value).longValue();
             if(type== Type.NoRetString.STRING8){
                 if(lIndex<0||lIndex>= utf8Bytes.length){
                     throw new SyntaxError("String index out of range:"+lIndex+" length:"+lIndex);
@@ -516,7 +516,7 @@ public abstract class Value{
         public ArrayOrTuple(Type type, Value[] elements) {
             super(type);
             this.elements=elements;
-            getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.UINT64,
+            getters.put(Type.FIELD_NAME_LENGTH,()->createPrimitive(Type.Numeric.SIZE,
                     elements.length));
         }
         @Override
@@ -600,7 +600,7 @@ public abstract class Value{
         @Override
         public Value getAtIndex(Value index) {
             //long since indices are internally uint64
-            long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
+            long lIndex=((Number)((NumericValue)index.castTo(Type.Numeric.SIZE)).value).longValue();
             if(lIndex<0||lIndex>=elements.length){
                 throw new NoRetRuntimeError("index out of Bounds:"+lIndex);
             }else{
@@ -610,7 +610,7 @@ public abstract class Value{
         @Override
         public ArrayOrTuple setAtIndex(Value index, Value value) {
             //long since indices are internally uint64
-            long lIndex=(Long)((NumericValue)index.castTo(Type.Numeric.UINT64)).value;
+            long lIndex=((Number)((NumericValue)index.castTo(Type.Numeric.SIZE)).value).longValue();
             if(lIndex<0||lIndex>=elements.length){
                 throw new NoRetRuntimeError("index out of Bounds:"+lIndex);
             }else{
