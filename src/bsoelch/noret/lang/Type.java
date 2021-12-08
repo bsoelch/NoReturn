@@ -1,8 +1,10 @@
 package bsoelch.noret.lang;
 
+import bsoelch.noret.SyntaxError;
 import bsoelch.noret.TypeError;
 
 import java.util.*;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -263,16 +265,16 @@ public class Type {
         //union{A,B,C}->D if A->D and B->D and C->D
         //A->union{B,C,D} if A->B or A->C or A->D
         if(to instanceof Union){
-            return Arrays.stream(((Union) to).fieldNames).map(to.fields::get).anyMatch(e->canAssign(e,from,allowCast,generics));
+            return Arrays.stream(((Union) to).entries).map(e->e.type).anyMatch(e->canAssign(e,from,allowCast,generics));
         }else if(from instanceof Union){
-            return Arrays.stream(((Union) from).fieldNames).map(from.fields::get).allMatch(e->canAssign(to,e,allowCast,generics));
+            return Arrays.stream(((Union) from).entries).map(e->e.type).allMatch(e->canAssign(to,e,allowCast,generics));
         }
         //{A0,..,AN}->{B0,...,BN} iff A_i -> B_i for all i
         if(to instanceof Struct&&from instanceof Struct){
-            if(((Struct) to).fieldNames.length!=((Struct) from).fieldNames.length)
+            if(((Struct) to).entries.length!=((Struct) from).entries.length)
                 return false;
-            return IntStream.range(0,((Struct) to).fieldNames.length)
-                    .allMatch(i->canAssign(to.fields.get(((Struct) to).fieldNames[i]),from.fields.get(((Struct) from).fieldNames[i]),
+            return IntStream.range(0,((Struct) to).entries.length)
+                    .allMatch(i->canAssign(((Struct) to).entries[i].type,((Struct) from).entries[i].type,
                             allowCast, generics));
         }
         //(A0,...,AN)=>? -> (B0,...,BN)=>? iff A_i -> B_i for all i
@@ -403,9 +405,6 @@ public class Type {
         }
     }
 
-    private static int calculateBlockCount(Type[] types) {
-        return Arrays.stream(types).mapToInt(t->t.blockCount).sum();
-    }
     private static boolean isVarSize(Type[] types) {
         return Arrays.stream(types).anyMatch(t->t.needsExternalData);
     }
@@ -423,7 +422,7 @@ public class Type {
             return ret.append('}').toString();
         }
         public Tuple(String name, Type[] elements) {
-            super(name==null?tupleName(elements):name, calculateBlockCount(elements), isVarSize(elements), false);
+            super(name==null?tupleName(elements):name, Arrays.stream(elements).mapToInt(t->t.blockCount).sum(), isVarSize(elements), false);
             this.tupleName=name;
             this.elements=elements;
             fields.put(FIELD_NAME_LENGTH,Numeric.SIZE);
@@ -449,8 +448,19 @@ public class Type {
     }
 
     public static class Struct extends StructOrUnion{
+        HashMap<String,Long> offsets =new HashMap<>();
         public Struct(String name, Type[] types, String[] names) {
             super(name,types,names,false);
+            for(StructEntry e:entries()){
+                offsets.put(e.name,e.off);
+            }
+        }
+        public long offsetOf(String field){
+            Long off= offsets.get(field);
+            if(off==null){
+                throw new SyntaxError(this+" does not have a field:"+field);
+            }
+            return off;
         }
     }
     public static class Union extends StructOrUnion{
@@ -473,8 +483,7 @@ public class Type {
     public static abstract class StructOrUnion extends Type{
         public final boolean isUnion;
         final String structName;
-        final String[] fieldNames;
-        final Type[] elements;
+        final StructEntry[] entries;
         private static String structName(Type[] types,String[] names,boolean isUnion) {
             if(types.length!=names.length){
                 throw new IllegalArgumentException("lengths of types and names do not match");
@@ -490,23 +499,27 @@ public class Type {
         }
         private StructOrUnion(String name, Type[] types, String[] names,boolean isUnion){
             super(structName(types,names,isUnion),
-                    isUnion?Stream.of(types).mapToInt(t->t.blockCount).max().orElse(0):Stream.of(types).mapToInt(t->t.blockCount).max().orElse(0)
+                    isUnion?Stream.of(types).mapToInt(t->t.blockCount).max().orElse(0):
+                            Stream.of(types).mapToInt(t->t.blockCount).sum()
                     , isVarSize(types), false);
             structName=name;
             this.isUnion=isUnion;
-            this.fieldNames=names.clone();
-            this.elements=types.clone();
+            ArrayList<StructEntry> entries=new ArrayList<>(names.length);
+            long off=0;
             for(int i=0;i<names.length;i++){
                 if(fields.put(names[i],types[i])!=null){
                     throw new TypeError("duplicate or reserved field-name \""+names[i]+"\" in struct "+this);
                 }
+                entries.add(new StructEntry(names[i],off,types[i]));
+                off+=types[i].blockCount*8L/*sizeof(Value)*/;
             }
+            this.entries=entries.toArray(new StructEntry[0]);
         }
 
         @Override
         public boolean isMutableFlied(String fieldName) {
-            for(String field:fieldNames){
-                if(field.equals(fieldName))
+            for(StructEntry e:entries){
+                if(e.name.equals(fieldName))
                     return true;
             }
             return super.isMutableFlied(fieldName);
@@ -525,21 +538,15 @@ public class Type {
         }@Override
 
         public Iterable<Type> childTypes() {
-            return Arrays.asList(elements);
+            return Arrays.stream(entries).map(e->e.type).collect(Collectors.toList());
         }
 
         public Iterable<StructEntry> entries(){
-            ArrayList<StructEntry> entries=new ArrayList<>(fieldNames.length);
-            long off=0;
-            for(int i=0;i<fieldNames.length;i++){
-                entries.add(new StructEntry(fieldNames[i],off,elements[i]));
-                off+=elements[i].blockCount*8L/*sizeof(Value)*/;
-            }
-            return entries;
+            return Arrays.asList(entries);
         }
 
         public int elementCount() {
-            return elements.length;
+            return entries.length;
         }
     }
     public static class Proc extends Type{
@@ -569,7 +576,7 @@ public class Type {
         }
         /**Number of blocks needed to store the arguments of this procedure*/
         public long argsBlockSize() {
-            return Type.calculateBlockCount(argTypes);
+            return Arrays.stream(argTypes).mapToInt(t->t.blockCount).sum();
         }
 
         @Override

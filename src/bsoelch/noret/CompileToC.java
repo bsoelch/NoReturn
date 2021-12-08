@@ -342,7 +342,7 @@ public class CompileToC {
         writeLine("#define TYPE_CONTENT_SHIFT  8");
         writeLine("#define TYPE_CONTENT_MASK   0xffffffff");
         writeLine("#define TYPE_COUNT_SHIFT    40");
-        writeLine("#define TYPE_COUNT_MASK     0xffff");
+        writeLine("#define TYPE_COUNT_MASK     "+TYPE_ELEMENT_COUNT+"");
         comment("Type data for all composite Types");
         ArrayList<Type> contentTypes=new ArrayList<>();
         ArrayList<Type.StructEntry> tupleData=new ArrayList<>();
@@ -1681,52 +1681,61 @@ public class CompileToC {
                 return prevTmp;
             }
         }else if(expr instanceof GetField){
-            if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_TYPE)){
-                if(((GetField) expr).value.expectedType() instanceof Type.AnyType){
+            Type expectedType = ((GetField) expr).value.expectedType();
+            String fieldName = ((GetField) expr).fieldName;
+            if(fieldName.equals(Type.FIELD_NAME_TYPE)){
+                if(expectedType instanceof Type.AnyType){
                     tmpCount=writeExpression(indent+"    ",initLines,line,((GetField) expr).value,false,tmpCount, procName, varNames);
                 }else{
-                    line.append("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK + "{.asType=").append(typeSignature(((GetField) expr).value.expectedType()))
+                    line.append("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK + "{.asType=").append(typeSignature(expectedType))
                             .append("}})");
                     if(unwrap){
                         line.append(unwrapSuffix(expr.expectedType()));
                     }
                 }
                 return tmpCount;
-            }else if(((GetField) expr).fieldName.equals(Type.FIELD_NAME_LENGTH)){
-                if((((GetField) expr).value.expectedType() instanceof Type.Array||
-                        ((GetField) expr).value.expectedType() instanceof Type.NoRetString)){
+            }else if(fieldName.equals(Type.FIELD_NAME_LENGTH)){
+                if((expectedType instanceof Type.Array||
+                        expectedType instanceof Type.NoRetString)){
                     line.append('(');
-                    writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
+                    tmpCount=writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
                     line.append("[0].asPtr+"+ARRAY_LEN_OFFSET+")");//array.length
                     if(unwrap){
                         line.append(unwrapSuffix(expr.expectedType()));
                     }
                     return tmpCount;
-                }else if((((GetField) expr).value.expectedType() instanceof Type.Tuple)){
+                }else if((expectedType instanceof Type.Tuple)){
                     if(!unwrap){
                         line.append("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK + "{.")
                                 .append(typeFieldName(Type.Numeric.SIZE)).append("=");
                     }
-                    line.append(((Type.Tuple) ((GetField) expr).value.expectedType()).getElements().length);
+                    line.append(((Type.Tuple) expectedType).getElements().length);
                     if(!unwrap){
                         line.append("}})");
                     }
                     return tmpCount;
                 }
-            }else if(((GetField) expr).value.expectedType() instanceof Type.Optional&&
-                    ((GetField) expr).fieldName.equals(Type.FIELD_NAME_VALUE)){
+            }else if(expectedType instanceof Type.Optional&&
+                    fieldName.equals(Type.FIELD_NAME_VALUE)){
                 //TODO check value before access, dereference pointers
                 line.append("((");
-                writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
+                tmpCount=writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
                 line.append(")+1)");//optional.length
                 if(unwrap){
                     line.append(unwrapSuffix(expr.expectedType()));
                 }
                 return tmpCount;
+            }else if(expectedType instanceof Type.Struct){
+                line.append("(((void*)");
+                tmpCount=writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
+                line.append(")+").append(((Type.Struct) expectedType).offsetOf(fieldName)).append("ull)");//offset
+                if(unwrap){
+                    line.append(unwrapSuffix(expr.expectedType()));
+                }
+                return tmpCount;
             }
-
-            //TODO struct/union field access
-            throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
+            //TODO union field access
+            throw new UnsupportedOperationException(expectedType+" is currently not supported");
         }else if(expr instanceof GetIndex){
             if(((GetIndex)expr).value.expectedType() instanceof Type.Array){
                 if(((Type.Array) ((GetIndex)expr).value.expectedType()).content instanceof Type.Primitive){

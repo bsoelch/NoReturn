@@ -24,7 +24,7 @@ public class GetIndex implements Expression{
                         indType+ " string indices have to be unsigned integers or strings of the same type");
             }
         }else {
-            //TODO addArray-access for tuples
+            //TODO addArray-access for tuples constIndex (only with constant indices)
             if(valType instanceof Type.Array){
                 if(Type.canAssign(Type.Numeric.SIZE, indType,null)){
                     type =((Type.Array) valType).content;

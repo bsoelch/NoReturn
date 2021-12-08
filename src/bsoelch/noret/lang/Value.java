@@ -706,7 +706,7 @@ public abstract class Value{
 
         @Override
         public Iterator<Value> iterator() {
-            return Arrays.stream(((Type.Struct)type).fieldNames).map(elements::get).iterator();
+            return Arrays.stream(((Type.Struct)type).entries).map(e->elements.get(e.name)).iterator();
         }
 
         @Override
@@ -763,8 +763,8 @@ public abstract class Value{
             }
         }
         private void initSetters() {
-            for(String name:((Type.Union)type).fieldNames){
-                setters.put(name,(v)-> {
+            for(Type.StructEntry e:((Type.Union)type).entries){
+                setters.put(e.name,(v)-> {
                     content=v;
                     return this;
                 });
