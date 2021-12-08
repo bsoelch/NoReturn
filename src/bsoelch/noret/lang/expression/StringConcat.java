@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -35,5 +36,14 @@ public class StringConcat implements Expression {
     @Override
     public boolean canAssignTo() {
         return Expression.super.canAssignTo();
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;//all possible compile-time evaluations are done on initialization
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
     }
 }

@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.SyntaxError;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
@@ -12,14 +13,14 @@ public class LeftUnaryOp implements Expression {
 
     final Type expectedOutput;
 
-    public static Expression create(OperatorType op, Expression expr){
+    public static Expression create(OperatorType op, Expression expr,ProgramContext context){
         Type type = expr.expectedType();
         if(!(type instanceof Type.Primitive)){
             throw new SyntaxError("Unsupported type for unary operation "+op+" : "+type);
         }
         Type expectedOut=typeCheck(op,(Type.Primitive) type);
-        if(expr instanceof ValueExpression){//constant folding
-            return ValueExpression.create(evaluate(op,((ValueExpression) expr).value), null);
+        if(expr.hasValue(context)){//constant folding
+            return ValueExpression.create(evaluate(op, expr.getValue(context)));
         }
         return new LeftUnaryOp(op, expr,expectedOut);
     }
@@ -136,6 +137,15 @@ public class LeftUnaryOp implements Expression {
     @Override
     public String toString() {
         return "LeftUnaryOp{" + op + " " + expr +'}';
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;//all possible compile-time evaluations are done on initialization
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
     }
 }
 

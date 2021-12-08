@@ -1,6 +1,6 @@
 package bsoelch.noret.lang;
 
-import bsoelch.noret.Parser;
+import bsoelch.noret.ProgramContext;
 
 import java.util.ArrayList;
 
@@ -9,7 +9,7 @@ public class LogAction implements Action {
 
     public final LogType type;
     public final Expression expr;
-    public LogAction(LogType logType, Expression expr, Parser.ParserContext context) {
+    public LogAction(LogType logType, Expression expr, ProgramContext context) {
         assert  logType!=null;
         this.type=logType;
         this.expr=expr;

@@ -1,6 +1,6 @@
 package bsoelch.noret.lang.expression;
 
-import bsoelch.noret.Parser;
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.SyntaxError;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
@@ -12,17 +12,20 @@ public class GetField implements Expression{
     public final String fieldName;
     final Type type;
 
-    public static Expression create(Expression value, String fieldName, Parser.ParserContext context){
+    public static Expression create(Expression value, String fieldName, ProgramContext context){
         Type valType = value.expectedType();
         Type type=valType.getField(fieldName);
         if(type==null){
             throw new SyntaxError("Type "+valType+" does not have a field \""+fieldName+"\"");
         }else if(Type.FIELD_NAME_TYPE.equals(fieldName)){
             context.addRuntimeType(valType,true);
+            if(! (valType instanceof Type.AnyType)){//evaluate .type expressions at compile time
+                return ValueExpression.create(new Value.TypeValue(valType));
+            }
         }
-        if(value instanceof ValueExpression){//constant folding
+        if(value.hasValue(context)&&!value.isBound()){//constant folding
             //set field is not supported for constants
-            return ValueExpression.create(((ValueExpression) value).value.getField(fieldName), null);
+            return ValueExpression.create(value.getValue(context).getField(fieldName));
         }
         return new GetField(value,fieldName,type);
     }
@@ -72,5 +75,14 @@ public class GetField implements Expression{
     @Override
     public String toString() {
         return "GetField{"+value + "." + fieldName+"}" ;
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;//all possible compile-time evaluations are done on initialization
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
     }
 }

@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
@@ -50,5 +51,14 @@ public class VarExpression implements Expression {
     @Override
     public String toString() {
         return "VarExpression{" + varId + '}';
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return context.hasVarValue(varId);
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        return context.getVarValue(varId);
     }
 }

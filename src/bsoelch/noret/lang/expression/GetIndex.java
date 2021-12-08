@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
@@ -10,7 +11,7 @@ public class GetIndex implements Expression{
     public final Expression index;
     final Type type;
 
-    public static Expression create(Expression value, Expression index){
+    public static Expression create(Expression value, Expression index,ProgramContext context){
         Type valType = value.expectedType();
         Type indType = index.expectedType();
         Type type;
@@ -37,9 +38,9 @@ public class GetIndex implements Expression{
                         valType +"\" only arrays,tuples and string support array-access");
             }
         }
-        if(value instanceof ValueExpression&&index instanceof ValueExpression){//constant folding
+        if(value.hasValue(context)&&index.hasValue(context)&&!value.isBound()){//constant folding
             //set index is not supported for constants
-            return ValueExpression.create(((ValueExpression) value).value.getAtIndex(((ValueExpression) index).value), null);
+            return ValueExpression.create(value.getValue(context).getAtIndex(index.getValue(context)));
         }
         return new GetIndex(value, index,type);
     }
@@ -89,5 +90,14 @@ public class GetIndex implements Expression{
     @Override
     public String toString() {
         return "GetIndex{"+value +"[" + index +"]}";
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;//all possible compile-time evaluations are done on initialization
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
     }
 }

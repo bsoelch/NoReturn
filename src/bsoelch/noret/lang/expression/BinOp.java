@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.SyntaxError;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
@@ -14,13 +15,13 @@ public class BinOp implements Expression {
 
     final Type expectedOutput;
 
-    public static Expression create(Expression left, OperatorType op, Expression right){
+    public static Expression create(Expression left, OperatorType op, Expression right, ProgramContext context){
         Type lType = left.expectedType();
         Type rType = right.expectedType();
         if(lType instanceof Type.Primitive&&rType instanceof Type.Primitive){
             Type type=typeCheck((Type.Primitive) lType, op, (Type.Primitive) rType);
-            if(left instanceof ValueExpression&&right instanceof ValueExpression){//fold constants
-                return ValueExpression.create(evaluate(((ValueExpression) left).value,op,()->((ValueExpression) right).value), null);
+            if(left.hasValue(context)&&right.hasValue(context)){//fold constants
+                return ValueExpression.create(evaluate(left.getValue(context),op,()->right.getValue(context)));
             }
             return new BinOp(left, op, right,type);
         }else{
@@ -29,27 +30,27 @@ public class BinOp implements Expression {
                     if (lType instanceof Type.NoRetString) {
                         return StringConcat.appendEnd(left,right);
                     } else if (lType instanceof Type.Array) {
-                        return TupleConcat.pushEnd(left,right);
+                        return TupleConcat.pushEnd(left,right,context);
                     }
                     break;
                 case RSHIFT:
                     if (rType instanceof Type.NoRetString) {
                         return StringConcat.appendStart(left,right);
                     } else if (rType instanceof Type.Array) {
-                        return TupleConcat.pushStart(left,right);
+                        return TupleConcat.pushStart(left,right,context);
                     }
                     break;
                 case PLUS:
                     if (lType instanceof Type.NoRetString || rType instanceof Type.NoRetString) {
                         return StringConcat.concat(left,right);
                     } else if (lType instanceof Type.Array && rType instanceof Type.Array) {
-                        return TupleConcat.concat(left,right);
+                        return TupleConcat.concat(left,right,context);
                     }
                     break;
                 case EQ:
                 case NE://eq functions for any expressions
                     if (lType instanceof Type.NoRetString && rType instanceof Type.NoRetString) {
-                        return StringCompare.create(left,op,right);
+                        return StringCompare.create(left,op,right,context);
                     }else{
                         return new EqualityCheck(left,op==OperatorType.NE,right);
                     }
@@ -58,7 +59,7 @@ public class BinOp implements Expression {
                 case LE:
                 case LT:
                     if (lType instanceof Type.NoRetString && rType instanceof Type.NoRetString) {
-                        return StringCompare.create(left,op,right);
+                        return StringCompare.create(left,op,right,context);
                     }
                     break;
             }
@@ -203,6 +204,15 @@ public class BinOp implements Expression {
     @Override
     public String toString() {
         return "BinOp{" +left + " "+op + " "+ right +'}';
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;//all possible compile-time evaluations are done on initialization
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
     }
 }
 

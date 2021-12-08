@@ -1,29 +1,23 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
 
 public class ValueExpression implements Expression {
     final Value value;
-    public final String constId;
 
-    public static Expression create(Value value,String constId){
-        return new ValueExpression(value,constId);
+    public static Expression create(Value value){
+        return new ValueExpression(value);
     }
 
-    public ValueExpression(Value value, String constId) {
+    private ValueExpression(Value value) {
         this.value = value;
-        this.constId = constId;
     }
-
-    public boolean isVarSizeConstant(){
-        return constId!=null&&value.getType().needsExternalData;
-    }
-
     @Override
     public boolean isBound() {
-        return (constId!=null)&&value.isMutable();
+        return false;
     }
 
     @Override
@@ -41,6 +35,14 @@ public class ValueExpression implements Expression {
     }
 
     public Value getValue() {
+        return value;
+    }
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return true;
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
         return value;
     }
 }

@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -8,15 +9,16 @@ public class EqualityCheck implements Expression {
     public final Expression left,right;
     public final boolean neq;
 
-    public static Expression create(Expression left, boolean neq, Expression right) {
+    public static Expression create(Expression left, boolean neq, Expression right,ProgramContext context) {
         if(!(Type.canCast(left.expectedType(),right.expectedType(),null)||
                 Type.canCast(right.expectedType(),left.expectedType(),null))){
-            return new ValueExpression(Value.createPrimitive(Type.Primitive.BOOL, neq),null);
+            return ValueExpression.create(Value.createPrimitive(Type.Primitive.BOOL, neq));
         }else{
-            if(left instanceof ValueExpression&&right instanceof ValueExpression){
-                return new ValueExpression(Value.createPrimitive(Type.Primitive.BOOL,(((ValueExpression) left).value
-                        .equals(((ValueExpression) right).value))^neq),null);
+            if(left.hasValue(context)&&right.hasValue(context)){
+                return ValueExpression.create(Value.createPrimitive(Type.Primitive.BOOL,(left.getValue(context)
+                        .equals(right.getValue(context)))^neq));
             }//addLater compare string/tuple concat blocks
+            //addLater compile time evaluate if expressions are equal/different
             return new EqualityCheck(left, neq, right);
         }
     }
@@ -47,5 +49,14 @@ public class EqualityCheck implements Expression {
     @Override
     public boolean canAssignTo() {
         return false;
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
     }
 }

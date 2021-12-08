@@ -1,6 +1,6 @@
 package bsoelch.noret.lang.expression;
 
-import bsoelch.noret.Parser;
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
@@ -12,14 +12,14 @@ public class TypeCast implements Expression{
 
     /**
      * @param context ParserContext of the Parser that parsed this expression*/
-    public static Expression create(Type castType, Expression value, Parser.ParserContext context){
+    public static Expression create(Type castType, Expression value, ProgramContext context){
         if(!Type.canCast(castType,value.expectedType(),null)){
             throw new TypeError("Values of type "+value.expectedType()+ " cannot be cast to "+castType);
         }
-        if(value instanceof ValueExpression){
-            Value value1 = ((ValueExpression) value).value.castTo(castType);
+        if(value.hasValue(context)){
+            Value value1 = value.getValue(context).castTo(castType);
             assert value1.getType().equals(castType);
-            return ValueExpression.create(value1, null);
+            return ValueExpression.create(value1);
         }
         if(value.expectedType().equals(castType)){
             return value;
@@ -60,5 +60,14 @@ public class TypeCast implements Expression{
     @Override
     public String toString() {
         return "TypeCast{" +type+ ":" + value +'}';
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;//all possible compile-time evaluations are done on initialization
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
     }
 }

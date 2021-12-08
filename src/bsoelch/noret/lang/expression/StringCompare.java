@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.SyntaxError;
 import bsoelch.noret.lang.*;
 
@@ -9,13 +10,13 @@ public class StringCompare implements Expression {
     public final Expression left,right;
     public final OperatorType op;
 
-    public static Expression create(Expression left, OperatorType op, Expression right) {
+    public static Expression create(Expression left, OperatorType op, Expression right, ProgramContext context) {
         if(!(left.expectedType() instanceof Type.NoRetString&&right.expectedType() instanceof Type.NoRetString)){
             throw new SyntaxError("StringCompare can only compare strings");
         }else{
-            if(left instanceof ValueExpression&&right instanceof ValueExpression){
-                return new ValueExpression(compareValues((Value.StringValue)((ValueExpression) left).value,
-                        op,(Value.StringValue)((ValueExpression) right).value),null);
+            if(left.hasValue(context)&&right.hasValue(context)){
+                return ValueExpression.create(compareValues((Value.StringValue) left.getValue(context),
+                        op,(Value.StringValue) right.getValue(context)));
             }//addLater compare string concat blocks
             return new StringCompare(left, op, right);
         }
@@ -66,5 +67,14 @@ public class StringCompare implements Expression {
     @Override
     public boolean canAssignTo() {
         return false;
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;//all possible compile-time evaluations are done on initialization
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
     }
 }

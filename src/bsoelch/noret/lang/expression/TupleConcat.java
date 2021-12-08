@@ -1,5 +1,6 @@
 package bsoelch.noret.lang.expression;
 
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.*;
 
@@ -10,15 +11,15 @@ import java.util.stream.Stream;
 public class TupleConcat implements Expression {
 
     //TODO join constant values
-    private static void addToList(Expression expr, ArrayList<Section> tmp,boolean wrap) {
+    private static void addToList(Expression expr, ArrayList<Section> tmp,boolean wrap,ProgramContext context) {
         if(wrap){
             tmp.add(new Section(expr,false,1,true));
         }else if (expr instanceof TupleConcat) {
             tmp.addAll(((TupleConcat) expr).sections);
         } else {
             if (expr.expectedType() instanceof Type.Array){
-                if(expr instanceof ValueExpression){
-                    tmp.add(new Section(expr, false, ((Value.ArrayOrTuple)((ValueExpression)expr).value).elements().length, false));
+                if(expr.hasValue(context)){
+                    tmp.add(new Section(expr, false, ((Value.ArrayOrTuple) expr.getValue(context)).elements().length, false));
                 }else{//addLater slices
                     tmp.add(new Section(expr, true, -1, false));
                 }
@@ -27,22 +28,22 @@ public class TupleConcat implements Expression {
             }
         }
     }
-    public static Expression pushEnd(Expression tpl, Expression val) {
+    public static Expression pushEnd(Expression tpl, Expression val,ProgramContext context) {
         ArrayList<Section> tmp=new ArrayList<>();
-        addToList(tpl, tmp,false);
-        addToList(val, tmp,true);
+        addToList(tpl, tmp,false,context);
+        addToList(val, tmp,true,context);
         return new TupleConcat(tmp);
     }
-    public static Expression pushStart(Expression val, Expression tpl) {
+    public static Expression pushStart(Expression val, Expression tpl,ProgramContext context) {
         ArrayList<Section> tmp=new ArrayList<>();
-        addToList(val, tmp,true);
-        addToList(tpl,tmp,false);
+        addToList(val, tmp,true,context);
+        addToList(tpl,tmp,false,context);
         return new TupleConcat(tmp);
     }
-    public static Expression concat(Expression tpl1, Expression tpl2) {
+    public static Expression concat(Expression tpl1, Expression tpl2,ProgramContext context) {
         ArrayList<Section> tmp=new ArrayList<>();
-        addToList(tpl1, tmp,false);
-        addToList(tpl2, tmp,false);
+        addToList(tpl1, tmp,false,context);
+        addToList(tpl2, tmp,false,context);
         return new TupleConcat(tmp);
     }
     static Expression createTuple(ArrayList<Section> parts) {
@@ -105,4 +106,12 @@ public class TupleConcat implements Expression {
         return type;
     }
 
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;//all possible compile-time evaluations are done on initialization
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
+    }
 }

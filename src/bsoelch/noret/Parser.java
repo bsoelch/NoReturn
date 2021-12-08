@@ -7,11 +7,9 @@ import bsoelch.noret.lang.expression.*;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Reader;
-import java.io.UnsupportedEncodingException;
 import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.regex.Pattern;
 
 public class Parser {
@@ -89,7 +87,7 @@ public class Parser {
     static class ExprToken extends ParserToken{
         final Expression expr;
         ExprToken(Value value, String constId, TokenPosition pos) {
-            this(false,ValueExpression.create(value, constId), pos);
+            this(false,constId==null?ValueExpression.create(value):Constant.create(value, constId), pos);
         }
         ExprToken(Expression expr, TokenPosition pos) {
             this(false,expr, pos);
@@ -803,101 +801,6 @@ public class Parser {
     }
 
 
-    public static class ParserContext{
-        final HashMap<String, Type>      typeNames = new HashMap<>();
-        final HashMap<String, Procedure> procNames = new HashMap<>();
-        final HashMap<String, Value>     constants = new HashMap<>();
-
-        final HashMap<String, Integer>   varIds    = new HashMap<>();
-        final ArrayList<Type> varTypes = new ArrayList<>();
-
-        final HashSet<Type> runtimeTypes =new HashSet<>();
-        final HashSet<Type> runtimeBlockTypes =new HashSet<>();
-        final HashSet<Type.StructOrUnion> runtimeStructs =new HashSet<>();
-
-        long maxArgSize=0;
-
-        public void declareProcedure(String name,Procedure proc){
-            procNames.put(name,proc);
-            maxArgSize=Math.max(maxArgSize,((Type.Proc)proc.getType()).argsBlockSize());
-            varIds.clear();
-            varTypes.clear();
-        }
-
-        private boolean hasName(String name) {
-            return typeNames.containsKey(name)|| procNames.containsKey(name)||
-                    constants.containsKey(name)|| varIds.containsKey(name);
-        }
-
-        /**child types of containers that are needed at runtime,
-         * this method is a helper of the compiler
-         * @param topLevel true if the supplied type is not contained in any other type*/
-        public void addRuntimeType(Type t,boolean topLevel){
-            if(t instanceof Type.Struct||t instanceof Type.Union){
-                runtimeStructs.add((Type.StructOrUnion) t);
-            }else if(t instanceof Type.Tuple||t instanceof Type.Proc){
-                runtimeBlockTypes.add(t);
-            }else if(!topLevel){
-                runtimeTypes.add(t);
-            }
-            //add child types
-            for(Type c: t.childTypes()){
-                addRuntimeType(c,false);
-            }
-        }
-
-        public void defType(String name,Type type){
-            if(hasName(name)){
-                throw new SyntaxError(name+" is already defined");
-            }else{
-                typeNames.put(name,type);
-            }
-        }
-        public void declareVariable(String name,Type type){
-            if(hasName(name)){
-                throw new SyntaxError(name+" is already defined");
-            }else{
-                varIds.put(name,varIds.size());
-                varTypes.add(type);
-            }
-        }
-
-        public Type getType(String name){
-            return typeNames.get(name);
-        }
-        public Procedure getProc(String name){
-            return procNames.get(name);
-        }
-
-        public int getVarId(String name){
-            Integer get=varIds.get(name);
-            return get==null?-1:get;
-        }
-
-        public Type getVarType(int id) {
-            return varTypes.get(id);
-        }
-
-        public int varCount(){
-            return varIds.size();
-        }
-
-        public void addConstant(String constName, Value constValue) {
-            if(hasName(constName)){
-                throw new SyntaxError(constName+" is already defined");
-            }else{
-                constants.put(constName,constValue);
-            }
-        }
-        public Value getConst(String constName){
-            return constants.get(constName);
-        }
-
-        public long maxArgSize() {
-            return maxArgSize;
-        }
-    }
-
     enum TypeParserState{
         ROOT,BRACKET,STRUCT_TYPE,STRUCT_NAME,TUPLE
     }
@@ -908,7 +811,7 @@ public class Parser {
         ROOT,ASSIGN_EXPR,DEF_EXPR, ASSERT, LOG
     }
 
-    ParserContext context;
+    ProgramContext context;
 
     /*
     <root_element>=<typedef>|<proc_def>
@@ -921,7 +824,7 @@ public class Parser {
 
     */
     public Parser(Reader in) throws IOException {
-        context=new ParserContext();
+        context=new ProgramContext();
         Type.addAtomics(context.typeNames);
         parse(in);
     }
@@ -950,7 +853,7 @@ public class Parser {
         }
     }
 
-    private Type typeFromTokens(ParserContext context, ArrayList<ParserToken> tokens, String structName) {
+    private Type typeFromTokens(ProgramContext context, ArrayList<ParserToken> tokens, String structName) {
         if(structName!=null&&tokens.get(0).tokenType!=ParserTokenType.STRUCT_DEFINITION){
             //addLater allow top-level structs containing optionals/arrays/references to themselves
             throw new RuntimeException("structName should only be non-null if the current call is a struct definition");
@@ -1145,7 +1048,7 @@ public class Parser {
             return ((TypeToken)tokens.get(0)).type;
         }
     }
-    private void readTypeDef(Tokenizer tokens,ParserContext context) throws IOException {
+    private void readTypeDef(Tokenizer tokens, ProgramContext context) throws IOException {
         ParserToken token= tokens.getNextToken();
         if(token.tokenType !=ParserTokenType.WORD){
             throw new SyntaxError("Illegal token-type for type-name:\""+token.tokenType.toString()+
@@ -1159,7 +1062,7 @@ public class Parser {
         context.defType(name,typeFromTokens(context,typeTokens, null));
     }
 
-    private Expression expressionFromTokens(String procName,Type.Proc procType,ParserContext context, ArrayList<ParserToken> tokens){
+    private Expression expressionFromTokens(String procName, Type.Proc procType, ProgramContext context, ArrayList<ParserToken> tokens){
         //1. read brackets
         // (<Expr>)
         // (<Type>:)
@@ -1219,7 +1122,7 @@ public class Parser {
                             tokenBuffer.clear();
                         }
                         if(bracketStack.isEmpty()){
-                            tokens.set(i,new ExprToken(InitStructOrArray.newTuple(exprBuffer),tokens.get(i).pos));
+                            tokens.set(i,new ExprToken(InitContainer.newTuple(exprBuffer),tokens.get(i).pos));
                             state=ExpressionParserState.ROOT;
                         }else{
                             tokens.remove(i--);
@@ -1245,7 +1148,7 @@ public class Parser {
                         exprBuffer.add(expressionFromTokens(procName,procType,context,tokenBuffer));
                         tokenBuffer.clear();
                         if(bracketStack.isEmpty()){
-                            tokens.set(i,new ExprToken(InitStructOrArray.newStruct(exprBuffer,nameBuffer),
+                            tokens.set(i,new ExprToken(InitContainer.newStruct(exprBuffer,nameBuffer),
                                     tokens.get(i).pos));
                             state=ExpressionParserState.ROOT;
                         }else{
@@ -1334,7 +1237,7 @@ public class Parser {
                 }else if(tokens.get(i).tokenType==ParserTokenType.INDEX){
                     tokens.set(i-1,new ExprToken(GetIndex.create(
                             ((ExprToken)tokens.get(i-1)).expr,
-                            ((ExprToken)tokens.get(i)).expr),tokens.get(i-1).pos));
+                            ((ExprToken)tokens.get(i)).expr,context),tokens.get(i-1).pos));
                     tokens.remove(i--);
                 }else if(tokens.get(i).tokenType==ParserTokenType.RANGE){
                     //TODO Range
@@ -1366,7 +1269,7 @@ public class Parser {
                             ((Operator)tokens.get(i)).opType==OperatorType.NOT
                     ){
                         tmpL=((ExprToken)tokens.remove(i+1)).expr;
-                        tokens.set(i,new ExprToken(LeftUnaryOp.create(((Operator)tokens.get(i)).opType,tmpL),tokens.get(i).pos));
+                        tokens.set(i,new ExprToken(LeftUnaryOp.create(((Operator)tokens.get(i)).opType,tmpL,context),tokens.get(i).pos));
                     }
                 }
             }
@@ -1381,7 +1284,7 @@ public class Parser {
                 tmpL=((ExprToken)tokens.get(i-1)).expr;
                 tmpR=((ExprToken)tokens.remove(i+1)).expr;
                 tokens.remove(i--);
-                tokens.set(i,new ExprToken(BinOp.create(tmpL,OperatorType.POW,tmpR),tokens.get(i).pos));
+                tokens.set(i,new ExprToken(BinOp.create(tmpL,OperatorType.POW,tmpR,context),tokens.get(i).pos));
             }
         }
         for(int level=0;level<=5;level++){
@@ -1423,7 +1326,7 @@ public class Parser {
                         tmpL=((ExprToken)tokens.get(i-1)).expr;
                         tmpR=((ExprToken)tokens.remove(i+1)).expr;
                         OperatorType opType=((Operator)tokens.remove(i--)).opType;
-                        tokens.set(i,new ExprToken(BinOp.create(tmpL,opType,tmpR),tokens.get(i).pos));
+                        tokens.set(i,new ExprToken(BinOp.create(tmpL,opType,tmpR,context),tokens.get(i).pos));
                     }
                 }
             }
@@ -1452,7 +1355,7 @@ public class Parser {
         return ((ExprToken)tokens.get(0)).expr;
     }
 
-    private void readConstDef(Tokenizer tokens,ParserContext context) throws IOException{
+    private void readConstDef(Tokenizer tokens, ProgramContext context) throws IOException{
         ArrayList<ParserToken> tokenBuffer=new ArrayList<>();
         Type constType;
         ParserToken token;
@@ -1484,7 +1387,7 @@ public class Parser {
     //addLater? update types of values depending on maximum range of parameters
     // i.e. don't use type any for values that are always an integer
     //addLater detect variables with predictable value
-    private void readProcDef(String name,Tokenizer tokens,ParserContext context) throws IOException {
+    private void readProcDef(String name, Tokenizer tokens, ProgramContext context) throws IOException {
         ParserToken token;
         ArrayDeque<ParserTokenType> bracketStack=new ArrayDeque<>();
         //1. '('
@@ -1540,7 +1443,7 @@ public class Parser {
                         throw new SyntaxError(" too much arguments for procedure expected: "+argTypes.size());
                     }
                     Type type = argTypes.get(argNames.size() - 1);
-                    context.declareVariable(((NamedToken)token).value,type);
+                    context.declareVariable(((NamedToken)token).value,type,null);
                     wasWord=true;
                 }
             }else{
@@ -1647,9 +1550,9 @@ public class Parser {
                         updateBracketStack(token,bracketStack);
                         tokenBuffer.add(token);
                         if(token.tokenType==ParserTokenType.EXPRESSION&&
-                                ((ExprToken)token).expr instanceof ValueExpression&&
+                                ((ExprToken)token).expr.hasValue(context)&&
                                 ((ExprToken)token).expr.expectedType() instanceof Type.NoRetString){
-                            defName=((ValueExpression) ((ExprToken) token).expr).getValue().stringValue();
+                            defName= ((ExprToken) token).expr.getValue(context).stringValue();
                             token=tokens.getNextToken();
                             if(token==null){
                                 throw new SyntaxError("unexpected end of file");
@@ -1692,7 +1595,7 @@ public class Parser {
                         if(!Type.canAssign(assignTarget.expectedType(),expr.expectedType(),null)){
                             throw new TypeError("cannot assign " +expr.expectedType()+ " to "+assignTarget.expectedType());
                         }else if(!assignTarget.canAssignTo()){
-                            throw new TypeError("cannot assign values to immutable value"+assignTarget);
+                            throw new TypeError("cannot assign values to immutable value "+assignTarget);
                         }
                         actions.add(new Assignment(assignTarget,expr,context));
                         tokenBuffer.clear();
@@ -1705,7 +1608,7 @@ public class Parser {
                     if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
                         Expression expr=expressionFromTokens(name,procType,context,tokenBuffer);
                         actions.add(new ValDef(defType,expr,context));
-                        context.declareVariable(defName,defType);
+                        context.declareVariable(defName,defType,expr);
                         tokenBuffer.clear();
                         state=ActionParserState.ROOT;
                     }else{
@@ -1726,8 +1629,8 @@ public class Parser {
                     if(bracketStack.isEmpty()&&token.tokenType==ParserTokenType.END){
                         Expression expr=TypeCast.create(Type.Primitive.BOOL,
                                 expressionFromTokens(name,procType,context,tokenBuffer),context);
-                        if(expr instanceof ValueExpression){//compile time assert
-                            if(!(Boolean)((Value.Primitive)((ValueExpression) expr).getValue()).getValue()){
+                        if(expr.hasValue(context)){//compile time assert
+                            if(!(Boolean)((Value.Primitive) expr.getValue(context)).getValue()){
                                 throw new SyntaxError("assertion failed: "+assertPos);
                             }
                         }else{

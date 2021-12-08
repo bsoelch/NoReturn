@@ -289,7 +289,7 @@ public class CompileToC {
 
     //addLater use signatures that are less likely to collide with other functions
 
-    private void writeFileHeader(long maxArgSize, Parser.ParserContext context) throws IOException {
+    private void writeFileHeader(long maxArgSize, ProgramContext context) throws IOException {
         comment("Auto generated code from NoRet compiler");
         //addLater print information about compiled code
         out.newLine();
@@ -1577,55 +1577,53 @@ public class CompileToC {
             }
             line.append("(("+VALUE_BLOCK_NAME+"[]){"+CAST_BLOCK+"{.asProc=&" + PROC_PREFIX).append(procName).append("}})");
             return tmpCount;
+        }else if(expr instanceof Constant){
+            line.append(CONST_PREFIX).append(asciify(((Constant) expr).constId));
+            if(unwrap){
+                line.append(unwrapSuffix(expr.expectedType()));
+            }
+            return tmpCount;
         }else if(expr instanceof ValueExpression){
-            if(((ValueExpression) expr).constId!=null){
-                line.append(CONST_PREFIX).append(asciify(((ValueExpression) expr).constId));
-                if(unwrap){
-                    line.append(unwrapSuffix(expr.expectedType()));
-                }
-                return tmpCount;
+            boolean needsExternalData;
+            if(((ValueExpression)expr).getValue() instanceof Value.AnyValue){
+                //special handling for AnyValues, needsExternalData depends on content
+                Value content=((Value.AnyValue) ((ValueExpression)expr).getValue()).content;
+                needsExternalData=content.getType().blockCount>1||content.getType().needsExternalData;
             }else{
-                boolean needsExternalData;
-                if(((ValueExpression)expr).getValue() instanceof Value.AnyValue){
-                    //special handling for AnyValues, needsExternalData depends on content
-                    Value content=((Value.AnyValue) ((ValueExpression)expr).getValue()).content;
-                    needsExternalData=content.getType().blockCount>1||content.getType().needsExternalData;
-                }else{
-                    needsExternalData=expr.expectedType().needsExternalData;
+                needsExternalData=expr.expectedType().needsExternalData;
+            }
+            if(needsExternalData){
+                if(unwrap){
+                    throw new RuntimeException("Cannot unwrap "+expr.expectedType());
                 }
-                if(needsExternalData){
-                    if(unwrap){
+                int blockCount=expr.expectedType().blockCount;
+                DataOut data= new DataOut("tmp", tmpCount + 1,false);
+                StringBuilder tmp;
+                initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
+                tmp=new StringBuilder("  memcpy(tmp"+tmpCount+",("+VALUE_BLOCK_NAME+"[]){");
+                writeConstValueAsUnion(tmp,((ValueExpression)expr).getValue(),data,true, true);
+                tmp.append("},").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"));");
+                initLines.add(indent+"{");
+                for(String l:data.prefixLines){
+                    initLines.add(indent+"  "+l);
+                }
+                initLines.add(indent+tmp);
+                initLines.add(indent+"}");
+                line.append("tmp").append(tmpCount);
+                return tmpCount+1;
+            }else{
+                if(unwrap){
+                    if(!(expr.expectedType() instanceof Type.Primitive)){
                         throw new RuntimeException("Cannot unwrap "+expr.expectedType());
                     }
-                    int blockCount=expr.expectedType().blockCount;
-                    DataOut data= new DataOut("tmp", tmpCount + 1,false);
-                    StringBuilder tmp;
-                    initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
-                    tmp=new StringBuilder("  memcpy(tmp"+tmpCount+",("+VALUE_BLOCK_NAME+"[]){");
-                    writeConstValueAsUnion(tmp,((ValueExpression)expr).getValue(),data,true, true);
-                    tmp.append("},").append(blockCount).append("*sizeof("+VALUE_BLOCK_NAME+"));");
-                    initLines.add(indent+"{");
-                    for(String l:data.prefixLines){
-                        initLines.add(indent+"  "+l);
-                    }
-                    initLines.add(indent+tmp);
-                    initLines.add(indent+"}");
-                    line.append("tmp").append(tmpCount);
-                    return tmpCount+1;
+                    line.append("((").append(cTypeName((Type.Primitive)expr.expectedType())).append(")(")
+                            .append(((ValueExpression)expr).getValue().stringValue()).append("))");
                 }else{
-                    if(unwrap){
-                        if(!(expr.expectedType() instanceof Type.Primitive)){
-                            throw new RuntimeException("Cannot unwrap "+expr.expectedType());
-                        }
-                        line.append("((").append(cTypeName((Type.Primitive)expr.expectedType())).append(")(")
-                                .append(((ValueExpression)expr).getValue().stringValue()).append("))");
-                    }else{
-                        line.append("(("+VALUE_BLOCK_NAME+"[]){");
-                        writeConstValueAsUnion(line,((ValueExpression)expr).getValue(),null,true, true);
-                        line.append("})");
-                    }
-                    return tmpCount;
+                    line.append("(("+VALUE_BLOCK_NAME+"[]){");
+                    writeConstValueAsUnion(line,((ValueExpression)expr).getValue(),null,true, true);
+                    line.append("})");
                 }
+                return tmpCount;
             }
         }else if(expr instanceof BinOp){
             String[] parts=binOpParts(((BinOp) expr),unwrap);
@@ -1737,9 +1735,10 @@ public class CompileToC {
             //TODO union field access
             throw new UnsupportedOperationException(expectedType+" is currently not supported");
         }else if(expr instanceof GetIndex){
-            if(((GetIndex)expr).value.expectedType() instanceof Type.Array){
-                if(((Type.Array) ((GetIndex)expr).value.expectedType()).content instanceof Type.Primitive){
-                    Type.Primitive content=(Type.Primitive)((Type.Array) ((GetIndex)expr).value.expectedType()).content;
+            Type expectedType = ((GetIndex) expr).value.expectedType();
+            if(expectedType instanceof Type.Array){
+                if(((Type.Array) expectedType).content instanceof Type.Primitive){
+                    Type.Primitive content=(Type.Primitive)((Type.Array) expectedType).content;
                     if(!unwrap){
                         line.append("((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{.").append(typeFieldName(content))
                                 .append("=");
@@ -1757,14 +1756,14 @@ public class CompileToC {
                     tmpCount = writeExpression(indent, initLines, line, ((GetIndex) expr).value, false, tmpCount, procName, varNames);
                     line.append("->asPtr,");
                     tmpCount = writeExpression(indent, initLines, line, ((GetIndex) expr).index, true, tmpCount, procName, varNames);
-                    line.append(",").append(((GetIndex) expr).value.expectedType().blockCount).append(")");
+                    line.append(",").append(expectedType.blockCount).append(")");
                     if (unwrap) {
                         line.append(unwrapSuffix(expr.expectedType()));
                     }
                 }
                 return tmpCount;
-            }else if(((GetIndex)expr).value.expectedType() instanceof Type.NoRetString){
-                Type.Numeric charType=((Type.NoRetString) ((GetIndex)expr).value.expectedType()).charType;
+            }else if(expectedType instanceof Type.NoRetString){
+                Type.Numeric charType=((Type.NoRetString) expectedType).charType;
                 if(!unwrap){
                     line.append("((" + VALUE_BLOCK_NAME + "[]){" + CAST_BLOCK + "{.").append(typeFieldName(charType))
                             .append("=");
@@ -1773,17 +1772,17 @@ public class CompileToC {
                 tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).value,false,tmpCount,procName,varNames);
                 line.append("->asPtr,");
                 tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).index,true, tmpCount,procName,varNames);
-                line.append(",").append((((Type.NoRetString) ((GetIndex)expr).value.expectedType()).charBits +7)/8).append("))");
+                line.append(",").append((((Type.NoRetString) expectedType).charBits +7)/8).append("))");
                 if(!unwrap){
                     line.append("}})");
                 }
                 return tmpCount;
-            }else if(((GetIndex)expr).value.expectedType() instanceof Type.Tuple){
+            }else if(expectedType instanceof Type.Tuple){
                 //addLater get tuple elements
                 throw new UnsupportedOperationException("unimplemented");
+                //return tmpCount;
             }
-            throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
-            //return tmpCount;
+            throw new SyntaxError("array access for Type "+ expectedType +" is not supported");
         }else {
             //TODO other expressions
             throw new UnsupportedOperationException(expr.getClass().getSimpleName()+" is currently not supported");
@@ -1891,7 +1890,7 @@ public class CompileToC {
         writeLine("}");
     }
 
-    public void compile(Parser.ParserContext context) throws IOException {
+    public void compile(ProgramContext context) throws IOException {
         writeFileHeader(context.maxArgSize(),context);
         for(Map.Entry<String, Value> e:context.constants.entrySet()){
             writeConstant(e.getKey(),e.getValue());

@@ -1,6 +1,6 @@
 package bsoelch.noret.lang.expression;
 
-import bsoelch.noret.Parser;
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.lang.*;
 
 import java.util.ArrayList;
@@ -12,10 +12,10 @@ public class IfExpr implements Expression {
 
     final Type expectedOutput;
 
-    public static Expression create(Expression cond, Expression ifVal, Expression elseVal, Parser.ParserContext context){
+    public static Expression create(Expression cond, Expression ifVal, Expression elseVal, ProgramContext context){
         cond=TypeCast.create(Type.Primitive.BOOL,cond, context);
-        if(cond instanceof ValueExpression){//constant folding
-            return ((Boolean)((Value.Primitive)((ValueExpression) cond).value.castTo(Type.Primitive.BOOL)).getValue())?
+        if(cond.hasValue(context)){//constant folding
+            return ((Boolean)((Value.Primitive) cond.getValue(context).castTo(Type.Primitive.BOOL)).getValue())?
                     ifVal:elseVal;
         }
         Type expectedOut=Type.commonSupertype(ifVal.expectedType(),elseVal.expectedType());
@@ -59,5 +59,14 @@ public class IfExpr implements Expression {
     @Override
     public String toString() {
         return "IfExpr{" +cond + "?" + ifVal +":" + elseVal + '}';
+    }
+
+    @Override
+    public boolean hasValue(ProgramContext context) {
+        return false;//all possible compile-time evaluations are done on initialization
+    }
+    @Override
+    public Value getValue(ProgramContext context) {
+        throw new RuntimeException(this+" cannot be evaluated at compile time");
     }
 }

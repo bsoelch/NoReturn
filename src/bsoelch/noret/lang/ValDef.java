@@ -1,6 +1,6 @@
 package bsoelch.noret.lang;
 
-import bsoelch.noret.Parser;
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.TypeError;
 import bsoelch.noret.lang.expression.TypeCast;
 
@@ -10,7 +10,7 @@ public class ValDef implements Action {
     final Type type;
     final Expression initValue;
 
-    public ValDef(Type type, Expression initValue, Parser.ParserContext context) {
+    public ValDef(Type type, Expression initValue, ProgramContext context) {
         if(Type.canAssign(type,initValue.expectedType(),null)){
             this.type = type;
             //ensure values are cast to the correct type

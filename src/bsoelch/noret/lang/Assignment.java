@@ -1,6 +1,6 @@
 package bsoelch.noret.lang;
 
-import bsoelch.noret.Parser;
+import bsoelch.noret.ProgramContext;
 import bsoelch.noret.SyntaxError;
 import bsoelch.noret.lang.expression.TypeCast;
 
@@ -10,7 +10,7 @@ public class Assignment implements Action {
     public final Expression target;
     public final Expression expr;
 
-    public Assignment(Expression target, Expression expr, Parser.ParserContext context) {
+    public Assignment(Expression target, Expression expr, ProgramContext context) {
         this.target = target;
         if(!target.canAssignTo()){
             throw new SyntaxError(target+" cannot be modified");
