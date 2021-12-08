@@ -45,13 +45,20 @@ typedef uint64_t Type;
 #define TYPE_COUNT_SHIFT    40
 #define TYPE_COUNT_MASK     0xffff
 // Type data for all composite Types
-Type typeData []={TYPE_SIG_I32,TYPE_SIG_I32,TYPE_SIG_I32,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_STRING8,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(9ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_I32,TYPE_SIG_ARRAY|(7ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(8ULL<<TYPE_CONTENT_SHIFT)};
+Type typeData []={TYPE_SIG_ARRAY|(1ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_STRING8,TYPE_SIG_ARRAY|(1ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_OPTIONAL|(6ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_I32,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(5ULL<<TYPE_CONTENT_SHIFT)};
+// Type data for tuple types
+typedef struct{
+  size_t off;
+  Type   type;
+}NoRetTupleEntry;
+NoRetTupleEntry tupleData []={{.off=0, .type=TYPE_SIG_I32}, {.off=8, .type=TYPE_SIG_I32}, {.off=16, .type=TYPE_SIG_I32}};
 // Type data for struct and union types
 typedef struct{
-  char* name;
-  Type  type;
+  char*  name;
+  size_t off;
+  Type   type;
 }NoRetStructEntry;
-NoRetStructEntry structData []={{.name="a",.type=TYPE_SIG_I32},{.name="b",.type=TYPE_SIG_I32}};
+NoRetStructEntry structData []={{.name="a", .off=0, .type=TYPE_SIG_I32}, {.name="b", .off=8, .type=TYPE_SIG_I32}};
 
 // value-block type
 typedef union ValueImpl Value;
@@ -194,7 +201,7 @@ void printType(const Type type,FILE* log,bool recursive){
       len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;
       for(size_t i=off;i<off+len;i++){
         if(i>off){fputs(", ",log);};
-        printType(typeData[i],log,false);
+        printType(tupleData[i].type,log,false);
       }
       fputs("}",log);
       break;
@@ -435,8 +442,27 @@ void printValue(FILE* log,Type type,const void* value){
       fputs("}",log);
       break;
     case TYPE_SIG_TUPLE:
-    case TYPE_SIG_UNION:
+      fputs("{",log);
+      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;
+      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;
+      for(size_t i=off;i<off+len;i++){
+        if(i>off){fputs(",",log);};
+        printValue(log, tupleData[i].type, value+tupleData[i].off);
+      }
+      fputs("}",log);
+      break;
     case TYPE_SIG_STRUCT:
+      fputs("{",log);
+      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;
+      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;
+      for(size_t i=off;i<off+len;i++){
+        if(i>off){fputs(",",log);};
+        fprintf(log, ".%s=", structData[i].name);
+        printValue(log, structData[i].type, value+structData[i].off);
+      }
+      fputs("}",log);
+      break;
+    case TYPE_SIG_UNION:
       assert(false && " unimplemented ");
       break;
     case TYPE_SIG_PROC:
@@ -524,7 +550,7 @@ static Value tmp_const_array__test1[]={{.asU64=0/*off*/},{.asU64=2/*cap*/},{.asU
 static Value tmp_const_array__test2[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=2/*len*/},{.raw32={4,5}}};
 static Value tmp_const_array__test3[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=1/*len*/},{.raw32={6,0}}};
 static Value tmp_const_array__test0[]={{.asU64=0/*off*/},{.asU64=3/*cap*/},{.asU64=3/*len*/},{.asPtr=(tmp_const_array__test1)},{.asPtr=(tmp_const_array__test2)},{.asPtr=(tmp_const_array__test3)}};
-const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(8ULL<<TYPE_CONTENT_SHIFT)},{.asPtr=(tmp_const_array__test0)}};
+const Value const_array__test []={{.asType=TYPE_SIG_ARRAY|(5ULL<<TYPE_CONTENT_SHIFT)},{.asPtr=(tmp_const_array__test0)}};
 // const string8[] : str_test = {"str1","str2"}
 static Value tmp_const_str__test1[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=4/*len*/},{.raw8={0x73,0x74,0x72,0x31,0x0,0x0,0x0,0x0}}};
 static Value tmp_const_str__test2[]={{.asU64=0/*off*/},{.asU64=1/*cap*/},{.asU64=4/*len*/},{.raw8={0x73,0x74,0x72,0x32,0x0,0x0,0x0,0x0}}};
@@ -552,7 +578,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
     }
   }
   {// Log[DEBUG]{VarExpression{0}}
-    logValue(DEBUG,false,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),(argsIn+0));
+    logValue(DEBUG,false,TYPE_SIG_ARRAY|(1ULL<<TYPE_CONTENT_SHIFT),(argsIn+0));
   }
   {// Log[DEBUG]{ValueExpression{"args[0]="}}
     Value tmp0 [1];
@@ -585,6 +611,9 @@ void* proc_start(Value* argsIn,Value* argsOut){
       }
     }
     logValue(DEBUG,true,TYPE_SIG_STRING8,tmp0);
+  }
+  {// Log[DEFAULT]{ValueExpression{{.a=0,.b=1}}}
+    logValue(DEFAULT,false,TYPE_SIG_STRUCT|(0ULL<<TYPE_CONTENT_SHIFT)|(2ULL<<TYPE_COUNT_SHIFT),const_aStruct);
   }
   {// Log[DEFAULT]{ValueExpression{struct{int32: a, int32: b}}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_STRUCT|(0ULL<<TYPE_CONTENT_SHIFT)|(2ULL<<TYPE_COUNT_SHIFT)}}));
@@ -666,6 +695,9 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Initialize: ValueExpression{{1,2,3}}
     memcpy(var5,((Value[]){(Value){.asI32=1},(Value){.asI32=2},(Value){.asI32=3}}),3*sizeof(Value));
   }
+  {// Log[DEFAULT]{VarExpression{5}}
+    logValue(DEFAULT,false,TYPE_SIG_TUPLE|(0ULL<<TYPE_CONTENT_SHIFT)|(3ULL<<TYPE_COUNT_SHIFT),var5);
+  }
   {// Log[DEFAULT]{GetField{VarExpression{5}.type}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_TUPLE|(0ULL<<TYPE_CONTENT_SHIFT)|(3ULL<<TYPE_COUNT_SHIFT)}}));
   }
@@ -673,10 +705,10 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_U64,((Value[]){(Value){.asU64=3}}));
   }
   {// Log[DEFAULT]{this}
-    logValue(DEFAULT,false,TYPE_SIG_PROC|(3ULL<<TYPE_CONTENT_SHIFT)|(1ULL<<TYPE_COUNT_SHIFT),((Value[]){(Value){.asProc=&proc_start}}));
+    logValue(DEFAULT,false,TYPE_SIG_PROC|(0ULL<<TYPE_CONTENT_SHIFT)|(1ULL<<TYPE_COUNT_SHIFT),((Value[]){(Value){.asProc=&proc_start}}));
   }
   {// Log[DEFAULT]{GetField{this.type}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_PROC|(3ULL<<TYPE_CONTENT_SHIFT)|(1ULL<<TYPE_COUNT_SHIFT)}}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_PROC|(0ULL<<TYPE_CONTENT_SHIFT)|(1ULL<<TYPE_COUNT_SHIFT)}}));
   }
   Value var6 [1];// (int32)
   {// Initialize: BinOp{ValueExpression{1} PLUS TypeCast{int32:GetField{VarExpression{0}.length}}}
@@ -690,16 +722,16 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_I32,var7);
   }
   {// Log[DEFAULT]{ValueExpression{{2112454933,2,3}}}
-    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(7ULL<<TYPE_CONTENT_SHIFT),const_y);
+    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),const_y);
   }
   {// Log[DEFAULT]{ValueExpression{2112454933}}
     logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=2112454933}}));
   }
   {// Log[DEFAULT]{ValueExpression{int32[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(7ULL<<TYPE_CONTENT_SHIFT)}}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT)}}));
   }
   {// Log[DEFAULT]{ValueExpression{(((int32[])[])?)[]}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(6ULL<<TYPE_CONTENT_SHIFT)}}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(3ULL<<TYPE_CONTENT_SHIFT)}}));
   }
   Value var8 [1];// (uint64)
   {// Initialize: ValueExpression{3}
@@ -728,20 +760,20 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=*((int32_t*)getRawElement(var9->asPtr,((int32_t)(0)),4))}}));
   }
   {// Log[DEFAULT]{VarExpression{9}}
-    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(7ULL<<TYPE_CONTENT_SHIFT),var9);
+    logValue(DEFAULT,false,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),var9);
   }
   {// Log[DEFAULT]{ValueExpression{"none"}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_NONE}}));
   }
   {// Log[DEFAULT]{ValueExpression{tuple{}}}
-    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_TUPLE|(4ULL<<TYPE_CONTENT_SHIFT)|(0ULL<<TYPE_COUNT_SHIFT)}}));
+    logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_TUPLE|(3ULL<<TYPE_CONTENT_SHIFT)|(0ULL<<TYPE_COUNT_SHIFT)}}));
   }
   Value var10 [2];// (int32?)
   {// Initialize: ValueExpression{Optional:{4}}
     memcpy(var10,((Value[]){(Value){.asBool=true},(Value){.asI32=4}}),2*sizeof(Value));
   }
   {// Log[DEFAULT]{VarExpression{10}}
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(7ULL<<TYPE_CONTENT_SHIFT),var10);
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(4ULL<<TYPE_CONTENT_SHIFT),var10);
   }
   {// Log[DEFAULT]{IfExpr{TypeCast{bool:VarExpression{10}}?TypeCast{int32?:GetField{VarExpression{10}.value}}:ValueExpression{Optional:{}}}}
     Value tmp0 [2];
@@ -752,7 +784,7 @@ void* proc_start(Value* argsIn,Value* argsOut){
         memcpy(tmp0,((Value[]){(Value){.asBool=false},(Value){.asPtr=NULL/*none*/}}),2*sizeof(Value));
       }
     }
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(7ULL<<TYPE_CONTENT_SHIFT),tmp0);
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(4ULL<<TYPE_CONTENT_SHIFT),tmp0);
   }
   Procedure ret=NULL;
   return ret;

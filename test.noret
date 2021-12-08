@@ -14,7 +14,7 @@ start(string8[]):(args)=>{
     log.debug "args[0]=";
     _log.debug args.length>0?args[0]:"No Arguments Provided";
     ##struct_test:aStruct={.a={0,1},.b=0};
-    ## log aStruct;
+    log aStruct;
     log aStruct.type;
     string8:utf8=u8"UTF8-String:a°💻";
     string16:utf16=u16"UTF16-String:a°💻";
@@ -31,7 +31,7 @@ start(string8[]):(args)=>{
     any:anAny=3;
     log anAny.type;
     tuple{int32,int32,int32}:aTuple={1,2,3};
-    ## log aTuple;
+    log aTuple;
     log aTuple.type;
     log aTuple.length;
     log start;

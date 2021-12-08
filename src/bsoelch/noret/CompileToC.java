@@ -40,6 +40,8 @@ public class CompileToC {
     public static final String ARRAY_GET_NAME = "getElement";
     public static final String ARRAY_GET_RAW_NAME = "getRawElement";
 
+    public static final int TYPE_ELEMENT_COUNT = 0xffff;
+
     public static final int ERR_NONE  = 0;
     public static final int ERR_MEM   = 1;
     public static final int ERR_TYPE  = 2;
@@ -126,7 +128,6 @@ public class CompileToC {
 
     private final BufferedWriter out;
     private final HashMap<Type, Integer> typeOffsets=new HashMap<>();
-    private final HashMap<Type.StructOrUnion, Integer> structOffsets=new HashMap<>();
     private int min2BlockSignature;
     /**minByteSignatures[i]=#{signatures < 2^(i+1)}*/
     private final int[] minByteSignatures =new int[4];
@@ -162,11 +163,6 @@ public class CompileToC {
 
     private Integer typeOffset(Type t) {
         Integer off = typeOffsets.get(t);
-        assert off != null;
-        return off;
-    }
-    private Integer structOffset(Type.StructOrUnion t) {
-        Integer off = structOffsets.get(t);
         assert off != null;
         return off;
     }
@@ -244,29 +240,29 @@ public class CompileToC {
         }else if(t instanceof Type.Tuple){//addLater combine similar cases
             Integer off = typeOffset(t);
             int len = ((Type.Tuple) t).getElements().length;
-            if(len>0xffff){//addLater constant
-                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
+            if(len> TYPE_ELEMENT_COUNT){//addLater constant
+                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+ TYPE_ELEMENT_COUNT);
             }
             return TYPE_SIG_PREFIX+ "TUPLE|("+off+"ULL<<TYPE_CONTENT_SHIFT)|" +"("+ len +"ULL<<TYPE_COUNT_SHIFT)";
         }else if(t instanceof Type.Struct){
-            Integer off = structOffset((Type.StructOrUnion) t);
+            Integer off = typeOffset(t);
             int len = ((Type.StructOrUnion) t).elementCount();
-            if(len>0xffff){
-                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
+            if(len> TYPE_ELEMENT_COUNT){
+                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+ TYPE_ELEMENT_COUNT);
             }
             return TYPE_SIG_PREFIX+ "STRUCT|("+off+"ULL<<TYPE_CONTENT_SHIFT)|" +"("+ len +"ULL<<TYPE_COUNT_SHIFT)";
         }else if(t instanceof Type.Union){
-            Integer off = structOffset((Type.StructOrUnion) t);
+            Integer off = typeOffset(t);
             int len = ((Type.StructOrUnion) t).elementCount();
-            if(len>0xffff){
-                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
+            if(len> TYPE_ELEMENT_COUNT){
+                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+ TYPE_ELEMENT_COUNT);
             }
             return TYPE_SIG_PREFIX+ "UNION|("+off+"ULL<<TYPE_CONTENT_SHIFT)|" +"("+ len +"ULL<<TYPE_COUNT_SHIFT)";
         }else if(t instanceof Type.Proc){
             Integer off = typeOffset(t);
             int len = ((Type.Proc) t).getArgTypes().length;
-            if(len>0xffff){
-                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+0xffff);
+            if(len> TYPE_ELEMENT_COUNT){
+                throw new SyntaxError("block-type exceeded type maximum allowed element count of "+ TYPE_ELEMENT_COUNT);
             }
             return TYPE_SIG_PREFIX+ "PROC|("+off+"ULL<<TYPE_CONTENT_SHIFT)|" +"("+ len +"ULL<<TYPE_COUNT_SHIFT)";
         }
@@ -349,11 +345,21 @@ public class CompileToC {
         writeLine("#define TYPE_COUNT_MASK     0xffff");
         comment("Type data for all composite Types");
         ArrayList<Type> contentTypes=new ArrayList<>();
+        ArrayList<Type.StructEntry> tupleData=new ArrayList<>();
         //addLater use (greedy-alg?) [shortest super-string] to reduce the total length of the saved values
         for(Type t:context.runtimeBlockTypes){
-            typeOffsets.put(t,contentTypes.size());
-            for(Type c:t.childTypes()){
-               contentTypes.add(c);
+            if(t instanceof Type.Tuple){
+                typeOffsets.put(t,tupleData.size());
+                long off=0;
+                for(Type c:t.childTypes()){
+                    tupleData.add(new Type.StructEntry(null,off,c));
+                    off+=c.blockCount*8L/*sizeof(Value)*/;
+                }
+            }else{
+                typeOffsets.put(t,contentTypes.size());
+                for(Type c:t.childTypes()){
+                   contentTypes.add(c);
+                }
             }
         }
         for(Type t:context.runtimeTypes){
@@ -362,7 +368,7 @@ public class CompileToC {
         }
         ArrayList<Type.StructEntry> structData=new ArrayList<>();
         for(Type.StructOrUnion s:context.runtimeStructs){
-            structOffsets.put(s,structData.size());
+            typeOffsets.put(s,structData.size());
             for(Type.StructEntry e:s.entries()){
                 structData.add(e);
             }
@@ -381,11 +387,30 @@ public class CompileToC {
             }
             writeLine(tmp.append("};").toString());
         }
+        if(tupleData.size()>0){
+            comment("Type data for tuple types");
+            writeLine("typedef struct{");
+            writeLine("  size_t off;");
+            writeLine("  Type   type;");
+            writeLine("}NoRetTupleEntry;");
+            tmp = new StringBuilder("NoRetTupleEntry tupleData []={");
+            boolean first = true;
+            for (Type.StructEntry e : tupleData) {
+                if (first) {
+                    first = false;
+                } else {
+                    tmp.append(", ");
+                }
+                tmp.append("{.off=").append(e.off).append(", .type=").append(typeSignature(e.type)).append("}");
+            }
+            writeLine(tmp.append("};").toString());
+        }//no else
         if(structData.size()>0){
             comment("Type data for struct and union types");
             writeLine("typedef struct{");
-            writeLine("  char* name;");
-            writeLine("  Type  type;");
+            writeLine("  char*  name;");
+            writeLine("  size_t off;");
+            writeLine("  Type   type;");
             writeLine("}NoRetStructEntry;");
             tmp = new StringBuilder("NoRetStructEntry structData []={");
             boolean first = true;
@@ -393,9 +418,10 @@ public class CompileToC {
                 if (first) {
                     first = false;
                 } else {
-                    tmp.append(',');
+                    tmp.append(", ");
                 }
-                tmp.append("{.name=\"").append(e.name).append("\",.type=").append(typeSignature(e.type)).append("}");
+                tmp.append("{.name=\"").append(e.name).append("\", .off=").append(e.off)
+                        .append(", .type=").append(typeSignature(e.type)).append("}");
             }
             writeLine(tmp.append("};").toString());
         }
@@ -508,7 +534,7 @@ public class CompileToC {
         writeLine("      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;");
         writeLine("      for(size_t i=off;i<off+len;i++){");
         writeLine("        if(i>off){fputs(\", \",log);};");//no wrapping in tuple elements
-        writeLine("        " + PRINT_TYPE_NAME + "(typeData[i],log,false);");
+        writeLine("        " + PRINT_TYPE_NAME + "(tupleData[i].type,log,false);");
         writeLine("      }");
         writeLine("      fputs(\"}\",log);");
         writeLine("      break;");
@@ -725,8 +751,29 @@ public class CompileToC {
         writeLine("      break;");
         //TODO Print Containers
         writeLine("    case " + TYPE_SIG_PREFIX + "TUPLE:");
-        writeLine("    case " + TYPE_SIG_PREFIX + "UNION:");
+        writeLine("      fputs(\"{\","+PRINT__STREAM_NAME+");");
+        writeLine("      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;");
+        writeLine("      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;");
+        writeLine("      for(size_t i=off;i<off+len;i++){");
+        writeLine("        if(i>off){fputs(\",\","+PRINT__STREAM_NAME+");};");
+        writeLine("        " + PRINT_VALUE + "("+ PRINT__STREAM_NAME +", tupleData[i].type, "+PRINT__VALUE_NAME+
+                "+tupleData[i].off);");
+        writeLine("      }");
+        writeLine("      fputs(\"}\","+PRINT__STREAM_NAME+");");
+        writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "STRUCT:");
+        writeLine("      fputs(\"{\","+PRINT__STREAM_NAME+");");
+        writeLine("      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;");
+        writeLine("      len=(type>>TYPE_COUNT_SHIFT)&TYPE_COUNT_MASK;");
+        writeLine("      for(size_t i=off;i<off+len;i++){");
+        writeLine("        if(i>off){fputs(\",\","+PRINT__STREAM_NAME+");};");
+        writeLine("        fprintf("+PRINT__STREAM_NAME+", \".%s=\", structData[i].name);");
+        writeLine("        " + PRINT_VALUE + "("+ PRINT__STREAM_NAME +", structData[i].type, "+PRINT__VALUE_NAME+
+                "+structData[i].off);");
+        writeLine("      }");
+        writeLine("      fputs(\"}\","+PRINT__STREAM_NAME+");");
+        writeLine("      break;");
+        writeLine("    case " + TYPE_SIG_PREFIX + "UNION:");
         writeLine("      assert(false && \" unimplemented \");");
         writeLine("      break;");
         writeLine("    case " + TYPE_SIG_PREFIX + "PROC:");

@@ -3,7 +3,6 @@ package bsoelch.noret.lang;
 import bsoelch.noret.TypeError;
 
 import java.util.*;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
@@ -463,9 +462,11 @@ public class Type {
     }
     public static class StructEntry{
         public final String name;
+        public final long off;
         public final Type type;
-        public StructEntry(String name,Type type) {
+        public StructEntry(String name,long off,Type type) {
             this.name = name;
+            this.off=off;
             this.type = type;
         }
     }
@@ -528,7 +529,13 @@ public class Type {
         }
 
         public Iterable<StructEntry> entries(){
-            return IntStream.range(0,elements.length).mapToObj(i->new StructEntry(fieldNames[i],elements[i])).collect(Collectors.toList());
+            ArrayList<StructEntry> entries=new ArrayList<>(fieldNames.length);
+            long off=0;
+            for(int i=0;i<fieldNames.length;i++){
+                entries.add(new StructEntry(fieldNames[i],off,elements[i]));
+                off+=elements[i].blockCount*8L/*sizeof(Value)*/;
+            }
+            return entries;
         }
 
         public int elementCount() {
