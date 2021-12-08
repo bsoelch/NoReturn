@@ -240,7 +240,7 @@ public class CompileToC {
         }else if(t instanceof Type.Tuple){//addLater combine similar cases
             Integer off = typeOffset(t);
             int len = ((Type.Tuple) t).getElements().length;
-            if(len> TYPE_ELEMENT_COUNT){//addLater constant
+            if(len> TYPE_ELEMENT_COUNT){
                 throw new SyntaxError("block-type exceeded type maximum allowed element count of "+ TYPE_ELEMENT_COUNT);
             }
             return TYPE_SIG_PREFIX+ "TUPLE|("+off+"ULL<<TYPE_CONTENT_SHIFT)|" +"("+ len +"ULL<<TYPE_COUNT_SHIFT)";
@@ -604,7 +604,7 @@ public class CompileToC {
         writeLine("    while(c>0){");
         writeLine("      if((buff[(*off)]&0xc0)!=0x80){");
         writeLine("        fprintf(stderr,\"format error in UTF8-string\");");
-        writeLine("        exit("+ERR_STR_ENCODING+");");
+        writeLine("        exit("+ERR_STR_ENCODING+");");//addLater don't crash on illegal char-codes
         writeLine("      }");
         writeLine("      ret<<=6;");
         writeLine("      ret|=buff[(*off)++]&0x3f;");
@@ -749,7 +749,6 @@ public class CompileToC {
         writeLine("      }");
         writeLine("      fputs(\"}\","+ PRINT__STREAM_NAME +");");
         writeLine("      break;");
-        //TODO Print Containers
         writeLine("    case " + TYPE_SIG_PREFIX + "TUPLE:");
         writeLine("      fputs(\"{\","+PRINT__STREAM_NAME+");");
         writeLine("      off=(type>>TYPE_CONTENT_SHIFT)&TYPE_CONTENT_MASK;");
@@ -773,6 +772,7 @@ public class CompileToC {
         writeLine("      }");
         writeLine("      fputs(\"}\","+PRINT__STREAM_NAME+");");
         writeLine("      break;");
+        //TODO Print Unions
         writeLine("    case " + TYPE_SIG_PREFIX + "UNION:");
         writeLine("      assert(false && \" unimplemented \");");
         writeLine("      break;");
