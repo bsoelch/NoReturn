@@ -57,6 +57,7 @@ public class VarExpression implements Expression {
     public boolean hasValue(ProgramContext context) {
         return context.hasVarValue(varId);
     }
+
     @Override
     public Value getValue(ProgramContext context) {
         return context.getVarValue(varId);

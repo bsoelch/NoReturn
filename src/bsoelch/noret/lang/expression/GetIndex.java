@@ -38,7 +38,7 @@ public class GetIndex implements Expression{
                         valType +"\" only arrays,tuples and string support array-access");
             }
         }
-        if(value.hasValue(context)&&index.hasValue(context)&&!value.isBound()){//constant folding
+        if((value.hasValue(context)&&!type.needsExternalData)&&index.hasValue(context)&&!value.canAssignTo()){//constant folding
             //set index is not supported for constants
             return ValueExpression.create(value.getValue(context).getAtIndex(index.getValue(context)));
         }
@@ -94,10 +94,11 @@ public class GetIndex implements Expression{
 
     @Override
     public boolean hasValue(ProgramContext context) {
-        return false;//all possible compile-time evaluations are done on initialization
+        return value.hasValue(context)&&index.hasValue(context);//all possible compile-time evaluations are done on initialization
     }
+
     @Override
     public Value getValue(ProgramContext context) {
-        throw new RuntimeException(this+" cannot be evaluated at compile time");
+        return value.getValue(context).getAtIndex(index.getValue(context));
     }
 }

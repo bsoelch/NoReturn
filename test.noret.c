@@ -756,8 +756,8 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log[DEFAULT]{Constant{y:{2112454933,2,3}}}
     logValue(DEFAULT,false,TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),const_y);
   }
-  {// Log[DEFAULT]{GetIndex{Constant{y:{2112454933,2,3}}[ValueExpression{0}]}}
-    logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=*((int32_t*)getRawElement(const_y->asPtr,((int32_t)(0)),4))}}));
+  {// Log[DEFAULT]{ValueExpression{2112454933}}
+    logValue(DEFAULT,false,TYPE_SIG_I32,((Value[]){(Value){.asI32=2112454933}}));
   }
   {// Log[DEFAULT]{ValueExpression{int32[]}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT)}}));
@@ -766,8 +766,8 @@ void* proc_start(Value* argsIn,Value* argsOut){
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_ARRAY|(7ULL<<TYPE_CONTENT_SHIFT)}}));
   }
   Value var9 [1];// (uint64)
-  {// Initialize: GetField{Constant{y:{2112454933,2,3}}.length}
-    memcpy(var9,(const_y[0].asPtr+2),1*sizeof(Value));
+  {// Initialize: ValueExpression{3}
+    memcpy(var9,((Value[]){(Value){.asU64=3}}),1*sizeof(Value));
   }
   {// Log[DEFAULT]{VarExpression{9}}
     logValue(DEFAULT,false,TYPE_SIG_U64,var9);

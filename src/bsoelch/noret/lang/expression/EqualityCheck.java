@@ -55,6 +55,7 @@ public class EqualityCheck implements Expression {
     public boolean hasValue(ProgramContext context) {
         return false;
     }
+
     @Override
     public Value getValue(ProgramContext context) {
         throw new RuntimeException(this+" cannot be evaluated at compile time");

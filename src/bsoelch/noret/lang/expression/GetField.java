@@ -23,7 +23,7 @@ public class GetField implements Expression{
                 return ValueExpression.create(new Value.TypeValue(valType));
             }
         }
-        if(value.hasValue(context)&&!value.isBound()){//constant folding
+        if((value.hasValue(context)&&!type.needsExternalData)&&!value.canAssignTo()){//constant folding
             //set field is not supported for constants
             return ValueExpression.create(value.getValue(context).getField(fieldName));
         }
@@ -79,10 +79,11 @@ public class GetField implements Expression{
 
     @Override
     public boolean hasValue(ProgramContext context) {
-        return false;//all possible compile-time evaluations are done on initialization
+        return value.hasValue(context);
     }
+
     @Override
     public Value getValue(ProgramContext context) {
-        throw new RuntimeException(this+" cannot be evaluated at compile time");
+        return value.getValue(context).getField(fieldName);
     }
 }

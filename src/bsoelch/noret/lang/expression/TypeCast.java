@@ -16,7 +16,7 @@ public class TypeCast implements Expression{
         if(!Type.canCast(castType,value.expectedType(),null)){
             throw new TypeError("Values of type "+value.expectedType()+ " cannot be cast to "+castType);
         }
-        if(value.hasValue(context)){
+        if(value.hasValue(context)&&!value.expectedType().needsExternalData&&!value.canAssignTo()){
             Value value1 = value.getValue(context).castTo(castType);
             assert value1.getType().equals(castType);
             return ValueExpression.create(value1);
@@ -64,10 +64,11 @@ public class TypeCast implements Expression{
 
     @Override
     public boolean hasValue(ProgramContext context) {
-        return false;//all possible compile-time evaluations are done on initialization
+        return value.hasValue(context);
     }
+
     @Override
     public Value getValue(ProgramContext context) {
-        throw new RuntimeException(this+" cannot be evaluated at compile time");
+        return value.getValue(context).castTo(type);
     }
 }

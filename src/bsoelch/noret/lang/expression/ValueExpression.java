@@ -41,6 +41,7 @@ public class ValueExpression implements Expression {
     public boolean hasValue(ProgramContext context) {
         return true;
     }
+
     @Override
     public Value getValue(ProgramContext context) {
         return value;

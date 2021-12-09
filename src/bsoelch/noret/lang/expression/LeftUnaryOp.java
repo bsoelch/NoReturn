@@ -143,6 +143,7 @@ public class LeftUnaryOp implements Expression {
     public boolean hasValue(ProgramContext context) {
         return false;//all possible compile-time evaluations are done on initialization
     }
+
     @Override
     public Value getValue(ProgramContext context) {
         throw new RuntimeException(this+" cannot be evaluated at compile time");
