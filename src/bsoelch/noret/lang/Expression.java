@@ -12,6 +12,7 @@ public interface Expression {
     default boolean canAssignTo() {
         return false;
     }
+    boolean canInline();
 
     /**true f the value of this element is known at compile time*/
     boolean hasValue(ProgramContext context);

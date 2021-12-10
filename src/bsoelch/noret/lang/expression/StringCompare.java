@@ -70,6 +70,11 @@ public class StringCompare implements Expression {
     }
 
     @Override
+    public boolean canInline() {
+        return true;
+    }
+
+    @Override
     public boolean hasValue(ProgramContext context) {
         return false;//all possible compile-time evaluations are done on initialization
     }

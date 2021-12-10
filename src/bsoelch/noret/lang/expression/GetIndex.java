@@ -91,6 +91,10 @@ public class GetIndex implements Expression{
     public String toString() {
         return "GetIndex{"+value +"[" + index +"]}";
     }
+    @Override
+    public boolean canInline() {
+        return value.canInline()&&index.canInline();
+    }
 
     @Override
     public boolean hasValue(ProgramContext context) {

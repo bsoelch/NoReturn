@@ -1651,12 +1651,18 @@ public class CompileToC {
             line.append(parts[1]);
             return tmpCount;
         }else if(expr instanceof IfExpr){
-            if(unwrap){
-                //TODO handle unwrapping of if-expressions
-                throw new UnsupportedOperationException("Unwrapping of IfExpr is currently not supported");
+            if(expr.canInline()){
+                initLines.clear();
+                line.append("((");
+                tmpCount=writeExpression(indent+"    ",initLines,line,((IfExpr)expr).cond,true,tmpCount, procName, varNames);
+                line.append(")?(");
+                tmpCount=writeExpression(indent,initLines,line,((IfExpr)expr).ifVal,unwrap, tmpCount,procName, varNames);
+                line.append("):(");
+                writeExpression(indent+"    ",initLines,line,((IfExpr)expr).elseVal,unwrap, tmpCount, procName, varNames);
+                line.append(")");
+                assert initLines.isEmpty();
+                return tmpCount;
             }else{
-                //addLater use ?: if both arguments can be inlined
-                // handle primitive values
                 int blockCount = expr.expectedType().blockCount;
                 initLines.add(indent+"Value tmp"+tmpCount+" ["+blockCount+"];");
                 int prevTmp=tmpCount++;
@@ -1676,6 +1682,9 @@ public class CompileToC {
                 initLines.add(indent+"  }");
                 initLines.add(indent+"}");
                 line.append("tmp").append(prevTmp);
+                if(unwrap){
+                    line.append(unwrapSuffix(expr.expectedType()));
+                }
                 return prevTmp;
             }
         }else if(expr instanceof GetField){

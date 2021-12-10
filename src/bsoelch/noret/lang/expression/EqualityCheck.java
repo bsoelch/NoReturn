@@ -50,6 +50,10 @@ public class EqualityCheck implements Expression {
     public boolean canAssignTo() {
         return false;
     }
+    @Override
+    public boolean canInline() {
+        return left.canInline()&&right.canInline();
+    }
 
     @Override
     public boolean hasValue(ProgramContext context) {

@@ -61,6 +61,10 @@ public class TypeCast implements Expression{
     public String toString() {
         return "TypeCast{" +type+ ":" + value +'}';
     }
+    @Override
+    public boolean canInline() {
+        return value.canInline();
+    }
 
     @Override
     public boolean hasValue(ProgramContext context) {

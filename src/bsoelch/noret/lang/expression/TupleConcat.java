@@ -106,6 +106,11 @@ public class TupleConcat implements Expression {
         return type;
     }
 
+    @Override
+    public boolean canInline() {
+        return false;
+    }
+
     //addLater pre-evaluation of TupleConcat
     @Override
     public boolean hasValue(ProgramContext context) {

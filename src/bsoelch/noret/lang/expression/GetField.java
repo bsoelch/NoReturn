@@ -71,6 +71,10 @@ public class GetField implements Expression{
     public Type expectedType() {
         return type;
     }
+    @Override
+    public boolean canInline() {
+        return value.canInline();
+    }
 
     @Override
     public String toString() {

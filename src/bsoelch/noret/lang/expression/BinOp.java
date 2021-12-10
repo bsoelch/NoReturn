@@ -200,6 +200,10 @@ public class BinOp implements Expression {
         return expectedOutput;
     }
 
+    @Override
+    public boolean canInline() {
+        return left.canInline()&& right.canInline();
+    }
 
     @Override
     public String toString() {

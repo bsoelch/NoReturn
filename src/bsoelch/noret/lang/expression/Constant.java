@@ -41,9 +41,11 @@ public class Constant implements Expression {
         return "Constant{"+constId+":"+value+"}";
     }
 
-    public Value getValue() {
-        return value;
+    @Override
+    public boolean canInline() {
+        return true;
     }
+
     @Override
     public boolean hasValue(ProgramContext context) {
         return true;

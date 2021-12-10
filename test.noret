@@ -53,7 +53,7 @@ start(string8[]):(args)=>{
     log x;
     log none.type;
     log {}.type;
-    int32?:optional=4;
+    uint64?:optional=args.length>0?args[0].length:0;
     log optional;
     log optional?optional.value:none;
 }=>[]

@@ -60,6 +60,10 @@ public class IfExpr implements Expression {
     public String toString() {
         return "IfExpr{" +cond + "?" + ifVal +":" + elseVal + '}';
     }
+    @Override
+    public boolean canInline() {
+        return cond.canInline()&&ifVal.canInline()&&elseVal.canInline();
+    }
 
     @Override
     public boolean hasValue(ProgramContext context) {

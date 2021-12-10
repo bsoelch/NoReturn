@@ -140,6 +140,11 @@ public class LeftUnaryOp implements Expression {
     }
 
     @Override
+    public boolean canInline() {
+        return expr.canInline();
+    }
+
+    @Override
     public boolean hasValue(ProgramContext context) {
         return false;//all possible compile-time evaluations are done on initialization
     }

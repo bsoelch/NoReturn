@@ -34,6 +34,11 @@ public class ValueExpression implements Expression {
         return "ValueExpression{"+value+"}";
     }
 
+    @Override
+    public boolean canInline() {
+        return !value.getType().needsExternalData;
+    }
+
     public Value getValue() {
         return value;
     }

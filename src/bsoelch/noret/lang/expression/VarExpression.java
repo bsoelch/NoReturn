@@ -54,6 +54,11 @@ public class VarExpression implements Expression {
     }
 
     @Override
+    public boolean canInline() {
+        return true;
+    }
+
+    @Override
     public boolean hasValue(ProgramContext context) {
         return context.hasVarValue(varId);
     }

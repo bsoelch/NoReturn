@@ -45,7 +45,7 @@ typedef uint64_t Type;
 #define TYPE_COUNT_SHIFT    40
 #define TYPE_COUNT_MASK     65535
 // Type data for all composite Types
-Type typeData []={TYPE_SIG_ARRAY|(6ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_I64,TYPE_SIG_ARRAY|(3ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_I32,TYPE_SIG_ARRAY|(6ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_STRING8,TYPE_SIG_OPTIONAL|(2ULL<<TYPE_CONTENT_SHIFT)};
+Type typeData []={TYPE_SIG_ARRAY|(6ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_I64,TYPE_SIG_ARRAY|(3ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_ARRAY|(4ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_I32,TYPE_SIG_ARRAY|(6ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_STRING8,TYPE_SIG_OPTIONAL|(2ULL<<TYPE_CONTENT_SHIFT),TYPE_SIG_U64};
 // Type data for tuple types
 typedef struct{
   size_t off;
@@ -800,15 +800,15 @@ void* proc_start(Value* argsIn,Value* argsOut){
   {// Log[DEFAULT]{ValueExpression{tuple{}}}
     logValue(DEFAULT,false,TYPE_SIG_TYPE,((Value[]){(Value){.asType=TYPE_SIG_TUPLE|(0ULL<<TYPE_CONTENT_SHIFT)|(0ULL<<TYPE_COUNT_SHIFT)}}));
   }
-  Value var11 [2];// (int32?)
-  {// Initialize: ValueExpression{Optional:{4}}
-    memcpy(var11,((Value[]){(Value){.asBool=true},(Value){.asI32=4}}),2*sizeof(Value));
+  Value var11 [2];// (uint64?)
+  {// Initialize: TypeCast{uint64?:IfExpr{BinOp{GetField{VarExpression{0}.length} GT ValueExpression{0}}?GetField{GetIndex{VarExpression{0}[ValueExpression{0}]}.length}:ValueExpression{0}}}
+    memcpy(var11,((Value[]){(Value){.asBool=true},(Value){.asU64=((((bool)(((argsIn+0)[0].asPtr+2)[0].asU64>((int32_t)(0)))))?((getElement((argsIn+0)->asPtr,((int32_t)(0)),1)[0].asPtr+2)[0].asU64):(((uint64_t)(0)))}}),2*sizeof(Value));
   }
   {// Log[DEFAULT]{VarExpression{11}}
-    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(4ULL<<TYPE_CONTENT_SHIFT),var11);
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(8ULL<<TYPE_CONTENT_SHIFT),var11);
   }
-  {// Log[DEFAULT]{GetField{VarExpression{11}.value}}
-    logValue(DEFAULT,false,TYPE_SIG_I32,((var11)+1));
+  {// Log[DEFAULT]{IfExpr{TypeCast{bool:VarExpression{11}}?TypeCast{uint64?:GetField{VarExpression{11}.value}}:ValueExpression{Optional:{}}}}
+    logValue(DEFAULT,false,TYPE_SIG_OPTIONAL|(8ULL<<TYPE_CONTENT_SHIFT),((((var11)[0].asBool))?(((Value[]){(Value){.asBool=true},(Value){.asU64=((var11)+1)[0].asU64}})):(((Value[]){(Value){.asBool=false},(Value){.asPtr=NULL/*none*/}})));
   }
   Procedure ret=NULL;
   return ret;

@@ -597,6 +597,7 @@ public class Type {
         }
     }
 
+    //TODO introduce enum type
     //TODO reintroduce Directories
 
     public static class GenericBound{
