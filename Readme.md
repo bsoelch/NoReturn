@@ -68,7 +68,8 @@ There are 14 atomic types:
   elements of an array are accessible though the [] operator
 - Tuple: (syntax: `'tuple{'<Type>(,<Type>)*'}'` 
   a sequence of typed values. 
-  The elements a tuple are currently not accessible
+  The elements a tuple are accessible though the [] operator 
+  (with constant indices)
 - optionals: (syntax: `<Type>'?'`) contains a value of Type < Type >
   or none
 - reference: (syntax `'@'<Type>`) contains a reference to a value

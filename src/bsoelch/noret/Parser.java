@@ -547,8 +547,13 @@ public class Parser {
                                         break;
                                     case 'u':
                                     case 'U':
-                                        throw new UnsupportedOperationException("unicode-escape sequence are currently not implemented");
-                                    //addLater more escape sequences
+                                        int l=c=='u'?4:6;
+                                        StringBuilder tmp=new StringBuilder(l);
+                                        for(int i=0;i<l;i++){
+                                            tmp.append((char)forceNextChar());
+                                        }
+                                        buffer.append(Character.toChars(Integer.parseInt(tmp.toString(),16)));
+                                        break;
                                     default:
                                         throw new IllegalArgumentException("The escape sequence: '\\"+c+"' is not supported");
                                 }

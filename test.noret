@@ -4,18 +4,18 @@ const int[]:y={1234567890123456789,2,3.0};
 const any: array_test =(int32[][]:){{1,2,3},{4,5},{6}};
 const string8[]:str_test={"str1","str2"};
 const int32[][]?[]:type_sig_test={};
-struct struct_test{tuple{int32,int64}:a,int32:b};
+struct struct_test{tuple{string8,int32}:a,int32:b};
 
 start(string8[]):(args)=>{
     assert "args.length<3" : args.length<3;
     log.debug args;
     log.debug "args[0]=";
     _log.debug args.length>0?args[0]:"No Arguments Provided";
-    struct_test:aStruct={.a={0,1},.b=1};
+    struct_test:aStruct={.a={"0",1},.b=1};
     log aStruct;
     log aStruct.type;
-    log "a=";
-    _log aStruct.a;
+    log "a[0]=";
+    _log aStruct.a[0];
     log "b=";
     _log aStruct.b;
     string8:utf8=u8"UTF8-String:a°💻";

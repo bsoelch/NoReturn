@@ -33,6 +33,16 @@ public class GetIndex implements Expression{
                     throw new TypeError("Invalid type for array index:"+
                             indType+ " Array indices have to be unsigned integers");
                 }
+            }else if(valType instanceof Type.Tuple){
+                if(Type.canAssign(Type.Numeric.SIZE, indType,null)&&index.hasValue(context)){
+                    Value indexValue = index.getValue(context);
+                    index=ValueExpression.create(indexValue);
+                    type =((Type.Tuple) valType).getElements()[
+                            ((Number)((Value.NumericValue) indexValue.castTo(Type.Numeric.SIZE)).getValue()).intValue()];
+                }else{
+                    throw new TypeError("Invalid type for tuple index:"+
+                            indType+ " Tuple indices have to be constant unsigned integers");
+                }
             }else{
                 throw new TypeError("Invalid type for array access: \"" +
                         valType +"\" only arrays,tuples and string support array-access");

@@ -1170,7 +1170,7 @@ public class CompileToC {
                     throw new UnsupportedOperationException("Unsupported ActionType: "+a.getClass().getSimpleName());
                 }
             }
-            //TODO cleanup memory
+            //TODO cleanup memory (check each execution path an free value at last use in each path)
             Procedure.ProcChild firstStatic=null;
             Expression[] firstArgs=null;
             ArrayList<Procedure.ProcChild> children= proc.children();
@@ -1659,7 +1659,7 @@ public class CompileToC {
                 tmpCount=writeExpression(indent,initLines,line,((IfExpr)expr).ifVal,unwrap, tmpCount,procName, varNames);
                 line.append("):(");
                 writeExpression(indent+"    ",initLines,line,((IfExpr)expr).elseVal,unwrap, tmpCount, procName, varNames);
-                line.append(")");
+                line.append("))");
                 assert initLines.isEmpty();
                 return tmpCount;
             }else{
@@ -1724,18 +1724,22 @@ public class CompileToC {
                 }
             }else if(expectedType instanceof Type.Optional&&
                     fieldName.equals(Type.FIELD_NAME_VALUE)){
-                //TODO check value before access, dereference pointers
-                line.append("((");
-                tmpCount=writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
-                line.append(")+1)");//optional.length
+                if(((Type.Optional) expectedType).content.blockCount==1){
+                    line.append("((");
+                    tmpCount=writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
+                    line.append(")+1)");//optional.length
+                }else{
+                    //TODO check value before access, dereference pointers
+                    throw new UnsupportedOperationException("unimplemented");
+                }
                 if(unwrap){
                     line.append(unwrapSuffix(expr.expectedType()));
                 }
                 return tmpCount;
             }else if(expectedType instanceof Type.Struct){
-                line.append("(((void*)");
+                line.append("((Value*)(((void*)");
                 tmpCount=writeExpression(indent,initLines,line, ((GetField) expr).value,false, tmpCount,procName,varNames);
-                line.append(")+").append(((Type.Struct) expectedType).offsetOf(fieldName)).append("ull)");//offset
+                line.append(")+").append(((Type.Struct) expectedType).offsetOf(fieldName)).append("ull))");//offset
                 if(unwrap){
                     line.append(unwrapSuffix(expr.expectedType()));
                 }
@@ -1787,9 +1791,15 @@ public class CompileToC {
                 }
                 return tmpCount;
             }else if(expectedType instanceof Type.Tuple){
-                //addLater get tuple elements
-                throw new UnsupportedOperationException("unimplemented");
-                //return tmpCount;
+                int i=((Number)((Value.NumericValue)((ValueExpression)((GetIndex) expr).index).getValue()
+                        .castTo(Type.Numeric.SIZE)).getValue()).intValue();
+                line.append("((Value*)(((void*)");
+                tmpCount=writeExpression(indent,initLines,line, ((GetIndex) expr).value,false, tmpCount,procName,varNames);
+                line.append(")+").append(((Type.Tuple) expectedType).getOffset(i)).append("ull))");//offset
+                if(unwrap){
+                    line.append(unwrapSuffix(expr.expectedType()));
+                }
+                return tmpCount;
             }
             throw new SyntaxError("array access for Type "+ expectedType +" is not supported");
         }else {

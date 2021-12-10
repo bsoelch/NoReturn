@@ -411,6 +411,7 @@ public class Type {
     public static class Tuple extends Type{
         final String tupleName;
         final Type[] elements;
+        final long[] offsets;
         private static String tupleName(Type[] types) {
             StringBuilder ret=new StringBuilder("tuple{");
             for(int i=0;i<types.length;i++){
@@ -425,11 +426,22 @@ public class Type {
             super(name==null?tupleName(elements):name, Arrays.stream(elements).mapToInt(t->t.blockCount).sum(), isVarSize(elements), false);
             this.tupleName=name;
             this.elements=elements;
+            offsets=new long[elements.length];
+            long off=0;
+            for(int i=0;i<elements.length;i++){
+                offsets[i]=off;
+                off+=(elements[i].blockCount*8L);
+            }
             fields.put(FIELD_NAME_LENGTH,Numeric.SIZE);
         }
         public Type[] getElements() {
             return elements;
         }
+
+        public long getOffset(int index) {
+            return offsets[index];
+        }
+
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
