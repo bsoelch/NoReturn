@@ -141,7 +141,7 @@ public class Parser {
         private StringType stringType;
         private int cached=-1;
 
-        private int line =0;
+        private int line =1;
         private int posInLine =0;
 
         private Tokenizer(Reader input) {
@@ -171,6 +171,20 @@ public class Parser {
             }
             return c;
         }
+
+        private TokenPosition currentPos;
+        private TokenPosition currentPos() {
+            if(currentPos==null){
+                currentPos=new TokenPosition(line, posInLine);
+            }
+            return currentPos;
+        }
+        private void nextToken(){
+            currentPos=new TokenPosition(line, posInLine);
+            buffer.setLength(0);
+        }
+
+
         //addLater better error feedback
         private void prepareToken() throws IOException {
             int c;
@@ -515,7 +529,7 @@ public class Parser {
                                 }
                                 tokenBuffer.addLast(new ExprToken(Value.createString(sType, value), null, currentPos()));
                             }
-                            buffer.setLength(0);
+                            nextToken();
                             state=WordState.ROOT;
                             return;
                         }else{
@@ -583,9 +597,6 @@ public class Parser {
             finishWord(tokenBuffer,buffer);
         }
 
-        private TokenPosition currentPos() {
-            return new TokenPosition(line, posInLine);
-        }
 
         /**@return false if the value was an integer otherwise true*/
         private boolean tryParseInt(ArrayDeque<ParserToken> tokens,String str){
@@ -663,7 +674,7 @@ public class Parser {
                 }catch (NumberFormatException nfe){
                     throw new SyntaxError(nfe);
                 }
-                buffer.setLength(0);
+                nextToken();
                 return true;
             }
             return false;
