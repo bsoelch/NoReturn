@@ -1811,10 +1811,6 @@ public class Parser {
         }
     }
 
-    public void compile(BufferedWriter output) throws IOException {
-        (new CompileToC(output)).compile(context);
-    }
-
     public Procedure interpret(){
         Procedure start=context.getProc("start");
         if(start==null){

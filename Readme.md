@@ -181,11 +181,9 @@ if it had the same log-type.
 There are 4 log-types: 
 - `log` prints the value to the standard output stream
 - `log.debug` prints the value preceded with `Debug:` 
-to the standard output stream(it will be possible to deactivate debug logs can be
-at compile time)
+to the standard output stream
 - `log.info` prints the value content preceded with `Info:`
-  to the standard output stream (it will be possible to deactivate info logs can be
-  at compile time)
+  to the standard output stream
 - `log.err` prints the value the input to the standard error stream
 
 Example:

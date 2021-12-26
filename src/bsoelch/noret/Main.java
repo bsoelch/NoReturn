@@ -19,7 +19,6 @@ public class Main {
             return;
         }
         Parser parser=new Parser(new FileReader(args[0]));
-        parser.compile(new BufferedWriter(new FileWriter(args[0]+".c")));
         Procedure start=parser.interpret();
         Value[] progArgs;
         if(start.argTypes().length==0){
