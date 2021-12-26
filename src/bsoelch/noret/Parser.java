@@ -4,7 +4,6 @@ import bsoelch.noret.lang.expression.VarExpression;
 import bsoelch.noret.lang.*;
 import bsoelch.noret.lang.expression.*;
 
-import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.Reader;
 import java.util.ArrayDeque;
@@ -627,16 +626,12 @@ public class Parser {
                                     Value.createPrimitive(Type.Numeric.FLOAT64, d),null, currentPos()));
                         }else if(floatBin.matcher(str).matches()){
                             //bin-Float
-                            double d=parseBinFloat(
-                                    str.replaceAll(BIN_PREFIX,"")//remove header
-                            );
+                            double d=parseFloat(str.replaceAll(BIN_PREFIX,""),2);
                             tokens.addLast(new ExprToken(
                                     Value.createPrimitive(Type.Numeric.FLOAT64, d), null, currentPos()));
                         }else if(floatHex.matcher(str).matches()){
                             //hex-Float
-                            double d=parseHexFloat(
-                                    str.replaceAll(HEX_PREFIX,"")//remove header
-                            );
+                            double d=parseFloat(str.replaceAll(HEX_PREFIX,""),16);
                             tokens.addLast(new ExprToken(
                                     Value.createPrimitive(Type.Numeric.FLOAT64, d),null, currentPos()));
                         }else {
@@ -730,89 +725,72 @@ public class Parser {
             }
         }
 
-        private double parseBinFloat(String str){
-            long val=0;
-            int c1=0,c2=0;
-            int d2=0,e=-1;
-            for(int i=0;i<str.length();i++){
-                switch (str.charAt(i)){
-                    case '0':
-                    case '1':
-                        if(c1<63){
-                            val*=2;
-                            val+=str.charAt(i)-'0';
-                            c1++;
-                            c2+=d2;
-                        }
-                        break;
-                    case '.':
-                        if(d2!=0){
-                            throw new SyntaxError("Duplicate decimal point");
-                        }
-                        d2=1;
-                        break;
-                    case 'E':
-                    case 'e':
-                        e=i+1;
-                        break;
-                }
+        private static int valueOf(char digit,int base) throws NumberFormatException {
+            int val;
+            if(digit>='0'&&digit<='9'){
+                val=digit-'0';
+            }else if(digit>='A'&&digit<='Z'){
+                val=digit-'A'+10;
+            }else if(digit>='a'&&digit<='z'){
+                val=digit-'a'+base<37?10:36;
+            }else{
+                throw new NumberFormatException("invalid digit for base "+base+" number '"+digit+"'");
             }
-            if (e > 0) {
-                c2-=Integer.parseInt(str.substring(e),2);
+            if(val>=base){
+                throw new NumberFormatException("invalid digit for base "+base+" number '"+digit+"'");
             }
-            return val*Math.pow(2,-c2);
+            return val;
         }
-        private double parseHexFloat(String str){
+        private static boolean isExpChar(char c,int base){
+            switch (c){
+                case 'e': case 'E':
+                    return base<('E'-'A'+10+1);
+                case 'p':case 'P':
+                  return base<('P'-'A'+10+1);
+                case 'x':case 'X':
+                    return base<('X'-'A'+10+1);
+                case '#':
+                    return true;
+                default:
+                    return false;
+            }
+        }
+        private static double parseFloat(String str, int base) {
+            if(base<2||base>36){
+                throw new IllegalArgumentException("base out of range:"+base+" base has to be between 2 and 62");
+            }
+            int i=0;
+            boolean sgn=str.startsWith("-");
+            if(sgn){
+                i++;
+            }
             long val=0;
-            int c1=0,c2=0;
-            int d2=0,e=-1;
-            for(int i=0;i<str.length();i++){
-                switch (str.charAt(i)){
-                    case '0':case '1':case '2':
-                    case '3':case '4':case '5':
-                    case '6':case '7':case '8':
-                    case '9':
-                        if(c1<15){
-                            val*=16;
-                            val+=str.charAt(i)-'0';
-                            c1++;
-                            c2+=d2;
-                        }
-                        break;
-                    case 'A':case 'B':case 'C':
-                    case 'D':case 'E':case 'F':
-                        if(c1<15){
-                            val*=16;
-                            val+=str.charAt(i)-'A'+10;
-                            c1++;
-                            c2+=d2;
-                        }
-                        break;
-                    case 'a':case 'b':case 'c':
-                    case 'd':case 'e':case 'f':
-                        if(c1<15){
-                            val*=16;
-                            val+=str.charAt(i)-'a'+10;
-                            c1++;
-                            c2+=d2;
-                        }
-                        break;
-                    case '.':
-                        if(d2!=0){
-                            throw new SyntaxError("Duplicate decimal point");
-                        }
-                        d2=1;
-                        break;
-                    case 'P':
-                    case 'p':
-                        e=i+1;
-                        break;
+            int c=0;
+            int d=0,e=-1;
+            for(;i<str.length();i++){
+                if(str.charAt(i)=='.'){
+                    if(d!=0){
+                        throw new NumberFormatException("invalid string-format for float \""+str+"\"");
+                    }
+                    d=1;
+                }else if(isExpChar(str.charAt(i),base)) {
+                    e = i + 1;
+                    break;
+                }else{
+                    if(val<Long.MAX_VALUE/base){
+                        val*=base;
+                        val+=valueOf(str.charAt(i),base);
+                        c+=d;
+                    }else{
+                        valueOf(str.charAt(i),base);//check digit without storing value
+                        c += d - 1;//decrease c if on the left of comma
+                    }
                 }
             }
             if (e > 0) {
-                c2-=Integer.parseInt(str.substring(e),16);
+                c-=Integer.parseInt(str.substring(e),base);
             }
-            return val*Math.pow(2,-c2);
+            return (sgn?-val:val)*Math.pow(base,-c);
         }
     }
 
