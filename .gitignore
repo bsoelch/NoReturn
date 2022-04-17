@@ -2,6 +2,6 @@
 /out/
 /.idea
 NoReturn.iml
+/compiler/test.sh
 /compiler/a.out
 /compiler/a.exe
-/compiler/
